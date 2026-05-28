@@ -1,0 +1,76 @@
+@startuml OCR处理流程时序图
+' ============================================================
+' 智审通 — OCR 多级降级处理流程
+' ============================================================
+
+skinparam backgroundColor #FEFEFE
+skinparam defaultFontSize 12
+skinparam sequenceMessageAlign center
+skinparam shadowing true
+
+title 智能 OCR 多级降级处理流程
+
+actor "用户" as User
+participant "前端\n(WorkbenchPage)" as FE
+participant "OCR 路由\n(ocr_router)" as OcrR
+participant "OCR 服务\n(ocr_service)" as OcrSvc
+participant "EasyOCR\n(本地)" as Easy
+participant "Key 池\n(key_pool)" as KeyPool
+participant "外部 LLM API\n(多模态)" as LLM
+participant "本地推理\n(llama.cpp)" as Local
+participant "模板服务\n(template_service)" as TplSvc
+database "数据库" as DB
+
+User -> FE : 上传图片/PDF
+FE -> OcrR : POST /api/ocr/upload
+
+== Step 1: 文字提取（多级降级） ==
+
+OcrR -> OcrSvc : process_document(file, user)
+
+alt 用户是 Free 版
+    OcrSvc -> Easy : easyocr.readtext(image)
+    Easy --> OcrSvc : raw_text\n(印刷体≥95%, 手写~85%)
+    note right of Easy : 本地 CPU 推理\n无外部依赖\n不限次数
+
+else 用户是 Pro / Pro+
+    alt Key 池有可用 Key
+        OcrSvc -> KeyPool : get_key("ocr")
+        KeyPool --> OcrSvc : {api_base, api_key, model}
+        OcrSvc -> LLM : multipart/form-data\n(图片 + prompt)
+        LLM --> OcrSvc : 结构化 JSON
+        note right of LLM : 多模态识别\n精度 >> 本地\n有月度配额限制
+    else 所有 Key 失效 → 降级
+        OcrSvc -> OcrSvc : 降级到 EasyOCR
+        OcrSvc -> Easy : easyocr.readtext(image)
+        Easy --> OcrSvc : raw_text
+        note right of OcrSvc : 自动降级\n用户无感知
+    end
+end
+
+== Step 2: 文档类型检测 ==
+
+OcrSvc -> TplSvc : detect_type(raw_text)
+TplSvc -> TplSvc : 关键词匹配\n(发票+金额→报销\n 请假+天数→请假 ...)
+TplSvc --> OcrSvc : document_type
+
+== Step 3: JSON 结构化填充 ==
+
+alt Free 用户（两阶段）
+    OcrSvc -> Local : POST /v1/chat/completions\n(system: "你是表单填充助手"\n user: raw_text)
+    Local --> OcrSvc : filled_json
+    note right of Local : Qwen2.5-0.5B\n纯文本→JSON\nCPU/Metal/GPU
+
+else Pro/Pro+ 用户（一步到位）
+    OcrSvc -> LLM : 已在 Step 1 完成
+    note right of LLM : OCR + JSON 一次调用\n省时省力
+end
+
+== Step 4: 返回结果 ==
+
+OcrSvc -> DB : 保存记录\n(ocr_provider, ocr_model, tier)
+OcrSvc --> OcrR : {raw_text, filled_json, document_type}
+OcrR --> FE : 返回结果
+FE -> User : 展示可编辑 JSON 表单\n+ 文档类型标签 + 层级标识
+
+@enduml

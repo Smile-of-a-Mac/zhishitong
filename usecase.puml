@@ -1,115 +1,208 @@
-@startuml 智审通用例图
+@startuml 智审通用例图 v5.0
 ' ============================================================
-' 智审通 — 高校行政审批自动化 Agent
+' 智审通 — 高校行政审批自动化 Agent v5.0
 ' 用例图（按角色）
+' 最后更新：2026-05-28
 ' ============================================================
 
 skinparam packageStyle rectangle
 skinparam actorStyle awesome
 skinparam defaultFontSize 13
+skinparam backgroundColor #FEFEFE
+skinparam shadowing true
 
 ' ── 角色定义 ──
-actor "超级管理员\n(admin)" as Admin
+actor "信息管理员\n(系统管理员)" as Admin
 actor "学校管理员" as SchoolAdmin
 actor "部门管理员" as DeptAdmin
 actor "财务管理员" as FinanceAdmin
-actor "学生" as Student
+actor "普通用户\n(学生/教师)" as Student
 
 ' ── 系统边界 ──
 rectangle "智审通 系统" {
-  
-  ' ── 超级管理员用例 ──
-  package "超级管理员" as AdminUC {
-    usecase "管理 API Key\n(添加/停用/恢复)" as UC_ApiKey
-    usecase "创建学校" as UC_CreateSchool
-    usecase "切换学校服务等级\n(Free ↔ Pro)" as UC_SchoolTier
+
+  ' ═══════════════════════════════════════
+  '  信息管理员用例
+  ' ═══════════════════════════════════════
+  package "信息管理" as AdminMgmt {
+    usecase "管理 API Key 池\n(添加/停用/恢复/删除)" as UC_ApiKey
+    usecase "创建/管理学校\n(配置服务等级)" as UC_CreateSchool
+    usecase "切换学校套餐\n(Free ↔ Pro ↔ Pro+)" as UC_SchoolTier
     usecase "管理成员\n(添加/移除/角色调整)" as UC_MemberMgmt
-    usecase "系统监控" as UC_Monitor
+  }
+
+  package "系统运维" as AdminOps {
+    usecase "系统监控面板\n(概览/日志/错误)" as UC_Monitor
     usecase "查看审计日志" as UC_Audit
+    usecase "数据看板 Dashboard" as UC_Dashboard_Admin
+    usecase "用户数据管理\n(软删除/恢复/彻底删除)" as UC_DataMgmt
+    usecase "预审规则配置\n(新增/编辑/停用规则)" as UC_RuleConfig
   }
 
-  ' ── 学校管理员用例 ──
-  package "学校管理员" as SchoolUC {
+  package "模拟测试" as AdminTest {
+    usecase "模拟测试面板\n(临时切换身份)" as UC_SimTest
+    usecase "覆盖角色/套餐/学校" as UC_SimOverride
+    usecase "一键退出模拟" as UC_SimExit
+  }
+
+  ' ═══════════════════════════════════════
+  '  学校管理员用例
+  ' ═══════════════════════════════════════
+  package "学校管理" as SchoolMgmt {
     usecase "管理部门管理员\n(创建/编辑/删除)" as UC_DeptAdminMgmt
-    usecase "查看全校事务总览" as UC_SchoolOverview
-    usecase "学校级审批\n(通过/驳回)" as UC_SchoolReview
-    usecase "使用智能建议" as UC_SchoolAI
     usecase "设置用户学校字段" as UC_SetSchool
+    usecase "查看全校事务总览" as UC_SchoolOverview
   }
 
-  ' ── 部门管理员用例 ──
-  package "部门管理员" as DeptUC {
+  package "学校审批" as SchoolApproval {
+    usecase "学校级审批\n(通过/驳回/需修改)" as UC_SchoolReview
+    usecase "使用 AI 智能建议" as UC_SchoolAI
+    usecase "审批意见模板\n(一键填入常用批语)" as UC_OpinionTemplate
+    usecase "审批代理\n(委托他人代审)" as UC_Delegation
+  }
+
+  ' ═══════════════════════════════════════
+  '  部门管理员用例
+  ' ═══════════════════════════════════════
+  package "部门审批" as DeptApproval {
     usecase "查看本部门事务\n(按状态/阶段筛选)" as UC_DeptList
     usecase "部门审批\n(通过/驳回/需修改)" as UC_DeptReview
     usecase "查看事务详情\n(材料/表单/审批历程)" as UC_DeptDetail
-    usecase "使用智能建议" as UC_DeptAI
+    usecase "使用 AI 智能建议" as UC_DeptAI
+    usecase "审批意见模板" as UC_OpinionTemplate_Dept
   }
 
-  ' ── 财务管理员用例 ──
-  package "财务管理员" as FinanceUC {
+  ' ═══════════════════════════════════════
+  '  财务管理员用例
+  ' ═══════════════════════════════════════
+  package "财务审批" as FinanceApproval {
     usecase "查看报销事务" as UC_FinanceList
     usecase "财务审批\n(审核金额/发票)" as UC_FinanceReview
-    usecase "使用智能建议" as UC_FinanceAI
+    usecase "使用 AI 智能建议" as UC_FinanceAI
   }
 
-  ' ── 学生用例 ──
-  package "学生" as StudentUC {
+  ' ═══════════════════════════════════════
+  '  普通用户（学生/教师）用例
+  ' ═══════════════════════════════════════
+  package "OCR 与表单" as StudentOCR {
     usecase "上传材料\n(图片/PDF)" as UC_Upload
     usecase "智能 OCR 识别\n→ 自动填表" as UC_OCR
     usecase "手动填写表单" as UC_ManualForm
+    usecase "编辑/确认 JSON 表单" as UC_EditJSON
     usecase "提交审批" as UC_Submit
-    usecase "查看历史记录" as UC_History
+  }
+
+  package "AI 增强" as StudentAI {
+    usecase "AI 政策问答 ChatBot\n(悬浮面板)" as UC_ChatBot
+    usecase "意图识别\n(自然语言→推荐表单)" as UC_Intent
+    usecase "自然语言搜索" as UC_NLSearch
+  }
+
+  package "事务管理" as StudentWork {
+    usecase "查看我的事务\n(进度/历史)" as UC_History
+    usecase "撤回申请" as UC_Withdraw
+    usecase "催办审批" as UC_Urge
     usecase "编辑个人信息" as UC_Profile
+  }
+
+  package "通知与公告" as StudentNotify {
+    usecase "查看通知中心\n(已读/未读)" as UC_Notifications
+    usecase "查看公告\n& 制度文库" as UC_Announcements
+  }
+
+  package "资源预约" as StudentResource {
+    usecase "预约会议室" as UC_BookRoom
+    usecase "预约公车" as UC_BookVehicle
+    usecase "查看/取消预约" as UC_ViewBooking
   }
 
   ' ── 公共用例 ──
   package "公共" as CommonUC {
     usecase "注册/登录" as UC_Auth
+    usecase "数据看板\n(按角色展示)" as UC_Dashboard
   }
 }
 
-' ── 角色 → 用例关联 ──
+' ═══════════════════════════════════════
+'  角色 → 用例关联
+' ═══════════════════════════════════════
+
+' 信息管理员
 Admin --> UC_ApiKey
 Admin --> UC_CreateSchool
 Admin --> UC_SchoolTier
 Admin --> UC_MemberMgmt
 Admin --> UC_Monitor
 Admin --> UC_Audit
+Admin --> UC_Dashboard_Admin
+Admin --> UC_DataMgmt
+Admin --> UC_RuleConfig
+Admin --> UC_SimTest
 
+' 学校管理员
 SchoolAdmin --> UC_DeptAdminMgmt
+SchoolAdmin --> UC_SetSchool
 SchoolAdmin --> UC_SchoolOverview
 SchoolAdmin --> UC_SchoolReview
 SchoolAdmin --> UC_SchoolAI
-SchoolAdmin --> UC_SetSchool
+SchoolAdmin --> UC_OpinionTemplate
+SchoolAdmin --> UC_Delegation
 
+' 部门管理员
 DeptAdmin --> UC_DeptList
 DeptAdmin --> UC_DeptReview
 DeptAdmin --> UC_DeptDetail
 DeptAdmin --> UC_DeptAI
+DeptAdmin --> UC_OpinionTemplate_Dept
 
+' 财务管理员
 FinanceAdmin --> UC_FinanceList
 FinanceAdmin --> UC_FinanceReview
 FinanceAdmin --> UC_FinanceAI
 
+' 普通用户
 Student --> UC_Upload
 Student --> UC_OCR
 Student --> UC_ManualForm
+Student --> UC_EditJSON
 Student --> UC_Submit
+Student --> UC_ChatBot
+Student --> UC_Intent
+Student --> UC_NLSearch
 Student --> UC_History
+Student --> UC_Withdraw
+Student --> UC_Urge
 Student --> UC_Profile
+Student --> UC_Notifications
+Student --> UC_Announcements
+Student --> UC_BookRoom
+Student --> UC_BookVehicle
+Student --> UC_ViewBooking
 
+' 公共
 Admin --> UC_Auth
 SchoolAdmin --> UC_Auth
 DeptAdmin --> UC_Auth
 FinanceAdmin --> UC_Auth
 Student --> UC_Auth
+Admin --> UC_Dashboard
+SchoolAdmin --> UC_Dashboard
+DeptAdmin --> UC_Dashboard
+FinanceAdmin --> UC_Dashboard
+Student --> UC_Dashboard
 
-' ── 用例间关系 ──
+' ═══════════════════════════════════════
+'  用例间关系
+' ═══════════════════════════════════════
 UC_Upload ..> UC_OCR : <<include>>
-UC_OCR ..> UC_Submit : <<extend>>
+UC_OCR ..> UC_EditJSON : <<include>>
+UC_EditJSON ..> UC_Submit : <<extend>>
 UC_ManualForm ..> UC_Submit : <<extend>>
 UC_SchoolReview ..> UC_SchoolAI : <<extend>>
 UC_DeptReview ..> UC_DeptAI : <<extend>>
 UC_FinanceReview ..> UC_FinanceAI : <<extend>>
+UC_Submit ..> UC_Notifications : <<extend>>
+UC_SimTest ..> UC_SimOverride : <<include>>
+UC_SimTest ..> UC_SimExit : <<include>>
 
 @enduml

@@ -1,0 +1,68 @@
+@startuml 智审通部署架构图
+' ============================================================
+' 智审通 — 部署架构图（方案 B：多容器）
+' ============================================================
+
+skinparam backgroundColor #FEFEFE
+skinparam defaultFontSize 12
+skinparam shadowing true
+skinparam nodeBackgroundColor #E8EAF6
+skinparam databaseBackgroundColor #FFF3E0
+skinparam componentBackgroundColor #E8F5E9
+
+title 智审通 部署架构图 v5.0
+
+node "用户浏览器" as Browser {
+}
+
+node "Nginx :80" as Nginx {
+  component "反向代理\n/api/* → backend:8080" as Proxy
+  component "前端静态文件\nReact build" as Static
+}
+
+node "后端容器 (FastAPI)" as Backend {
+  component "main.py\n(路由注册 + 中间件)" as Main
+  component "14 个 Routers" as Routers
+  component "Services\n(OCR/审批/RAG/规则引擎/通知...)" as Svc
+  component "auth.py\n(JWT + 模拟覆盖)" as Auth
+}
+
+node "推理容器 (llama.cpp)" as Inference {
+  component "server.py\n(GPU自动检测)" as Server
+  component "OpenAI 兼容 API\n:18080" as API
+}
+
+node "训练环境 (本地)" as Training {
+  component "train_lora.py" as Train
+  component "merge_lora.py" as Merge
+}
+
+database "SQLite\nzhishitong.db" as DB
+folder "uploads/\n(文件存储)" as Uploads
+folder "models/\n(GGUF 模型)" as Models
+folder "data/\n(知识库 + 语料)" as Data
+
+Browser --> Nginx : HTTP :80
+Nginx --> Backend : /api/*\n:8080
+Backend --> Inference : /v1/chat/completions\n:18080
+Backend --> DB
+Backend --> Uploads
+Inference --> Models
+Backend --> Data
+Training --> Models
+Training --> Data
+
+note bottom of Nginx
+  docker compose up -d
+  链式启动: DB(health) → llama(health) → backend → nginx
+end note
+
+note bottom of Inference
+  GPU 自动检测:
+  Apple Silicon → Metal
+  NVIDIA → CUDA
+  AMD → ROCm
+  无GPU → CPU
+end note
+
+@enduml

@@ -1,0 +1,49 @@
+@startuml 审批状态机
+' ============================================================
+' 智审通 — 审批记录状态机
+' ============================================================
+
+skinparam backgroundColor #FEFEFE
+skinparam defaultFontSize 13
+skinparam shadowing true
+skinparam stateBackgroundColor #E3F2FD
+skinparam stateBorderColor #1565C0
+
+title 审批记录状态机
+
+[*] --> pending : 用户提交申请
+
+state pending : ⏳ 已提交\n等待审批\nAI 分析完成
+
+pending --> approved : 审批人通过
+pending --> rejected : 审批人驳回
+pending --> needs_revision : 审批人标记需修改
+pending --> cancelled : 系统/管理员取消
+pending --> withdrawn : 用户主动撤回
+
+state approved : ✅ 审批通过\n(最终状态)
+state rejected : ❌ 审批驳回\n(最终状态)
+
+state needs_revision : ⚠️ 需修改补交
+needs_revision --> pending : 用户修改后重新提交
+needs_revision --> cancelled : 用户放弃
+
+state cancelled : 🚫 已取消\n(最终状态)
+
+state withdrawn : ↩️ 已撤回
+withdrawn --> pending : 用户编辑后重新提交
+withdrawn --> cancelled : 用户放弃
+
+' ── 多阶段流转注释 ──
+note right of pending
+  current_stage 字段追踪当前阶段:
+  dept_review → finance_review → school_review → completed
+  金额 ≤ 5000 时自动跳过 school_review
+end note
+
+note left of approved
+  多阶段审批中，每阶段审批人
+  都通过后才最终 approved
+end note
+
+@enduml

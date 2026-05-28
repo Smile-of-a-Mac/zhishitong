@@ -1,0 +1,107 @@
+@startuml 多阶段审批流程时序图
+' ============================================================
+' 智审通 — 多阶段审批流程时序图
+' 以「报销申请」为例（部门→财务→学校三级审批）
+' ============================================================
+
+skinparam backgroundColor #FEFEFE
+skinparam defaultFontSize 12
+skinparam sequenceMessageAlign center
+skinparam shadowing true
+
+title 多阶段审批流程 — 以报销申请为例
+
+actor "学生\n(申请人)" as Student
+participant "前端\n(WorkbenchPage)" as FE
+participant "后端\n(approval_router)" as API
+participant "审批服务\n(approval_service)" as AppSvc
+participant "规则引擎\n(rule_engine)" as Rule
+participant "RAG 服务\n(rag_service)" as RAG
+participant "通知服务\n(notification)" as Notif
+participant "数据库\n(SQLite)" as DB
+actor "部门管理员" as DeptAdmin
+actor "财务管理员" as FinanceAdmin
+actor "学校管理员" as SchoolAdmin
+
+== 第一阶段：提交申请 ==
+
+Student -> FE : 上传发票图片
+FE -> API : POST /api/ocr/upload
+API -> API : EasyOCR 文字提取
+API -> API : LLM JSON 填充
+API --> FE : 返回 filled_json
+FE -> Student : 展示可编辑表单
+Student -> FE : 确认并提交
+FE -> API : POST /api/approval/submit
+
+activate AppSvc
+AppSvc -> Rule : check_rules(报销)
+Rule --> AppSvc : {passed: true}
+
+AppSvc -> RAG : 合规性分析
+RAG --> AppSvc : 政策条文引用 + 建议
+
+AppSvc -> DB : 创建 ApprovalRecord\n(status=pending, current_stage=dept_review)
+AppSvc -> Notif : 通知部门管理员有新申请
+Notif -> DB : 写入 Notification
+deactivate AppSvc
+
+API --> FE : 提交成功\n(record_id=123)
+FE -> Student : 显示「已提交，等待审批」
+
+== 第二阶段：部门审批 ==
+
+DeptAdmin -> FE : 查看部门待审队列
+FE -> API : GET /api/dept/pending
+API --> FE : 待审列表
+DeptAdmin -> FE : 打开申请详情
+FE -> API : GET /api/approval/123
+API --> FE : 详情(OCR文本+JSON+AI建议+政策引用)
+FE -> DeptAdmin : 展示详情 + AI 智能建议
+
+alt 审批通过
+    DeptAdmin -> FE : 点击「通过」+ 填写意见
+    FE -> API : POST /api/dept/123/approve
+    activate AppSvc
+    AppSvc -> DB : status→approved,\ncurrent_stage→finance_review
+    AppSvc -> Notif : 通知财务管理员 + 申请人
+    deactivate AppSvc
+else 需修改
+    DeptAdmin -> FE : 点击「需修改」+ 填写原因
+    FE -> API : POST /api/dept/123/needs_revision
+    AppSvc -> Notif : 通知申请人修改
+    Student -> FE : 查看通知 → 修改 → 重新提交
+else 驳回
+    DeptAdmin -> FE : 点击「驳回」+ 填写原因
+    FE -> API : POST /api/dept/123/reject
+    AppSvc -> Notif : 通知申请人已驳回
+end
+
+== 第三阶段：财务审批 ==
+
+FinanceAdmin -> FE : 查看报销待审
+FE -> API : GET /api/finance/pending
+FinanceAdmin -> FE : 审核金额/发票
+
+alt 金额 ≤ 5000 → 自动跳过学校审批
+    FinanceAdmin -> FE : 财务通过
+    FE -> API : POST /api/finance/123/approve
+    AppSvc -> AppSvc : skip_rules:\n金额≤5000 → 跳过 school_review
+    AppSvc -> DB : status→approved,\ncurrent_stage→completed
+    AppSvc -> Notif : 通知申请人「审批通过」
+else 金额 > 5000 → 需学校审批
+    FinanceAdmin -> FE : 财务通过
+    FE -> API : POST /api/finance/123/approve
+    AppSvc -> DB : current_stage→school_review
+    AppSvc -> Notif : 通知学校管理员
+end
+
+== 第四阶段：学校审批（金额>5000时触发） ==
+
+SchoolAdmin -> FE : 查看学校待审
+SchoolAdmin -> FE : 通过/驳回
+FE -> API : POST /api/school/123/approve
+AppSvc -> DB : status→approved, stage→completed
+AppSvc -> Notif : 通知申请人「审批通过」
+
+@enduml

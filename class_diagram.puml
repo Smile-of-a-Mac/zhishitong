@@ -1,0 +1,268 @@
+@startuml 智审通数据模型类图 v5.0
+' ============================================================
+' 智审通 — 数据模型类图 (15 张表)
+' ============================================================
+
+skinparam backgroundColor #FEFEFE
+skinparam defaultFontSize 11
+skinparam classAttributeIconSize 0
+skinparam shadowing true
+
+title 智审通 数据模型类图 v5.0 (15 张表)
+
+' ── 枚举 ──
+enum TierEnum {
+  free
+  pro
+  pro_plus
+}
+
+enum ApiKeyType {
+  ocr
+  json_fill
+  llm
+}
+
+enum ApprovalStatus {
+  pending
+  approved
+  rejected
+  needs_revision
+  cancelled
+  withdrawn
+}
+
+enum NotificationType {
+  approval_submitted
+  approval_approved
+  approval_rejected
+  approval_needs_revision
+  approval_urged
+  approval_overdue
+  stage_advanced
+  system_announcement
+}
+
+enum ResourceType {
+  meeting_room
+  vehicle
+}
+
+enum BookingStatus {
+  pending
+  approved
+  rejected
+  cancelled
+}
+
+' ── 用户表 ──
+class User {
+  id : int PK
+  username : str
+  hashed_password : str
+  tier : TierEnum
+  llm_ocr_quota : int
+  llm_ocr_used : int
+  is_active : bool
+  is_admin : bool
+  is_school_admin : bool
+  is_dept_admin : bool
+  is_finance_admin : bool
+  department : str?
+  school : str?
+  real_name : str?
+  phone : str?
+  email : str?
+  student_id : str?
+  major : str?
+  class_name : str?
+  employee_id : str?
+  title : str?
+  created_at : datetime
+}
+
+' ── API Key 池 ──
+class ApiKey {
+  id : int PK
+  key_type : ApiKeyType
+  provider : str
+  api_base : str
+  api_key_encrypted : str
+  default_model : str
+  is_active : bool
+  usage_count : int
+  fail_count : int
+  note : str?
+}
+
+' ── 审批记录 ──
+class ApprovalRecord {
+  id : int PK
+  user_id : int FK
+  original_filename : str?
+  storage_path : str
+  ocr_provider : str?
+  ocr_model : str?
+  raw_ocr_text : text?
+  filled_json : text?
+  document_type : str?
+  status : ApprovalStatus
+  decision_reason : text?
+  policy_refs : text?
+  suggestions : text?
+  missing_info : text?
+  current_stage : str
+  stage_history_json : text
+  is_deleted : bool
+  created_at : datetime
+}
+
+' ── 配额流水 ──
+class QuotaLog {
+  id : int PK
+  user_id : int FK
+  action : str
+  detail : str?
+}
+
+' ── 审计日志 ──
+class AdminAuditLog {
+  id : int PK
+  admin_id : int FK
+  action : str
+  target_type : str
+  target_id : int?
+  detail : text?
+}
+
+' ── 系统日志 ──
+class SystemLog {
+  id : int PK
+  category : str
+  level : str
+  message : str
+  user_id : int?
+  duration_ms : int?
+  error_trace : text?
+  extra_json : text?
+}
+
+' ── 通知 ──
+class Notification {
+  id : int PK
+  user_id : int FK
+  type : NotificationType
+  title : str
+  body : str
+  record_id : int?
+  is_read : bool
+}
+
+' ── 审批意见模板 ──
+class ApprovalOpinionTemplate {
+  id : int PK
+  user_id : int FK
+  category : str
+  content : str
+  sort_order : int
+}
+
+' ── 审批代理 ──
+class ApprovalDelegation {
+  id : int PK
+  delegator_id : int FK
+  delegate_id : int FK
+  start_date : datetime
+  end_date : datetime
+  is_active : bool
+  reason : str?
+}
+
+' ── 预审规则 ──
+class RuleConfig {
+  id : int PK
+  rule_key : str
+  rule_name : str
+  document_type : str?
+  rule_type : str
+  field_key : str?
+  operator : str?
+  threshold_value : str?
+  error_message : str
+  severity : str
+  priority : int
+}
+
+' ── 公告/制度 ──
+class Announcement {
+  id : int PK
+  title : str
+  content : text
+  category : str
+  document_type : str?
+  is_pinned : bool
+  is_published : bool
+  view_count : int
+}
+
+' ── 资源：会议室 ──
+class ResourceRoom {
+  id : int PK
+  name : str
+  location : str
+  capacity : int
+  equipment : str?
+  is_active : bool
+}
+
+' ── 资源：车辆 ──
+class ResourceVehicle {
+  id : int PK
+  plate_number : str
+  model : str
+  seats : int
+  driver : str?
+  is_active : bool
+}
+
+' ── 资源预约 ──
+class ResourceBooking {
+  id : int PK
+  resource_type : ResourceType
+  resource_id : int
+  user_id : int FK
+  title : str
+  start_time : datetime
+  end_time : datetime
+  participants : str?
+  status : BookingStatus
+  reject_reason : str?
+}
+
+' ═══════════════════════════════════════
+'  关系
+' ═══════════════════════════════════════
+User ||--o{ ApprovalRecord : "提交"
+User ||--o{ QuotaLog : "配额变更"
+User ||--o{ Notification : "接收通知"
+User ||--o{ ApprovalOpinionTemplate : "常用批语"
+User ||--o{ ResourceBooking : "预约"
+User ||--o{ Announcement : "发布"
+
+User "委托人" ||--o{ ApprovalDelegation : "委托给"
+User "被委托人" ||--o{ ApprovalDelegation : "被委托"
+ApprovalRecord }o--|| ApiKey : "使用的Key"
+ApprovalRecord }o--o| Notification : "关联通知"
+
+AdminAuditLog }o--|| User : "操作人"
+RuleConfig }o--|| User : "创建人"
+Announcement }o--|| User : "作者"
+
+User ..> TierEnum
+ApiKey ..> ApiKeyType
+ApprovalRecord ..> ApprovalStatus
+Notification ..> NotificationType
+ResourceBooking ..> ResourceType
+ResourceBooking ..> BookingStatus
+
+@enduml

@@ -1,0 +1,110 @@
+@startuml 智审通系统架构图 v5.0
+' ============================================================
+' 智审通 — 系统架构图
+' ============================================================
+
+skinparam backgroundColor #FEFEFE
+skinparam defaultFontSize 12
+skinparam componentStyle uml2
+skinparam packageStyle rectangle
+skinparam shadowing true
+
+title 智审通 系统架构图 v5.0
+
+' ── 用户层 ──
+actor "普通用户\n(学生/教师)" as User
+actor "管理员\n(信息/学校/部门/财务)" as Admin
+
+' ── 前端层 ──
+package "前端 (React 18 + TypeScript + Vite)" as Frontend #E8F5E9 {
+  component "GlassCard\n毛玻璃卡片" as GlassCard
+  component "AuroraBackground\n极光背景" as Aurora
+  component "AIChatPanel\n政策问答悬浮" as ChatPanel
+  component "ApprovalProgressBar\n多阶段进度条" as ProgressBar
+  component "Frame\n玻璃侧边栏" as Frame
+  component "18 个路由页面\n(工作台/审批/看板/通知/资源等)" as Pages
+}
+
+' ── 后端层 ──
+package "后端 (FastAPI + SQLAlchemy + SQLite)" as Backend #E3F2FD {
+  package "Routers (14 个路由模块)" as Routers {
+    component "auth_router\n认证/注册/模拟" as AuthR
+    component "ocr_router\nOCR 多级路由" as OcrR
+    component "approval_router\n审批提交/流转" as ApprovalR
+    component "admin_router\n用户/学校/Key管理" as AdminR
+    component "dept_router\n部门审批" as DeptR
+    component "finance_router\n财务审批" as FinanceR
+    component "school_router\n学校审批/总览" as SchoolR
+    component "monitor_router\n系统监控" as MonitorR
+    component "dashboard_router\n数据看板" as DashR
+    component "notification_router\n站内信" as NotifR
+    component "announcement_router\n公告/制度文库" as AnnR
+    component "resource_router\n资源预约" as ResR
+    component "rag_router\nAI增强(6端点)" as RagR
+  }
+
+  package "Services (业务逻辑层)" as Services {
+    component "ocr_service\nEasyOCR+LLM填充" as OcrSvc
+    component "approval_service\n审批引擎" as ApprovalSvc
+    component "workflow.py\n11种事务多阶段流程" as WorkflowSvc
+    component "rule_engine\n智能预审规则" as RuleSvc
+    component "rag_service\nTF-IDF+知识库检索" as RagSvc
+    component "key_pool\n智能Key池" as KeyPool
+    component "notification_service\n站内信推送" as NotifSvc
+    component "crypto_service\nFernet加密" as CryptoSvc
+    component "file_service\n文件校验/存储" as FileSvc
+    component "template_service\n模板/类型检测" as TplSvc
+    component "logging_service\n结构化日志" as LogSvc
+  }
+
+  component "models.py\n15 张数据表" as Models
+  component "auth.py\nJWT + 模拟覆盖" as Auth
+  component "seed.py\n种子数据(8校)" as Seed
+}
+
+' ── 数据层 ──
+package "数据存储" as DataLayer #FFF3E0 {
+  database "SQLite\nzhishitong.db" as DB
+  folder "uploads/\n(按user_id隔离)" as Uploads
+  folder "data/policy_kb.json\nRAG知识库" as KB
+  folder "templates.json\n审批模板Schema" as Tpl
+}
+
+' ── AI 推理层 ──
+package "AI 推理层" as AILayer #FCE4EC {
+  component "inference_server\nllama.cpp + GPU检测" as LlamaCpp
+  component "EasyOCR\n本地文字提取" as EasyOCR
+  component "外部 LLM API\n(MiMo/DeepSeek/Qwen-VL)" as ExtLLM
+}
+
+' ── LoRA 训练管线 ──
+package "LoRA 微调管线" as LoRA #F3E5F5 {
+  component "train_lora.py\nQwen2.5-0.5B微调" as Train
+  component "merge_lora.py\n合并adapter" as Merge
+  component "lora_output/\nLoRA adapter" as LoraOut
+  component "qwen2.5-0.5b-lora.gguf\n微调后模型" as LoraGGUF
+}
+
+' ── 关系 ──
+User --> Frontend
+Admin --> Frontend
+Frontend --> Backend : HTTP API (:8080)
+Routers --> Services
+Services --> Models
+Models --> DB
+Services --> Uploads
+Services --> KB
+Services --> Tpl
+
+OcrSvc --> EasyOCR : 本地文字提取
+OcrSvc --> LlamaCpp : 本地JSON填充\n(:18080)
+OcrSvc --> ExtLLM : Pro/Pro+用户\nAPI调用
+RagSvc --> LlamaCpp : RAG问答\n(:18080)
+KeyPool --> ExtLLM : 多Key轮询
+
+Train --> LoraOut
+Merge --> LoraOut
+LoraOut --> LoraGGUF
+LlamaCpp ..> LoraGGUF : 微调后自动加载
+
+@enduml
