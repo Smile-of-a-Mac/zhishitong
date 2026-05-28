@@ -33,7 +33,7 @@ def seed():
 
         # ---- 超级管理员（唯一，不属于任何学校） ----
         # 生产部署前请务必通过 ADMIN_INIT_PASSWORD 环境变量覆盖初始密码
-        _admin_pwd = os.getenv("ADMIN_INIT_PASSWORD", "Admin@Sito2026!")
+        _admin_pwd = os.getenv("ADMIN_INIT_PASSWORD", "admin123")
         if not db.query(User).filter(User.username == "admin").first():
             db.add(User(
                 username="admin", hashed_password=hash_password(_admin_pwd),

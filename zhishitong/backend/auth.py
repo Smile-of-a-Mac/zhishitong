@@ -89,9 +89,10 @@ async def get_current_user(
     if not user or not user.is_active:
         raise HTTPException(status_code=401, detail="用户不存在或未激活")
 
-    # ── 管理员测试模拟：应用临时覆盖 ──
+    # ── 管理员测试模拟：应用临时覆盖（expunge 防止误写库）──
     if user.is_admin and user_id in _test_overrides:
         _apply_overrides(user, _test_overrides[user_id])
+        db.expunge(user)  # 关键：从会话分离，后续 commit 不会持久化模拟修改
 
     return user
 
