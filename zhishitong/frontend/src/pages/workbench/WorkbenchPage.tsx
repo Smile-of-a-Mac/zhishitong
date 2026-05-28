@@ -159,7 +159,7 @@ export default function WorkbenchPage() {
     }
   }, [result?.filled_json])
 
-  // 提交：有 record_id 走审批流，否则走手动申报
+  // 提交：有 OCR 存储路径走申报，否则走手动申报
   const handleFormSubmit = async () => {
     const useType = result?.document_type || formType
     if (!useType) { alert('请选择事务类型'); return }
@@ -184,11 +184,18 @@ export default function WorkbenchPage() {
         setSubmitResult(res.data)
         setResubmitId(null)
         clearState()
-      } else if (result?.record_id) {
-        // OCR 后有 record → 走审批提交
-        const res = await axios.post('/api/approvals', {
-          record_id: result.record_id,
-          edited_json: formFields,
+      } else if (result?.storage_path) {
+        // OCR 后有结果 → 走手动申报，同时附带 OCR 文件信息
+        const res = await axios.post('/api/approvals/manual', {
+          document_type: result.document_type || formType,
+          fields: formFields,
+          storage_path: result.storage_path,
+          raw_ocr_text: result.text,
+          original_filename: result.original_filename,
+          mime_type: result.mime_type,
+          file_size: result.file_size,
+          ocr_provider: result.provider,
+          ocr_model: '',  // 由后端记录
         })
         setSubmitResult(res.data)
         clearState()
@@ -205,7 +212,7 @@ export default function WorkbenchPage() {
       }
     } catch (e: any) {
       const err = e?.response?.data?.detail || '提交失败'
-      if (result?.record_id) {
+      if (result?.storage_path) {
         setSubmitResult({ error: err })
       } else {
         setFormResult({ error: err })
@@ -474,14 +481,14 @@ export default function WorkbenchPage() {
           <label style={{ display: 'block', fontSize: 12, color: '#888', marginBottom: 4 }}>事务类型</label>
           <select value={result?.document_type || formType} onChange={e => {
             const v = e.target.value
-            if (!result?.record_id) {
+            if (!result?.storage_path) {
               setFormType(v)
               setFormFields({})
               setFormResult(null)
             }
-          }} disabled={!!result?.record_id} style={{
+          }} disabled={!!result?.storage_path} style={{
             width: '100%', padding: '6px 10px', border: '1px solid #d9d9d9',
-            borderRadius: 4, fontSize: 13, background: result?.record_id ? '#f5f5f5' : '#fff',
+            borderRadius: 4, fontSize: 13, background: result?.storage_path ? '#f5f5f5' : '#fff',
           }}>
             <option value="">-- 请选择 --</option>
             {templates.map(t => (
@@ -543,7 +550,7 @@ export default function WorkbenchPage() {
         })()}
 
         <div style={{ marginTop: 16, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          {(result?.record_id || formType) && !isAdminUser && (
+          {(result?.storage_path || formType) && !isAdminUser && (
             <button onClick={handleFormSubmit} disabled={formSubmitting} className="glass-btn glass-btn-success" style={{ fontSize: 14, padding: '8px 24px' }}>
               {formSubmitting ? '提交中...' : '✅ 提交审批'}
             </button>

@@ -97,48 +97,31 @@ async def ocr_upload(
     # 5. 检测文档类型
     doc_type = detect_document_type(text)
 
-    # 6. 确定初始审批阶段
-    from services.workflow import get_first_stage
-    first_stage = get_first_stage(doc_type, filled_json)
-
-    # 7. 保存 OCR 记录
-    record = ApprovalRecord(
-        user_id=user.id,
-        original_filename=file.filename,
-        storage_path=storage_path,
-        mime_type=mime,
-        file_size=len(content),
-        ocr_provider=provider.value,
-        ocr_model=ocr_cfg.model if provider == OCRProvider.LLM else (
-            f"easyocr+{fill_cfg.model}" if fill_cfg.api_key else "easyocr+qwen3-0.5b"
-        ),
-        raw_ocr_text=text,
-        filled_json=json.dumps(filled_json, ensure_ascii=False) if filled_json else None,
-        document_type=doc_type,
-        current_stage=first_stage,
-        stage_history_json="[]",
-    )
-    db.add(record)
-    db.commit()
-    db.refresh(record)
+    # 6. 扣减配额（Pro 层 LLM OCR）
+    if provider == OCRProvider.LLM and user.tier == TierEnum.pro:
+        locked_user = db.query(User).filter(User.id == user.id).with_for_update().first()
+        locked_user.llm_ocr_used += 1
+        db.add(QuotaLog(
+            user_id=user.id, action="llm_ocr",
+            detail=f"第 {locked_user.llm_ocr_used} 次 LLM OCR",
+        ))
+        db.commit()
 
     remaining = max(0, user.llm_ocr_quota - user.llm_ocr_used)
 
-    # 结构化日志
-    ocr_tool = f"{provider.value}({record.ocr_model})"
+    # 7. 结构化日志（不创建审批记录，等用户确认后再提交）
+    ocr_tool = f"{provider.value}({ocr_cfg.model})"
     log(
         LogCategory.OCR,
         "info",
-        f"OCR 完成 [{ocr_tool}] {file.filename}",
+        f"OCR 完成 [{ocr_tool}] {file.filename}（待用户确认提交）",
         user_id=user.id,
-        record_id=record.id,
         duration_ms=duration_ms,
         tier=user.tier.value,
         provider=provider.value,
-        model=record.ocr_model,
+        model=ocr_cfg.model,
         doc_type=doc_type or "unknown",
         text_len=len(text),
-        has_filled_json=filled_json is not None and "error" not in str(filled_json),
     )
 
     return OCRResult(
@@ -148,5 +131,9 @@ async def ocr_upload(
         quota_remaining=remaining if user.tier == TierEnum.pro else None,
         document_type=doc_type,
         filled_json=filled_json,
-        record_id=record.id,
+        # 附带文件信息供后续提交使用
+        storage_path=storage_path,
+        original_filename=file.filename,
+        mime_type=mime,
+        file_size=len(content),
     )

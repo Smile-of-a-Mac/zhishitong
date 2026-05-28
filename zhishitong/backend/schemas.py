@@ -101,7 +101,11 @@ class OCRResult(BaseModel):
     quota_remaining: Optional[int] = None
     document_type: Optional[str] = None
     filled_json: Optional[dict] = None
-    record_id: Optional[int] = None
+    # 文件信息，供用户确认后提交时使用
+    storage_path: Optional[str] = None
+    original_filename: Optional[str] = None
+    mime_type: Optional[str] = None
+    file_size: Optional[int] = None
 
 
 # ===== 审批 =====
@@ -270,6 +274,14 @@ class ReviewSuggestRequest(BaseModel):
 class ManualSubmit(BaseModel):
     document_type: str = Field(..., pattern=r"^(reimbursement|leave|club_application|classroom_booking|business_trip|seal_application|dorm_change|scholarship|suspend_resume|enrollment_proof|abroad_application|onboarding|office_supplies|book_purchase)$")
     fields: dict  # 用户填写的字段 key-value
+    # OCR 附带信息（可选，有则关联文件）
+    storage_path: Optional[str] = None
+    raw_ocr_text: Optional[str] = None
+    original_filename: Optional[str] = None
+    mime_type: Optional[str] = None
+    file_size: Optional[int] = None
+    ocr_provider: Optional[str] = None
+    ocr_model: Optional[str] = None
 
 
 class DeptRecordOut(BaseModel):

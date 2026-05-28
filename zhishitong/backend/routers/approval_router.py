@@ -459,13 +459,17 @@ async def manual_submit(
 
     record = ApprovalRecord(
         user_id=user.id,
-        storage_path="manual",
-        original_filename=f"手动申报-{doc_type}",
+        storage_path=body.storage_path or "manual",
+        original_filename=body.original_filename or f"手动申报-{doc_type}",
         document_type=doc_type,
         filled_json=json.dumps(filled, ensure_ascii=False),
         current_stage=first_stage,
         stage_history_json="[]",
-        raw_ocr_text=f"手动填写申报 - {doc_type}",
+        raw_ocr_text=body.raw_ocr_text or f"手动填写申报 - {doc_type}",
+        ocr_provider=body.ocr_provider or "manual",
+        ocr_model=body.ocr_model or "",
+        mime_type=body.mime_type or "",
+        file_size=body.file_size or 0,
     )
     db.add(record)
     db.commit()

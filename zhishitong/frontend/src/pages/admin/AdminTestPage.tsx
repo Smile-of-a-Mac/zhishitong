@@ -82,6 +82,31 @@ export default function AdminTestPage() {
 
   return (
     <div>
+      {/* 模拟激活时的醒告横幅 */}
+      {session?.active && (
+        <GlassCard size="xs" style={{
+          marginBottom: 16,
+          background: 'rgba(255,149,0,0.12)',
+          border: '1px solid rgba(255,149,0,0.3)',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8,
+        }}>
+          <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--orange)' }}>
+            ⚡ 当前正在模拟 {session.overrides.tier || session.original.tier} 身份
+            {session.overrides.is_dept_admin ? ' · 部门管理员' : ''}
+            {session.overrides.is_school_admin ? ' · 学校管理员' : ''}
+            {session.overrides.is_finance_admin ? ' · 财务管理员' : ''}
+            {!session.overrides.is_dept_admin && !session.overrides.is_school_admin && !session.overrides.is_finance_admin && session.overrides.is_admin === false ? ' · 普通用户' : ''}
+          </span>
+          <button onClick={async () => {
+            await axios.delete('/api/admin/test-session')
+            await fetchSession()
+            alert('✅ 已退出模拟，恢复管理员身份')
+          }} className="glass-btn glass-btn-sm" style={{ background: 'var(--orange)', color: '#fff' }}>
+            🚪 退出模拟
+          </button>
+        </GlassCard>
+      )}
+
       <h1 className="page-title">🧪 模拟测试面板</h1>
       <p className="page-subtitle">管理员可临时切换角色/订阅/学校，无需反复登出登录。仅影响当前页面，不修改数据库。</p>
 

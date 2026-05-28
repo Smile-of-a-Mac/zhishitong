@@ -337,10 +337,60 @@ export default function Frame({ children }: { children: React.ReactNode }) {
 
       {/* 主内容区 */}
       <main>
+        {/* 模拟状态提示（仅管理员可见） */}
+        {user?.is_admin && <SimulationBanner />}
         <div className="content-container">
           {children}
         </div>
       </main>
+    </div>
+  )
+}
+
+/** 管理员模拟身份提示条 */
+function SimulationBanner() {
+  const [sim, setSim] = useState<{ active: boolean; overrides: Record<string, any> } | null>(null)
+  useEffect(() => {
+    const token = localStorage.getItem('token')
+    if (!token) return
+    fetch('/api/admin/test-session', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => setSim(d))
+      .catch(() => {})
+  }, [])
+
+  if (!sim?.active) return null
+
+  const exit = async () => {
+    const token = localStorage.getItem('token')
+    await fetch('/api/admin/test-session', { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } })
+    setSim(null)
+  }
+
+  return (
+    <div style={{
+      margin: '0 0 12px 0',
+      padding: '6px 14px',
+      borderRadius: 10,
+      background: 'rgba(255,149,0,0.12)',
+      border: '1px solid rgba(255,149,0,0.25)',
+      display: 'flex', alignItems: 'center', gap: 10,
+      fontSize: 13,
+      flexWrap: 'wrap',
+    }}>
+      <span style={{ color: 'var(--orange)', fontWeight: 600 }}>⚡ 模拟身份激活中</span>
+      <span style={{ color: 'var(--text-secondary)' }}>
+        {sim.overrides.tier || ''}
+        {sim.overrides.is_dept_admin ? ' · 部门管理员' : ''}
+        {sim.overrides.is_school_admin ? ' · 学校管理员' : ''}
+        {sim.overrides.is_finance_admin ? ' · 财务管理员' : ''}
+        {!sim.overrides.is_dept_admin && !sim.overrides.is_school_admin && !sim.overrides.is_finance_admin && sim.overrides.is_admin === false ? ' · 普通用户' : ''}
+      </span>
+      <button onClick={exit}
+        className="glass-btn glass-btn-sm"
+        style={{ marginLeft: 'auto', background: 'var(--orange)', color: '#fff', flexShrink: 0 }}>
+        🚪 退出模拟
+      </button>
     </div>
   )
 }
