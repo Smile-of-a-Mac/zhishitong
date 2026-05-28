@@ -1,0 +1,55 @@
+# ============================================================================
+# 智审通（sito）完整 Python 依赖清单
+# 覆盖范围：
+#   1) zhishitong/backend            (FastAPI 后端)
+#   2) zhishitong/inference_server   (llama.cpp 本地推理服务)
+#   3) training/                     (LoRA 训练与合并)
+#
+# 用法：
+#   python -m venv .venv
+#   source .venv/bin/activate
+#   pip install -r requirements.txt
+# ============================================================================
+
+# -------------------------------
+# Backend: Web/API & Data
+# -------------------------------
+fastapi==0.115.0
+uvicorn[standard]==0.30.0
+python-multipart==0.0.12
+pydantic==2.9.0
+sqlalchemy==2.0.35
+aiosqlite==0.20.0
+httpx==0.27.0
+
+# Auth / Security
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
+cryptography==43.0.0
+
+# File / Image / OCR
+python-magic==0.4.27
+Pillow==10.4.0
+easyocr==1.7.2
+
+# Workflow / RAG
+langgraph==0.2.0
+langchain==0.3.0
+chromadb==0.5.0
+scikit-learn==1.5.1
+
+# -------------------------------
+# Inference Server (llama.cpp)
+# -------------------------------
+# 可按硬件环境设置 CMAKE_ARGS 以启用 Metal/CUDA/ROCm
+llama-cpp-python>=0.3.0
+
+# -------------------------------
+# Training: LoRA Fine-tuning
+# -------------------------------
+torch>=2.0.0
+transformers>=4.40.0
+peft>=0.10.0
+sentencepiece>=0.1.99
+tqdm>=4.60.0
