@@ -3,6 +3,8 @@ import axios from 'axios'
 import { getDocTypeLabel } from '../../constants/docTypes'
 import { getFieldLabel } from '../../constants/fieldLabels'
 import GlassCard from '../../components/GlassCard'
+import ApprovalProgressBar from '../../components/ApprovalProgressBar'
+import { STATUS_LABELS, STAGE_LABELS } from '../../utils/constants'
 
 interface FinanceRecord {
   id: number; username: string; department: string | null
@@ -16,22 +18,6 @@ interface FinanceRecord {
 interface FinanceStats {
   department: string; total_records: number
   pending: number; approved: number; rejected: number; today_new: number
-}
-
-const STAGE_LABELS: Record<string, string> = {
-  dept_review: '📋 部门审批',
-  finance_review: '💰 财务审批',
-  school_review: '🏫 学校审批',
-  completed: '✅ 已完成',
-}
-
-const STATUS_LABELS: Record<string, string> = {
-  pending: '⏳ 待审批',
-  approved: '✅ 已通过',
-  rejected: '❌ 不通过',
-  needs_revision: '📝 需修改',
-  cancelled: '⊘ 申请已取消',
-  withdrawn: '↩️ 已撤回',
 }
 
 export default function FinanceAdminPage() {

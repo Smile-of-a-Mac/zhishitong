@@ -4,6 +4,8 @@ import { getDocTypeLabel } from '../../constants/docTypes'
 import { getFieldLabel } from '../../constants/fieldLabels'
 import GlassCard from '../../components/GlassCard'
 import AIDecisionPanel from '../../components/AIDecisionPanel'
+import ApprovalProgressBar from '../../components/ApprovalProgressBar'
+import { STATUS_LABELS } from '../../utils/constants'
 
 interface DeptRecord {
   id: number
@@ -30,15 +32,6 @@ interface DeptStats {
   approved: number
   rejected: number
   today_new: number
-}
-
-const STATUS_LABELS: Record<string, string> = {
-  pending: '⏳ 待审批',
-  approved: '✅ 已通过',
-  rejected: '❌ 不通过',
-  needs_revision: '📝 需修改',
-  cancelled: '⊘ 申请已取消',
-  withdrawn: '↩️ 已撤回',
 }
 
 export default function DeptAdminPage() {

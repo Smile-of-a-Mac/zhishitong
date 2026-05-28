@@ -3,6 +3,9 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import axios from 'axios'
 import { getDocTypeLabel } from '../../constants/docTypes'
 import GlassCard from '../../components/GlassCard'
+import ApprovalProgressBar from '../../components/ApprovalProgressBar'
+import { STAGE_LABELS, STATUS_LABELS } from '../../utils/constants'
+import { parseApiError } from '../../utils/api'
 
 type TabKey = 'all' | 'pending' | 'approved' | 'rejected'
 
@@ -12,77 +15,6 @@ const TAB_CONFIG: { key: TabKey; label: string; icon: string; statuses: string[]
   { key: 'approved', label: '已通过', icon: '✅', statuses: ['approved'] },
   { key: 'rejected', label: '已驳回', icon: '❌', statuses: ['rejected'] },
 ]
-
-const WORKFLOW_STAGES: Record<string, { key: string; label: string }[]> = {
-  reimbursement: [
-    { key: 'dept_review', label: '部门审核' },
-    { key: 'finance_review', label: '财务审核' },
-    { key: 'school_review', label: '学校审核' },
-  ],
-  leave: [
-    { key: 'dept_review', label: '辅导员审核' },
-  ],
-  club_application: [
-    { key: 'dept_review', label: '学院审核' },
-    { key: 'school_review', label: '团委审核' },
-  ],
-}
-
-const FALLBACK_STAGES = [
-  { key: 'dept_review', label: '部门审核' },
-  { key: 'school_review', label: '上级审核' },
-]
-
-const STAGE_LABELS: Record<string, string> = {
-  dept_review: '部门审核',
-  finance_review: '财务审核',
-  school_review: '学校审核',
-  completed: '已完成',
-}
-
-// ── 审批进度条组件 ──
-
-function ApprovalProgressBar({ currentStage, documentType }: { currentStage: string; documentType?: string | null }) {
-  const stages = (documentType && WORKFLOW_STAGES[documentType]) || FALLBACK_STAGES
-  const currentIdx = stages.findIndex(s => s.key === currentStage)
-
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, flexWrap: 'wrap' }}>
-      {stages.map((s, i) => {
-        let bg = 'var(--divider)'
-        let color = 'var(--text-secondary)'
-        if (i < currentIdx) { bg = '#34C759'; color = '#34C759' }
-        else if (i === currentIdx) { bg = 'var(--accent-color)'; color = 'var(--accent-color)' }
-        return (
-          <React.Fragment key={s.key}>
-            <span style={{
-              width: 8, height: 8, borderRadius: '50%', background: bg,
-              display: 'inline-block', flexShrink: 0,
-            }} />
-            <span style={{ color, fontWeight: i === currentIdx ? 600 : 400 }}>{s.label}</span>
-            {i < stages.length - 1 && (
-              <span style={{ color: 'var(--divider)', margin: '0 2px' }}>→</span>
-            )}
-          </React.Fragment>
-        )
-      })}
-    </div>
-  )
-}
-
-function parseApiError(error: any, fallback = '请求失败') {
-  const detail = error?.response?.data?.detail
-  if (!detail) return fallback
-  if (typeof detail === 'string') return detail
-  if (Array.isArray(detail)) {
-    return detail.map((d: any) => d?.msg || d?.message || JSON.stringify(d)).join('；')
-  }
-  try {
-    return JSON.stringify(detail)
-  } catch {
-    return fallback
-  }
-}
 
 export default function HistoryPage() {
   const [records, setRecords] = useState<any[]>([])
@@ -161,10 +93,7 @@ export default function HistoryPage() {
 
   if (loading) return <GlassCard style={{ color: 'var(--text-secondary)', padding: 40, textAlign: 'center' }}>加载中...</GlassCard>
 
-  const statusLabel = (s: string) =>
-    s === 'approved' ? '✅ 已通过' : s === 'rejected' ? '❌ 不通过' :
-    s === 'pending' ? '⏳ 待审批' : s === 'needs_revision' ? '📝 需修改' :
-    s === 'withdrawn' ? '↩️ 已撤回' : s === 'cancelled' ? '⊘ 已取消' : s
+  const statusLabel = (s: string) => STATUS_LABELS[s] || s
 
   const isConcluded = (s: string) => ['approved', 'rejected', 'cancelled'].includes(s)
   const canCancel = (s: string) => s === 'needs_revision'

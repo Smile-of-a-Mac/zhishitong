@@ -22,27 +22,11 @@ from services.template_service import get_template
 from services.ocr_service import _normalize_json_keys, _FIELD_KEY_MAP
 from services.crypto_service import decrypt
 from services.notification_service import notify_submitted, notify_urged
+from constants import get_doc_label
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/approvals", tags=["approvals"])
-
-
-_DOC_LABEL_MAP = {
-    "reimbursement": "报销申请", "leave": "请假申请",
-    "club_application": "社团活动申请", "classroom_booking": "教室借用",
-    "business_trip": "出差申请", "seal_application": "用章申请",
-    "dorm_change": "宿舍调换", "scholarship": "奖学金申请",
-    "suspend_resume": "休学/复学", "enrollment_proof": "在读证明",
-    "abroad_application": "因公出国", "onboarding": "入职报到",
-    "office_supplies": "办公用品领用", "book_purchase": "图书采购",
-}
-
-
-def _get_doc_label(doc_type: Optional[str]) -> str:
-    if not doc_type:
-        return "未知事务"
-    return _DOC_LABEL_MAP.get(doc_type, doc_type)
 
 
 def _notify_dept_admins(db: Session, applicant: User, record: ApprovalRecord):
@@ -57,7 +41,7 @@ def _notify_dept_admins(db: Session, applicant: User, record: ApprovalRecord):
         if not dept_admins:
             return
         admin_ids = [a.id for a in dept_admins]
-        doc_label = _get_doc_label(record.document_type)
+        doc_label = get_doc_label(record.document_type)
         notify_submitted(
             db, record.id, applicant.id,
             applicant.real_name or applicant.username,

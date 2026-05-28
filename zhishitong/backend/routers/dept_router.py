@@ -17,67 +17,10 @@ from auth import require_dept_admin
 from services.logging_service import LogCategory, log
 from services.workflow import get_stages, get_next_stage, get_stage_label, get_stage_role
 from services.notification_service import notify_review_result, notify_stage_advanced
+from constants import get_doc_label
+from routers.shared import build_stages, parse_filled, normalize_reason, record_to_out
 
 router = APIRouter(prefix="/api/dept", tags=["department"])
-
-
-def _build_stages(record: ApprovalRecord) -> list[dict]:
-    """从记录构建阶段列表"""
-    try:
-        stages = json.loads(record.stage_history_json or "[]")
-    except (json.JSONDecodeError, TypeError):
-        stages = []
-    for s in stages:
-        s["label"] = s.get("label", get_stage_label(record.document_type, s.get("stage", "")))
-    return stages
-
-
-def _parse_filled(record: ApprovalRecord) -> dict:
-    try:
-        return json.loads(record.filled_json) if record.filled_json else {}
-    except (json.JSONDecodeError, TypeError):
-        return {}
-
-
-def _normalize_reason(reason: Optional[str]) -> str:
-    return (reason or "").strip()
-
-
-def _get_doc_label(doc_type: Optional[str]) -> str:
-    """文档类型 → 中文标签，用于通知消息"""
-    if not doc_type:
-        return "未知事务"
-    return {
-        "reimbursement": "报销申请", "leave": "请假申请", 
-        "club_application": "社团活动申请", "classroom_booking": "教室借用",
-        "business_trip": "出差申请", "seal_application": "用章申请",
-        "dorm_change": "宿舍调换", "scholarship": "奖学金申请",
-        "suspend_resume": "休学/复学", "enrollment_proof": "在读证明",
-        "abroad_application": "因公出国", "onboarding": "入职报到",
-        "office_supplies": "办公用品领用", "book_purchase": "图书采购",
-    }.get(doc_type, doc_type)
-
-
-def _record_to_out(record: ApprovalRecord, db: Session) -> DeptRecordOut:
-    u = db.query(User).filter(User.id == record.user_id).first()
-    stages = _build_stages(record)
-    return DeptRecordOut(
-        id=record.id,
-        username=u.username if u else "unknown",
-        department=u.department if u else None,
-        original_filename=record.original_filename,
-        document_type=record.document_type,
-        status=record.status.value if record.status else "pending",
-        current_stage=record.current_stage or "dept_review",
-        filled_json=record.filled_json,
-        decision_reason=record.decision_reason,
-        suggestions=record.suggestions,
-        missing_info=record.missing_info,
-        stages=stages,
-        image_url=f"/api/files/{record.id}" if record.storage_path and record.storage_path != "manual" else None,
-        is_deleted=record.is_deleted,
-        created_at=record.created_at,
-    )
 
 
 # ========== 事务列表 ==========
@@ -134,7 +77,7 @@ def list_dept_records(
         (page - 1) * page_size
     ).limit(page_size).all()
 
-    items = [_record_to_out(r, db) for r in records]
+    items = [record_to_out(r, db) for r in records]
     return DeptRecordListOut(items=items, total=total, page=page, page_size=page_size)
 
 
@@ -165,7 +108,7 @@ def update_record_status(
 
     old_status = record.status.value if record.status else "pending"
     new_status = body.status
-    reason = _normalize_reason(body.reason)
+    reason = normalize_reason(body.reason)
 
     if new_status in {"rejected", "needs_revision"} and not reason:
         raise HTTPException(400, "驳回或需修改时必须填写审批理由")
@@ -186,7 +129,7 @@ def update_record_status(
 
     if new_status == "approved":
         # 部门审批通过 → 进入下一阶段
-        filled = _parse_filled(record)
+        filled = parse_filled(record)
         next_stage = get_next_stage(record.document_type, "dept_review", filled)
         if next_stage:
             next_label = get_stage_label(record.document_type, next_stage)
@@ -196,8 +139,8 @@ def update_record_status(
             else:
                 record.decision_reason = f"[部门审批通过] 转交 {next_label}"
             # 通知申请人：审批通过，进入下一阶段
-            notify_review_result(db, record_id, record.user_id, "通过", reason, _get_doc_label(record.document_type))
-            notify_stage_advanced(db, record_id, record.user_id, next_label, _get_doc_label(record.document_type))
+            notify_review_result(db, record_id, record.user_id, "通过", reason, get_doc_label(record.document_type))
+            notify_stage_advanced(db, record_id, record.user_id, next_label, get_doc_label(record.document_type))
         else:
             record.status = ApprovalStatus.approved
             record.current_stage = "completed"
@@ -206,17 +149,17 @@ def update_record_status(
             else:
                 record.decision_reason = "[部门审批通过] 全部审批完成"
             # 通知申请人：最终通过
-            notify_review_result(db, record_id, record.user_id, "通过", reason, _get_doc_label(record.document_type))
+            notify_review_result(db, record_id, record.user_id, "通过", reason, get_doc_label(record.document_type))
     elif new_status == "needs_revision":
         record.status = ApprovalStatus.needs_revision
         record.decision_reason = f"[部门标记需修改] {reason}"
         # 通知申请人：需修改
-        notify_review_result(db, record_id, record.user_id, "需修改", reason, _get_doc_label(record.document_type))
+        notify_review_result(db, record_id, record.user_id, "需修改", reason, get_doc_label(record.document_type))
     else:
         record.status = ApprovalStatus(new_status)
         record.decision_reason = f"[部门管理员: {admin.username}] {reason}"
         # 通知申请人：驳回
-        notify_review_result(db, record_id, record.user_id, "驳回", reason, _get_doc_label(record.document_type))
+        notify_review_result(db, record_id, record.user_id, "驳回", reason, get_doc_label(record.document_type))
 
     db.add(AdminAuditLog(
         admin_id=admin.id, action="dept_review",
@@ -295,4 +238,4 @@ def get_dept_record(
         owner = db.query(User).filter(User.id == record.user_id).first()
         if not owner or owner.department != admin.department:
             raise HTTPException(403, "无权查看")
-    return _record_to_out(record, db)
+    return record_to_out(record, db)

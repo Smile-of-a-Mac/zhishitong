@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import GlassCard from '../../components/GlassCard'
 import { useAuth } from '../../hooks/useAuth'
+import { getDocLabel, getDocIcon, VALID_DOC_TYPES } from '../../constants/docTypes'
+import { useFormStorage } from '../../hooks/useFormStorage'
 
 interface TemplateField {
   key: string; label: string; type: string
@@ -12,76 +14,16 @@ interface Template {
   key: string; label: string; icon: string; fields: TemplateField[]
 }
 
-const DOC_TYPES: Record<string, string> = {
-  reimbursement: 'reimbursement',
-  leave: 'leave',
-  club_application: 'club_application',
-  classroom_booking: 'classroom_booking',
-  business_trip: 'business_trip',
-  seal_application: 'seal_application',
-  dorm_change: 'dorm_change',
-  scholarship: 'scholarship',
-  suspend_resume: 'suspend_resume',
-  enrollment_proof: 'enrollment_proof',
-  abroad_application: 'abroad_application',
-  onboarding: 'onboarding',
-  office_supplies: 'office_supplies',
-  book_purchase: 'book_purchase',
-}
-
-const DOC_ICONS: Record<string, string> = {
-  reimbursement: '💰', leave: '📝', club_application: '🎉',
-  classroom_booking: '🏫', business_trip: '✈️',
-  seal_application: '🔖', dorm_change: '🏠', scholarship: '🏆',
-  suspend_resume: '🎓', enrollment_proof: '📄',
-  abroad_application: '🌍', onboarding: '💼',
-  office_supplies: '🖊️', book_purchase: '📚',
-}
-
-const DOC_LABELS: Record<string, string> = {
-  reimbursement: '报销申请', leave: '请假申请', club_application: '社团活动申请',
-  classroom_booking: '教室借用', business_trip: '出差申请',
-  seal_application: '用章申请', dorm_change: '宿舍调换', scholarship: '奖学金申请',
-  suspend_resume: '休学/复学', enrollment_proof: '在读证明',
-  abroad_application: '因公出国', onboarding: '入职报到',
-  office_supplies: '办公用品领用', book_purchase: '图书采购',
-}
-
-const STORAGE_PREFIX = 'zhishitong_manual_'
-
 export default function ManualFormPage() {
   const { docType } = useParams<{ docType: string }>()
   const nav = useNavigate()
   const { user } = useAuth()
   const [templates, setTemplates] = useState<Template[]>([])
-  const [formFields, setFormFields] = useState<Record<string, string>>({})
+  const { data: formFields, setData: setFormFields, clear: clearFormStorage } = useFormStorage<Record<string, string>>(
+    user?.id, `manual_${docType}`, {}
+  )
   const [submitting, setSubmitting] = useState(false)
   const [result, setResult] = useState<any>(null)
-
-  // 使用 userId + docType 作为 key，防止跨用户/跨事务泄露
-  const storageKey = `${STORAGE_PREFIX}${user?.id ?? 'guest'}_${docType}`
-
-  // 恢复保存的状态
-  useEffect(() => {
-    try {
-      const raw = sessionStorage.getItem(storageKey)
-      if (raw) {
-        const saved = JSON.parse(raw)
-        if (saved?.docType === docType && saved?.userId === user?.id) {
-          setFormFields(saved.formFields || {})
-        }
-      }
-    } catch {}
-  }, [docType, storageKey, user?.id])
-
-  // 状态变化时自动保存
-  useEffect(() => {
-    if (Object.keys(formFields).length > 0) {
-      try {
-        sessionStorage.setItem(storageKey, JSON.stringify({ docType, userId: user?.id, formFields }))
-      } catch {}
-    }
-  }, [formFields, storageKey, docType, user?.id])
 
   useEffect(() => {
     axios.get('/api/templates').then(r => {
@@ -120,17 +62,16 @@ export default function ManualFormPage() {
         fields: submitData,
       })
       setResult(res.data)
-      setFormFields({})
-      try { sessionStorage.removeItem(storageKey) } catch {}
+      clearFormStorage()
     } catch (e: any) {
       setResult({ error: e?.response?.data?.detail || '提交失败' })
     } finally { setSubmitting(false) }
   }
 
-  const icon = DOC_ICONS[docType || ''] || '📋'
-  const title = DOC_LABELS[docType || ''] || '事务申报'
+  const icon = getDocIcon(docType)
+  const title = getDocLabel(docType)
 
-  if (!docType || !DOC_TYPES[docType]) {
+  if (!docType || !VALID_DOC_TYPES.includes(docType)) {
     return <GlassCard style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>未知的事务类型</GlassCard>
   }
 
@@ -139,7 +80,7 @@ export default function ManualFormPage() {
     return (
       <GlassCard style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 40 }}>
         <div style={{ fontSize: 40, marginBottom: 12 }}>🚫</div>
-        <p>部门管理员不能提交「{DOC_LABELS[docType] || docType}」申请</p>
+        <p>部门管理员不能提交「{getDocLabel(docType)}」申请</p>
         <p style={{ fontSize: 13 }}>请使用普通用户账号提交，避免审批自己提交的申请</p>
         <button onClick={() => nav('/dept')} className="glass-btn glass-btn-sm" style={{ marginTop: 8 }}>返回部门管理</button>
       </GlassCard>

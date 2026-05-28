@@ -22,6 +22,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 from sqlalchemy.orm import Session
 
 from config import LLAMA_SERVER_URL, LLM_API_BASE, LLM_API_KEY, LLM_FILL_MODEL
+from constants import get_doc_label
 
 logger = logging.getLogger(__name__)
 
@@ -250,20 +251,6 @@ def _extract_json(text: str) -> dict:
     return json.loads(text)
 
 
-_DOC_LABELS = {
-    "reimbursement": "报销申请", "leave": "请假申请",
-    "business_trip": "出差申请", "club_application": "社团活动申请",
-    "classroom_booking": "教室借用", "seal_application": "用章申请",
-    "scholarship": "奖学金申请", "dorm_change": "宿舍调换申请",
-    "enrollment_proof": "在读证明", "abroad_application": "因公出国申请",
-    "office_supplies": "办公用品领用", "book_purchase": "图书采购",
-}
-
-
-def _doc_label(doc_type: str) -> str:
-    return _DOC_LABELS.get(doc_type, doc_type)
-
-
 # ============================================================
 #  四、合规性分析（RAG + LLM）
 # ============================================================
@@ -283,7 +270,7 @@ async def check_compliance(form_json: dict, doc_type: str, db: Session) -> dict:
         for h in policy_hits
     ) if policy_hits else "暂无相关政策条文。"
 
-    doc_name = _doc_label(doc_type)
+    doc_name = get_doc_label(doc_type)
 
     prompt = f"""你是一名高校行政审批合规顾问。请严格依据下方政策条文，分析该申请表单的合规性。
 
@@ -461,7 +448,7 @@ async def generate_opinion(
         "needs_revision": "需补充材料后重新提交",
     }.get(decision, decision)
 
-    doc_name = _doc_label(doc_type)
+    doc_name = get_doc_label(doc_type)
     issues_text = "；".join(issues[:3]) if issues else "未发现明显问题"
     policy_text = ""
     if policy_hits:
@@ -518,7 +505,7 @@ _INTENT_KEYWORDS: dict[str, list[str]] = {
 async def parse_intent(text: str) -> dict:
     """识别用户意图，返回推荐文档类型及可预填字段"""
     keyword_type = _keyword_intent(text)
-    doc_name = _doc_label(keyword_type)
+    doc_name = get_doc_label(keyword_type)
 
     prompt = f"""你是智能表单助手。根据用户描述识别申请意图并提取可预填字段。
 
@@ -549,7 +536,7 @@ async def parse_intent(text: str) -> dict:
         result["prefill_fields"] = pf
         if not result.get("document_type"):
             result["document_type"] = keyword_type
-        result["doc_label"] = _doc_label(result["document_type"])
+        result["doc_label"] = get_doc_label(result["document_type"])
         result["confidence"] = float(result.get("confidence", 0.65))
         return result
     except Exception as e:
