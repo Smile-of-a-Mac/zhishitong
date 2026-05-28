@@ -125,10 +125,11 @@ async def ocr_upload(
     remaining = max(0, user.llm_ocr_quota - user.llm_ocr_used)
 
     # 结构化日志
+    ocr_tool = f"{provider.value}({record.ocr_model})"
     log(
         LogCategory.OCR,
         "info",
-        f"OCR 完成: {file.filename}",
+        f"OCR 完成 [{ocr_tool}] {file.filename}",
         user_id=user.id,
         record_id=record.id,
         duration_ms=duration_ms,

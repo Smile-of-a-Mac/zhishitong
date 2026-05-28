@@ -225,7 +225,13 @@ export default function AdminMonitorPage() {
           <GlassCard size="sm" style={{ padding: 0, background: '#1e1e1e', fontFamily: 'monospace', fontSize: 12, maxHeight: 500, overflow: 'auto' }}>
             {logs.length === 0 ? (
               <div style={{ color: '#888', padding: '16px', textAlign: 'center' }}>暂无日志</div>
-            ) : logs.map((l, i) => (
+            ) : logs.map((l, i) => {
+              const extraTags: string[] = []
+              if (l.extra?.provider) extraTags.push(l.extra.provider)
+              if (l.extra?.model) extraTags.push(l.extra.model)
+              if (l.extra?.tier) extraTags.push(l.extra.tier)
+              if (l.extra?.status) extraTags.push(String(l.extra.status))
+              return (
               <div key={i} style={{
                 padding: '3px 12px', borderBottom: '1px solid #333',
                 display: 'flex', gap: 8, alignItems: 'flex-start',
@@ -237,15 +243,20 @@ export default function AdminMonitorPage() {
                   color: LEVEL_COLORS[l.level] || '#888', fontWeight: 600,
                   minWidth: 56, textAlign: 'center',
                 }}>[{l.level.toUpperCase()}]</span>
-                <span style={{ color: '#61afef', minWidth: 60 }}>
+                <span style={{ color: '#61afef', minWidth: 52 }}>
                   {CATEGORY_LABELS[l.category] || l.category}
                 </span>
                 <span style={{ color: '#abb2bf', flex: 1, wordBreak: 'break-all' }}>{l.message}</span>
+                {extraTags.length > 0 && (
+                  <span style={{ color: '#e5c07b', whiteSpace: 'nowrap', fontSize: 11 }}>
+                    {extraTags.join(' · ')}
+                  </span>
+                )}
                 {l.duration_ms !== null && (
                   <span style={{ color: '#888', whiteSpace: 'nowrap' }}>{l.duration_ms}ms</span>
                 )}
               </div>
-            ))}
+            )})}
           </GlassCard>
         </>
       )}
