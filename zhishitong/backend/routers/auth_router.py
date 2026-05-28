@@ -11,6 +11,7 @@ from database import get_db
 from models import User, TierEnum
 from schemas import UserCreate, UserOut, Token, LoginRequest
 from auth import hash_password, verify_password, create_token, get_current_user
+from auth import clear_test_override
 from services.logging_service import LogCategory, log
 
 router = APIRouter(prefix="/api", tags=["auth"])
@@ -75,6 +76,9 @@ def login(body: LoginRequest, request: Request, db: Session = Depends(get_db)):
         log(LogCategory.AUTH, "warning", f"已禁用用户尝试登录: {user.username}", user_id=user.id)
         raise HTTPException(403, "该账号已被管理员禁用，请联系管理员恢复")
     log(LogCategory.AUTH, "info", f"用户登录: {user.username}", user_id=user.id, tier=user.tier.value)
+    # 管理员登录时自动清除测试模拟覆盖
+    if user.is_admin:
+        clear_test_override(user.id)
     return Token(access_token=create_token(user), user=UserOut.model_validate(user))
 
 
