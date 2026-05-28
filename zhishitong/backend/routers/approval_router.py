@@ -161,15 +161,16 @@ def get_approval(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    record = (
-        db.query(ApprovalRecord)
-        .filter(
-            ApprovalRecord.id == record_id,
-            ApprovalRecord.user_id == user.id,
-            ApprovalRecord.is_deleted == False,
-        )
-        .first()
-    )
+    # 管理员可查看所有记录；普通用户只能看自己的
+    is_admin = user.is_admin or user.is_dept_admin or user.is_school_admin or user.is_finance_admin
+    filters = [
+        ApprovalRecord.id == record_id,
+        ApprovalRecord.is_deleted == False,
+    ]
+    if not is_admin:
+        filters.append(ApprovalRecord.user_id == user.id)
+
+    record = db.query(ApprovalRecord).filter(*filters).first()
     if not record:
         raise HTTPException(404, "记录不存在")
     return ApprovalOut(

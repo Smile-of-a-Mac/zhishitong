@@ -9,6 +9,18 @@ const APPLY_NAV: NavItem[] = [
   { to: '/apply/reimbursement', label: '💰 报销申请' },
   { to: '/apply/leave', label: '📝 请假申请' },
   { to: '/apply/club_application', label: '🎉 社团活动申请' },
+  { to: '/apply/scholarship', label: '🏆 奖学金申请' },
+  { to: '/apply/suspend_resume', label: '🎓 休学/复学' },
+  { to: '/apply/enrollment_proof', label: '📄 在读证明' },
+  { to: '/apply/diploma_verification', label: '📜 学历学位证明' },
+  { to: '/apply/transcript_print', label: '📜 成绩单打印' },
+  { to: '/apply/class_reschedule', label: '🔀 调停课申请' },
+  { to: '/apply/makeup_exam', label: '📝 缓考/补考' },
+  { to: '/apply/exam_review', label: '📋 试卷查阅' },
+  { to: '/apply/classroom_booking', label: '🏫 教室借用' },
+  { to: '/apply/dorm_change', label: '🏠 宿舍调换' },
+  { to: '/apply/seal_application', label: '🔖 用章申请' },
+  { to: '/', label: '🤖 智能工作台（更多…）' },
 ]
 
 const TOOL_NAV: NavItem[] = [

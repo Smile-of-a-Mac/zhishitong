@@ -39,22 +39,25 @@ export default function HistoryPage() {
   useEffect(() => { fetch() }, [])
 
   // 支持 ?detail=recordId 从通知页面跳转来自动打开详情
+  const detailFetchedRef = React.useRef<number | null>(null)
   useEffect(() => {
     const detailId = searchParams.get('detail')
-    if (detailId) {
-      const id = parseInt(detailId)
-      if (id && records.length > 0) {
-        // 如果记录已在列表中，直接打开详情
-        const existing = records.find(r => r.id === id)
-        if (existing) {
-          showDetail(id)
-          return
-        }
-      }
-      // 否则先发起一次查询
-      if (id) showDetail(id)
+    if (!detailId || loading) return
+    const id = parseInt(detailId)
+    if (!id) return
+    // 避免重复请求同一个 detail
+    if (detailFetchedRef.current === id) return
+    detailFetchedRef.current = id
+
+    // 如果记录已在列表中，直接打开详情（无需发请求）
+    const existing = records.find(r => r.id === id)
+    if (existing) {
+      setDetail(existing)
+      return
     }
-  }, [searchParams, records])
+    // 不在列表中（如管理员查看他人记录），单独请求
+    showDetail(id)
+  }, [searchParams, records, loading])
 
   const activeTabConfig = TAB_CONFIG.find(t => t.key === activeTab)
   const filteredRecords = activeTab === 'all'
