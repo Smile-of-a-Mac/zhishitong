@@ -20,7 +20,6 @@ const APPLY_NAV: NavItem[] = [
   { to: '/apply/classroom_booking', label: '🏫 教室借用' },
   { to: '/apply/dorm_change', label: '🏠 宿舍调换' },
   { to: '/apply/seal_application', label: '🔖 用章申请' },
-  { to: '/', label: '🤖 智能工作台（更多…）' },
 ]
 
 const TOOL_NAV: NavItem[] = [
