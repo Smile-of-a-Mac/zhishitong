@@ -8,6 +8,7 @@ interface TestSession {
   original: {
     username: string
     tier: string
+    is_admin: boolean
     is_dept_admin: boolean
     is_school_admin: boolean
     is_finance_admin: boolean
@@ -17,11 +18,11 @@ interface TestSession {
 }
 
 const PRESET_SCENARIOS = [
-  { label: '👨‍🎓 学生 (Pro)', overrides: { tier: 'pro', is_dept_admin: false, is_school_admin: false, is_finance_admin: false, department: '计算机学院', school: '山东科技大学' } },
-  { label: '👨‍🏫 部门管理员', overrides: { tier: 'pro', is_dept_admin: true, is_school_admin: false, is_finance_admin: false, department: '计算机学院', school: '山东科技大学' } },
-  { label: '🏫 学校管理员', overrides: { tier: 'pro_plus', is_dept_admin: false, is_school_admin: true, is_finance_admin: false, department: '', school: '山东科技大学' } },
-  { label: '💰 财务管理员', overrides: { tier: 'pro_plus', is_dept_admin: false, is_school_admin: false, is_finance_admin: true, department: '财务处', school: '山东科技大学' } },
-  { label: '🆓 免费用户', overrides: { tier: 'free', is_dept_admin: false, is_school_admin: false, is_finance_admin: false } },
+  { label: '👨‍🎓 学生 (Pro)', overrides: { tier: 'pro', is_admin: false, is_dept_admin: false, is_school_admin: false, is_finance_admin: false, department: '计算机学院', school: '山东科技大学' } },
+  { label: '👨‍🏫 部门管理员', overrides: { tier: 'pro', is_admin: false, is_dept_admin: true, is_school_admin: false, is_finance_admin: false, department: '计算机学院', school: '山东科技大学' } },
+  { label: '🏫 学校管理员', overrides: { tier: 'pro_plus', is_admin: false, is_dept_admin: false, is_school_admin: true, is_finance_admin: false, department: '', school: '山东科技大学' } },
+  { label: '💰 财务管理员', overrides: { tier: 'pro_plus', is_admin: false, is_dept_admin: false, is_school_admin: false, is_finance_admin: true, department: '财务处', school: '山东科技大学' } },
+  { label: '🆓 免费用户', overrides: { tier: 'free', is_admin: false, is_dept_admin: false, is_school_admin: false, is_finance_admin: false } },
   { label: '🧹 还原管理员', overrides: {}, reset: true },
 ]
 
@@ -30,6 +31,7 @@ export default function AdminTestPage() {
   const [customTier, setCustomTier] = useState('')
   const [customDept, setCustomDept] = useState('')
   const [customSchool, setCustomSchool] = useState('')
+  const [customIsAdmin, setCustomIsAdmin] = useState(false)
   const [customDeptAdmin, setCustomDeptAdmin] = useState(false)
   const [customSchoolAdmin, setCustomSchoolAdmin] = useState(false)
   const [customFinanceAdmin, setCustomFinanceAdmin] = useState(false)
@@ -61,6 +63,7 @@ export default function AdminTestPage() {
     if (customTier) overrides.tier = customTier
     if (customDept) overrides.department = customDept
     if (customSchool) overrides.school = customSchool
+    overrides.is_admin = customIsAdmin
     overrides.is_dept_admin = customDeptAdmin
     overrides.is_school_admin = customSchoolAdmin
     overrides.is_finance_admin = customFinanceAdmin
@@ -96,6 +99,7 @@ export default function AdminTestPage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 8 }}>
             <div><span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>用户名</span><div style={{ fontWeight: 600 }}>{session.original.username}</div></div>
             <div><span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>订阅层级</span><div>{badge(session.active ? session.overrides.tier || session.original.tier : session.original.tier)}</div></div>
+            <div><span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>系统管理员</span><div>{badge(session.active ? session.overrides.is_admin ?? session.original.is_admin : session.original.is_admin)}</div></div>
             <div><span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>部门管理员</span><div>{badge(session.active ? session.overrides.is_dept_admin ?? session.original.is_dept_admin : session.original.is_dept_admin)}</div></div>
             <div><span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>学校管理员</span><div>{badge(session.active ? session.overrides.is_school_admin ?? session.original.is_school_admin : session.original.is_school_admin)}</div></div>
             <div><span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>财务管理员</span><div>{badge(session.active ? session.overrides.is_finance_admin ?? session.original.is_finance_admin : session.original.is_finance_admin)}</div></div>
@@ -142,6 +146,7 @@ export default function AdminTestPage() {
               placeholder="如: 计算机学院" className="glass-input" />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingTop: 4 }}>
+            <label style={{ fontSize: 12 }}><input type="checkbox" checked={customIsAdmin} onChange={e => setCustomIsAdmin(e.target.checked)} /> 系统管理员</label>
             <label style={{ fontSize: 12 }}><input type="checkbox" checked={customDeptAdmin} onChange={e => setCustomDeptAdmin(e.target.checked)} /> 部门管理员</label>
             <label style={{ fontSize: 12 }}><input type="checkbox" checked={customSchoolAdmin} onChange={e => setCustomSchoolAdmin(e.target.checked)} /> 学校管理员</label>
             <label style={{ fontSize: 12 }}><input type="checkbox" checked={customFinanceAdmin} onChange={e => setCustomFinanceAdmin(e.target.checked)} /> 财务管理员</label>

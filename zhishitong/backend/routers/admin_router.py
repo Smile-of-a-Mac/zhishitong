@@ -842,6 +842,7 @@ def key_pool_stats(
 
 class TestSessionOverride(BaseModel):
     tier: Optional[str] = None          # free | pro | pro_plus
+    is_admin: Optional[bool] = None
     is_dept_admin: Optional[bool] = None
     is_school_admin: Optional[bool] = None
     is_finance_admin: Optional[bool] = None
@@ -862,6 +863,7 @@ def get_test_session(
         "original": {
             "username": admin.username,
             "tier": admin.tier.value,
+            "is_admin": admin.is_admin,
             "is_dept_admin": admin.is_dept_admin,
             "is_school_admin": admin.is_school_admin,
             "is_finance_admin": admin.is_finance_admin,
@@ -888,7 +890,7 @@ def set_test_session(
         if body.tier not in ("free", "pro", "pro_plus"):
             raise HTTPException(400, f"无效订阅层级: {body.tier}")
         overrides["tier"] = body.tier
-    for field in ("is_dept_admin", "is_school_admin", "is_finance_admin"):
+    for field in ("is_admin", "is_dept_admin", "is_school_admin", "is_finance_admin"):
         if getattr(body, field) is not None:
             overrides[field] = getattr(body, field)
     if body.department is not None:
