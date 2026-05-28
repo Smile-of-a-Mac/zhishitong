@@ -281,5 +281,5 @@ python merge_lora.py       # 合并
 
 ## 设计文档
 
-- 📐 [产品设计文档（27 章）](../docs/DESIGN.md) — 完整的产品架构、数据模型、审批流程、安全策略
-- 🔧 [运维排查手册](../docs/TROUBLESHOOTING.md) — 系统架构、常见问题排查、日志格式参考
+- 📐 [产品设计文档（27 章）](docs/DESIGN.md) — 完整的产品架构、数据模型、审批流程、安全策略
+- 🔧 [运维排查手册](docs/TROUBLESHOOTING.md) — 系统架构、常见问题排查、日志格式参考
