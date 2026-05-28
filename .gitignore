@@ -36,6 +36,20 @@ models/*.gguf
 *.pt
 *.pth
 
+# ===== 训练/推理产物（大文件，禁止提交） =====
+lora_output/
+lora_output_merged/
+training/checkpoints/
+training/output/
+
+# 本地模型目录（如需保留占位，可提交 .gitkeep）
+models/qwen2.5-0.5b-local/
+
+# 训练语料/抓取原始页面（体积大）
+data/pages/
+data/*_corpus_*.jsonl
+zhishitong/data/*_corpus_*.jsonl
+
 # ===== 环境变量 =====
 .env
 .env.*
