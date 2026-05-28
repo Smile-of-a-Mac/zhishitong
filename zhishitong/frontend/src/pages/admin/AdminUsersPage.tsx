@@ -103,7 +103,7 @@ export default function AdminUsersPage() {
       {showAdd && (
         <GlassCard size="sm" style={{ marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ fontWeight: 600, fontSize: 14 }}>添加新成员</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          <div className="responsive-form-grid" style={{ gap: 8 }}>
             <input placeholder="用户名 *" value={addForm.username} onChange={e => setAddForm(f => ({ ...f, username: e.target.value }))}
               className="glass-input" style={{ padding: '6px 10px' }} />
             <input type="password" placeholder="密码 *" value={addForm.password} onChange={e => setAddForm(f => ({ ...f, password: e.target.value }))}

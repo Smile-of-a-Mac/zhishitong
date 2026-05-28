@@ -262,8 +262,10 @@ export default function AdminApiKeysPage() {
     <div>
       <h1 className="page-title">API Key 管理</h1>
 
-      <GlassCard strong style={{ marginBottom: 20 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+      <GlassCard strong>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', rowGap: 6, marginBottom: 12 }}>
           <h2 className="section-title" style={{ margin: 0 }}>📷 OCR 专用 Keys（多模态模型，用于识别图片）</h2>
           <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{ocrKeys.length} / 100</span>
         </div>
@@ -276,7 +278,7 @@ export default function AdminApiKeysPage() {
       </GlassCard>
 
       <GlassCard strong>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', rowGap: 6, marginBottom: 12 }}>
           <h2 className="section-title" style={{ margin: 0 }}>✍️ JSON 填充专用 Keys（对话模型，用于结构化填写）</h2>
           <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{fillKeys.length} / 100</span>
         </div>
@@ -287,8 +289,8 @@ export default function AdminApiKeysPage() {
           </button>
         )}
       </GlassCard>
-      <GlassCard strong style={{ marginBottom: 20 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+      <GlassCard strong>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', rowGap: 6, marginBottom: 12 }}>
           <h2 className="section-title" style={{ margin: 0 }}>🤖 AI 服务 Keys（RAG 合规分析 / 意图识别 / 意见生成）</h2>
           <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{llmKeys.length} / 100</span>
         </div>
@@ -299,6 +301,7 @@ export default function AdminApiKeysPage() {
           </button>
         )}
       </GlassCard>
+      </div>
     </div>
   )
 }

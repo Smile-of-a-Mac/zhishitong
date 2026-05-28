@@ -73,7 +73,7 @@ export default function SchoolAdminPage() {
       {showAdd && (
         <GlassCard strong style={{ marginBottom: 16 }}>
           <h3 style={{ margin: '0 0 12px', fontSize: 15 }}>新建部门管理员</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: 8, alignItems: 'end' }}>
+          <div className="responsive-admin-create-grid">
             <div>
               <label style={{ display: 'block', fontSize: 12, color: 'var(--text-secondary)', marginBottom: 2 }}>用户名</label>
               <input value={newUsername} onChange={e => setNewUsername(e.target.value)} placeholder="例如: dept_cs"

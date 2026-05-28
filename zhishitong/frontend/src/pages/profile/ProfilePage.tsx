@@ -67,7 +67,7 @@ export default function ProfilePage() {
         </div>
 
         {/* 双列信息网格 */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 24px' }}>
+        <div className="responsive-two-col-grid" style={{ gap: '0 24px' }}>
 
           {/* ── 基本信息 ── */}
           <SectionTitle label="基本信息" />
@@ -161,7 +161,7 @@ export default function ProfilePage() {
 
         {showPwdForm && (
           <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--divider)' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, maxWidth: 480 }}>
+            <div className="responsive-form-grid" style={{ gap: 12, maxWidth: 480 }}>
               <div style={{ gridColumn: '1 / -1' }}>
                 <label style={{ display: 'block', fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>原密码</label>
                 <input type="password" value={oldPwd} onChange={e => setOldPwd(e.target.value)}

@@ -180,7 +180,7 @@ export default function AdminMonitorPage() {
 
           {/* 按层级分布 */}
           {stats && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className="responsive-panel-grid">
               <GlassCard size="sm">
                 <div className="section-title">OCR 调用分布（按层级）</div>
                 {Object.entries(stats.ocr_calls_by_tier).map(([tier, cnt]) => (
