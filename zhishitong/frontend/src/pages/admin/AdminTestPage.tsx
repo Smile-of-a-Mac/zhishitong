@@ -57,7 +57,9 @@ export default function AdminTestPage() {
         await refreshUser()
         navigate('/admin/members')
       } else {
-        alert('✅ 模拟已激活！刷新任意页面即可看到效果。\n\n返回工作台测试不同角色的功能。')
+        // 自动刷新用户上下文，无需手动刷新页面
+        await refreshUser()
+        navigate('/')
       }
     } catch (e: any) {
       alert('❌ ' + (e?.response?.data?.detail || '操作失败'))

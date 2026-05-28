@@ -1,10 +1,12 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 
 export default function LoginPage() {
   const [loading, setLoading] = useState(false)
+  const [cardEntered, setCardEntered] = useState(false)
   const [mode, setMode] = useState<'login' | 'register'>('login')
+  const [showDemo, setShowDemo] = useState(false)
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -12,6 +14,13 @@ export default function LoginPage() {
   const [fieldErrors, setFieldErrors] = useState<{ username?: string; password?: string; confirmPassword?: string }>({})
   const { login, register } = useAuth()
   const navigate = useNavigate()
+
+  useEffect(() => {
+    const rafId = requestAnimationFrame(() => {
+      setCardEntered(true)
+    })
+    return () => cancelAnimationFrame(rafId)
+  }, [])
 
   const handleSubmit = async () => {
     setError('')
@@ -56,7 +65,7 @@ export default function LoginPage() {
 
   return (
     <div className="login-page-wrapper">
-      <div className="login-card">
+      <div className={`login-card${cardEntered ? ' login-card-enter' : ''}`}>
         <div style={{ textAlign: 'center', marginBottom: 28 }}>
           <div style={{ fontSize: 28, fontWeight: 700, marginBottom: 4, color: 'var(--text-primary)' }}>智审通</div>
           <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>高校行政审批自动化 Agent</div>
@@ -101,8 +110,8 @@ export default function LoginPage() {
           )}
         </div>
 
-        {mode === 'register' && (
-          <div style={{ marginBottom: 16 }}>
+        <div className={`login-collapse${mode === 'register' ? ' login-collapse-open' : ''}`}>
+          <div className={`login-collapse-content${mode === 'register' ? ' login-collapse-content-open' : ''}`} style={{ marginBottom: 16 }}>
             <input
               type="password"
               placeholder="请再次输入密码"
@@ -115,7 +124,7 @@ export default function LoginPage() {
               <div style={{ color: 'var(--red)', fontSize: 12, marginTop: 3, paddingLeft: 4 }}>{fieldErrors.confirmPassword}</div>
             )}
           </div>
-        )}
+        </div>
 
         {error && (
           <div style={{
@@ -140,27 +149,36 @@ export default function LoginPage() {
 
         <hr className="glass-divider" />
 
-        <details style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.8 }}>
-          <summary style={{ cursor: 'pointer', fontWeight: 600, color: 'var(--text-secondary)' }}>📘 演示账号</summary>
-          <div style={{ marginTop: 8, background: 'rgba(0,0,0,0.04)', borderRadius: 8, padding: '10px 12px' }}>
-              <strong>系统管理员：</strong><br />
-              admin / (由服务端环境变量 ADMIN_INIT_PASSWORD 设定，默认 Admin@Sito2026!)<br /><br />
-              <strong>山东科技大学 (Pro)：</strong><br />
-              sdu_school_admin / admin123 — 学校管理员<br />
-              sdu_dept_cs / 123456 — 部门管理员（计算机学院）<br />
-              sdu_dept_fin / 123456 — 部门管理员（财务处）<br />
-              sdu_finance_admin / admin123 — 财务管理员<br />
-              sdu_student_a / 123456 — 学生<br />
-              sdu_student_b / 123456 — 学生<br /><br />
-              <strong>山东科技大学（济南校区）(Free)：</strong><br />
-              sdujn_school_admin / admin123 — 学校管理员<br />
-              sdujn_dept_cs / 123456 — 部门管理员<br />
-              sdujn_dept_fin / 123456 — 部门管理员<br />
-              sdujn_finance_admin / admin123 — 财务管理员<br />
-              sdujn_student_a / 123456 — 学生<br />
-              sdujn_student_b / 123456 — 学生
+        <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.8 }}>
+          <div
+            onClick={() => setShowDemo(v => !v)}
+            style={{ cursor: 'pointer', fontWeight: 600, color: 'var(--text-secondary)', userSelect: 'none' }}
+          >
+            📘 演示账号
+          </div>
+          <div className={`login-collapse${showDemo ? ' login-collapse-open' : ''}`}>
+            <div>
+              <div className={`login-collapse-content${showDemo ? ' login-collapse-content-open' : ''}`} style={{ marginTop: 8, background: 'rgba(0,0,0,0.04)', borderRadius: 8, padding: '10px 12px' }}>
+                <strong>系统管理员：</strong><br />
+                admin / (由服务端环境变量 ADMIN_INIT_PASSWORD 设定，默认 Admin@Sito2026!)<br /><br />
+                <strong>山东科技大学 (Pro)：</strong><br />
+                sdu_school_admin / admin123 — 学校管理员<br />
+                sdu_dept_cs / 123456 — 部门管理员（计算机学院）<br />
+                sdu_dept_fin / 123456 — 部门管理员（财务处）<br />
+                sdu_finance_admin / admin123 — 财务管理员<br />
+                sdu_student_a / 123456 — 学生<br />
+                sdu_student_b / 123456 — 学生<br /><br />
+                <strong>山东科技大学（济南校区）(Free)：</strong><br />
+                sdujn_school_admin / admin123 — 学校管理员<br />
+                sdujn_dept_cs / 123456 — 部门管理员<br />
+                sdujn_dept_fin / 123456 — 部门管理员<br />
+                sdujn_finance_admin / admin123 — 财务管理员<br />
+                sdujn_student_a / 123456 — 学生<br />
+                sdujn_student_b / 123456 — 学生
+              </div>
             </div>
-        </details>
+          </div>
+        </div>
       </div>
     </div>
   )

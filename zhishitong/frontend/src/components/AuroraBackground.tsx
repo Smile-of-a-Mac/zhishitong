@@ -114,7 +114,7 @@ export default function AuroraBackground() {
       ctx!.globalCompositeOperation = window.matchMedia('(prefers-color-scheme: dark)').matches
         ? 'screen'
         : 'source-over'
-      tick++
+      tick += 0.35  // ≈1/3 速度，极光流动更舒缓
       for (const line of lines) {
         line.update(ctx!, w, h, tick)
       }

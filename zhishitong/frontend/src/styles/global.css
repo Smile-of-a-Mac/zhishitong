@@ -710,6 +710,75 @@ nav a, nav button {
   border: 1px solid rgba(255, 255, 255, 0.55);
   border-radius: var(--radius);
   box-shadow: 0 12px 48px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06);
+  opacity: 0;
+  transform: scale(0.86);
+  transition: transform 0.75s cubic-bezier(0.15, 0.75, 0.35, 1), opacity 0.3s ease-out;
+}
+
+.login-card-enter {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* 登录页可折叠区域 — grid 高度过渡（跟实际内容走，无机械感） */
+.login-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.62s cubic-bezier(0.2, 0.85, 0.2, 1);
+}
+
+.login-collapse > div {
+  overflow: hidden;
+}
+
+.login-collapse-open {
+  grid-template-rows: 1fr;
+}
+
+.login-collapse-content {
+  transform-origin: top center;
+}
+
+.login-collapse-content-open {
+  animation: loginSectionSpringIn 0.56s cubic-bezier(0.2, 0.85, 0.2, 1) both;
+}
+
+/* details 展开 — 同样用 grid，包裹一层 */
+.login-card details .details-grid {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.58s cubic-bezier(0.2, 0.85, 0.2, 1);
+}
+
+.login-card details .details-grid > div {
+  overflow: hidden;
+}
+
+.login-card details[open] .details-grid {
+  grid-template-rows: 1fr;
+}
+
+.login-card details .details-inner {
+  transform-origin: top center;
+}
+
+.login-card details[open] .details-inner {
+  animation: loginSectionSpringIn 0.56s cubic-bezier(0.2, 0.85, 0.2, 1) both;
+}
+
+@keyframes loginSectionSpringIn {
+  0% {
+    transform: scaleY(0.9) translateY(-8px);
+    opacity: 0;
+  }
+  62% {
+    transform: scaleY(1.03) translateY(0);
+    opacity: 1;
+  }
+  100% {
+    transform: scaleY(1) translateY(0);
+    opacity: 1;
+  }
 }
 
 /* 登录页 tab 切换 */

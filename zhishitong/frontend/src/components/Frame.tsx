@@ -343,7 +343,6 @@ export default function Frame({ children }: { children: React.ReactNode }) {
           >
             退出登录
           </button>
-          <SimulationBanner isSidebar />
         </div>
       </aside>
 
