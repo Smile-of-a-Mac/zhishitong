@@ -91,6 +91,10 @@ export default function AdminApiKeysPage() {
   const addKey = async (keyType: string) => {
     if (!provider || !apiKeyPlain) { alert('请选择供应商并填写 API Key'); return }
     if (!model) { alert('请选择模型'); return }
+    // DeepSeek 无视觉能力，阻止误添加为 OCR Key
+    if (keyType === 'ocr' && provider === 'deepseek') {
+      if (!confirm('⚠️ DeepSeek 模型不支持图片识别（多模态），用于 OCR 会返回 400 错误。\n\n确定仍要添加？')) return
+    }
     try {
       await axios.post('/api/admin/api-keys', {
         key_type: keyType, provider, api_base: apiBase,
@@ -266,7 +270,12 @@ export default function AdminApiKeysPage() {
 
       <GlassCard strong>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', rowGap: 6, marginBottom: 12 }}>
-          <h2 className="section-title" style={{ margin: 0 }}>📷 OCR 专用 Keys（多模态模型，用于识别图片）</h2>
+          <div>
+            <h2 className="section-title" style={{ margin: 0 }}>📷 OCR 专用 Keys（多模态模型，用于识别图片）</h2>
+            <div style={{ fontSize: 11, color: 'var(--orange)', marginTop: 2 }}>
+              ⚠️ 仅支持视觉/多模态模型（如 MIMO、GPT-4o、Qwen-VL），纯文本模型会返回 400 错误
+            </div>
+          </div>
           <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{ocrKeys.length} / 100</span>
         </div>
         {renderTable(ocrKeys)}
