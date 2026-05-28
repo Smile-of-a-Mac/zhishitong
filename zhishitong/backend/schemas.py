@@ -68,7 +68,7 @@ class ApprovalStageInfo(BaseModel):
 # ===== 管理员 — API Key 管理 =====
 
 class ApiKeyCreate(BaseModel):
-    key_type: str = Field(..., pattern=r"^(ocr|json_fill)$")
+    key_type: str = Field(..., pattern=r"^(ocr|json_fill|llm)$")
     provider: str = Field(..., min_length=1, max_length=64)
     api_base: str = Field(..., min_length=1, max_length=256)
     api_key_plain: str = Field(..., min_length=1, max_length=512)
@@ -83,6 +83,7 @@ class ApiKeyOut(BaseModel):
     api_base: str
     default_model: str
     is_active: bool
+    usage_count: int
     fail_count: int
     last_used_at: Optional[datetime]
     note: str

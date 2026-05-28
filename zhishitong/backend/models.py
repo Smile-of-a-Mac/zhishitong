@@ -21,6 +21,7 @@ class TierEnum(str, enum.Enum):
 class ApiKeyType(str, enum.Enum):
     ocr = "ocr"
     json_fill = "json_fill"
+    llm = "llm"  # RAG/AI 服务的通用 LLM Key
 
 
 class ApprovalStatus(str, enum.Enum):
@@ -125,6 +126,7 @@ class ApiKey(Base):
     api_key_encrypted = Column(String(512), nullable=False)  # Fernet 密文
     default_model = Column(String(128), nullable=False)
     is_active = Column(Boolean, default=True)
+    usage_count = Column(Integer, default=0)   # 累计使用次数
     fail_count = Column(Integer, default=0)
     last_used_at = Column(DateTime, nullable=True)
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)

@@ -13,48 +13,25 @@ from services.file_service import validate_file, store_file
 from services.ocr_service import ocr_with_tier, OCRProvider
 from services.template_service import detect_document_type
 from services.crypto_service import decrypt
-from models import ApiKey, ApiKeyType
 from services.logging_service import LogCategory, log, log_error
+from services.key_pool import resolve_key, record_success, record_failure, ResolvedKey
+from models import ApiKeyType
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["ocr"])
 
 
-def _resolve_llm_config(db: Session) -> tuple[str, str, str, str, str, str]:
-    """从 API Key 池中选取活跃的 Key，返回 (ocr_base, ocr_key, ocr_model, fill_base, fill_key, fill_model)"""
-    # 1. 尝试 OCR 类型 Key（多模态）
-    ocr_base, ocr_key, ocr_model = LLM_API_BASE, LLM_API_KEY, LLM_MODEL
-    ocr_key_obj = (
-        db.query(ApiKey)
-        .filter(ApiKey.key_type == ApiKeyType.ocr, ApiKey.is_active == True)
-        .order_by(ApiKey.fail_count.asc())
-        .first()
+def _resolve_llm_config(db: Session) -> tuple:
+    """从 Key 池智能选取最优 Key，返回 (ocr_resolved, fill_resolved)"""
+    ocr_resolved = resolve_key(
+        db, ApiKeyType.ocr,
+        fallback_base=LLM_API_BASE, fallback_key=LLM_API_KEY, fallback_model=LLM_MODEL,
     )
-    if ocr_key_obj:
-        try:
-            ocr_base = ocr_key_obj.api_base
-            ocr_key = decrypt(ocr_key_obj.api_key_encrypted)
-            ocr_model = ocr_key_obj.default_model
-        except Exception:
-            logger.warning(f"OCR Key {ocr_key_obj.id} 解密失败，使用环境变量")
-
-    # 2. 尝试 JSON 填充类型 Key（文本模型）
-    fill_base, fill_key, fill_model = LLM_API_BASE, LLM_API_KEY, LLM_FILL_MODEL
-    fill_key_obj = (
-        db.query(ApiKey)
-        .filter(ApiKey.key_type == ApiKeyType.json_fill, ApiKey.is_active == True)
-        .order_by(ApiKey.fail_count.asc())
-        .first()
+    fill_resolved = resolve_key(
+        db, ApiKeyType.json_fill,
+        fallback_base=LLM_API_BASE, fallback_key=LLM_API_KEY, fallback_model=LLM_FILL_MODEL,
     )
-    if fill_key_obj:
-        try:
-            fill_base = fill_key_obj.api_base
-            fill_key = decrypt(fill_key_obj.api_key_encrypted)
-            fill_model = fill_key_obj.default_model
-        except Exception:
-            logger.warning(f"JSON Fill Key {fill_key_obj.id} 解密失败，使用环境变量")
-
-    return ocr_base, ocr_key, ocr_model, fill_base, fill_key, fill_model
+    return ocr_resolved, fill_resolved
 
 
 @router.post("/ocr", response_model=OCRResult)
@@ -76,8 +53,8 @@ async def ocr_upload(
         log_error(LogCategory.OCR, f"文件处理失败: {file.filename}", exc=e, user_id=user.id, filename=file.filename)
         raise HTTPException(500, f"文件处理失败: {e}")
 
-    # 2. 选择 LLM 配置
-    api_base, api_key, model, fill_api_base, fill_api_key, fill_model = _resolve_llm_config(db)
+    # 2. 选择 LLM 配置（智能 Key 池）
+    ocr_cfg, fill_cfg = _resolve_llm_config(db)
 
     # 3. 执行 OCR
     quota_remaining = user.llm_ocr_quota - user.llm_ocr_used
@@ -86,16 +63,24 @@ async def ocr_upload(
             content,
             tier=user.tier.value,
             llm_quota_remaining=quota_remaining,
-            api_base=api_base,
-            api_key=api_key,
-            model=model,
-            fill_api_base=fill_api_base,
-            fill_api_key=fill_api_key,
-            fill_model=fill_model,
+            api_base=ocr_cfg.api_base,
+            api_key=ocr_cfg.api_key,
+            model=ocr_cfg.model,
+            fill_api_base=fill_cfg.api_base,
+            fill_api_key=fill_cfg.api_key,
+            fill_model=fill_cfg.model,
         )
     except Exception as e:
+        # 记录失败（保守：两个 Key 都标记）
+        record_failure(db, ocr_cfg.key_id)
+        record_failure(db, fill_cfg.key_id)
         log_error(LogCategory.OCR, f"OCR 识别失败: {file.filename}", exc=e, user_id=user.id, tier=user.tier.value)
         raise HTTPException(500, f"OCR 识别失败: {e}")
+    
+    # 记录成功（两个 Key 的使用量 +1）
+    record_success(db, ocr_cfg.key_id)
+    if fill_cfg.key_id != ocr_cfg.key_id:
+        record_success(db, fill_cfg.key_id)
 
     duration_ms = round((time.time() - t_start) * 1000)
 

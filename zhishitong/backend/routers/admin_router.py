@@ -18,8 +18,9 @@ from schemas import (
 )
 from auth import require_admin, require_school_admin, hash_password, verify_password
 from services.crypto_service import encrypt, decrypt
-from config import MAX_OCR_KEYS, MAX_FILL_KEYS
+from config import MAX_OCR_KEYS, MAX_FILL_KEYS, MAX_LLM_KEYS
 from services.logging_service import LogCategory, log
+from services.key_pool import get_pool_stats
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -378,7 +379,7 @@ def admin_reset_password(
 
 @router.get("/api-keys", response_model=list[ApiKeyOut])
 def list_api_keys(
-    key_type: str = Query(None, pattern="^(ocr|json_fill)$"),
+    key_type: str = Query(None, pattern="^(ocr|json_fill|llm)$"),
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
@@ -397,7 +398,8 @@ def add_api_key(
     # 数量限制
     ktype = ApiKeyType(body.key_type)
     count = db.query(ApiKey).filter(ApiKey.key_type == ktype).count()
-    limit = MAX_OCR_KEYS if body.key_type == "ocr" else MAX_FILL_KEYS
+    limit_map = {"ocr": MAX_OCR_KEYS, "json_fill": MAX_FILL_KEYS, "llm": MAX_LLM_KEYS}
+    limit = limit_map.get(body.key_type, 100)
     if count >= limit:
         raise HTTPException(400, f"{body.key_type} 类型 Key 已达上限 {limit} 个")
 
@@ -809,3 +811,25 @@ def hard_delete_record(
 
     log(LogCategory.ADMIN, "warning", f"物理删除记录 #{record.id}", user_id=admin.id, record_id=record.id)
     return {"detail": "已永久删除"}
+
+
+# ===== Key 池统计 =====
+
+@router.get("/key-pool/stats")
+def key_pool_stats(
+    key_type: str = Query(None, pattern="^(ocr|json_fill|llm)$"),
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """
+    查看 Key 池统计信息。
+    不指定 key_type 时返回所有类型的汇总。
+    """
+    if key_type:
+        return get_pool_stats(db, ApiKeyType(key_type))
+    return {
+        "pools": [
+            get_pool_stats(db, ApiKeyType(t))
+            for t in ["ocr", "json_fill", "llm"]
+        ]
+    }

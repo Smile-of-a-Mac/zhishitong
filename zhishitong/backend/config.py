@@ -65,6 +65,7 @@ MAX_FILE_SIZE = int(os.getenv("MAX_FILE_SIZE_MB", "10")) * 1024 * 1024
 # ---- API Key 池上限 ----
 MAX_OCR_KEYS = int(os.getenv("MAX_OCR_KEYS", "100"))
 MAX_FILL_KEYS = int(os.getenv("MAX_FILL_KEYS", "100"))
+MAX_LLM_KEYS = int(os.getenv("MAX_LLM_KEYS", "100"))
 
 # ---- EasyOCR ----
 EASYOCR_LANGS = ["ch_sim", "en"]

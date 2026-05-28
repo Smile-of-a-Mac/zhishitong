@@ -185,7 +185,7 @@ def _fallback_keyword_search(query: str, doc_type: Optional[str], top_k: int) ->
 
 
 # ============================================================
-#  三、LLM 调用工具
+#  三、LLM 调用工具（集成智能 Key 池）
 # ============================================================
 
 async def _call_llm(
@@ -193,36 +193,64 @@ async def _call_llm(
     system: str = "",
     max_tokens: int = 512,
     temperature: float = 0.3,
+    db: Optional[Session] = None,
 ) -> str:
     """
     统一 LLM 调用入口。
-    优先外部 API（如有配置），否则走本地推理服务。
+    如果提供了 db，则从 Key 池智能选取最优 API Key 并追踪用量/失败。
+    无 db 或池中无可用 Key 时回退到环境变量 → 本地推理服务。
     """
+    from services.key_pool import resolve_key, record_success, record_failure
+    from models import ApiKeyType
+
     messages = []
     if system:
         messages.append({"role": "system", "content": system})
     messages.append({"role": "user", "content": prompt})
 
-    # 尝试外部 API（仅当配置了 API Key 时）
-    if LLM_API_KEY:
+    # 1. 尝试 Key 池（如有 db）
+    key_id = None
+    api_base = LLM_API_BASE
+    api_key = LLM_API_KEY
+    model = LLM_FILL_MODEL
+
+    if db:
+        resolved = resolve_key(
+            db, ApiKeyType.llm,
+            fallback_base=LLM_API_BASE, fallback_key=LLM_API_KEY, fallback_model=LLM_FILL_MODEL,
+        )
+        key_id = resolved.key_id
+        api_base = resolved.api_base
+        api_key = resolved.api_key
+        model = resolved.model
+
+    # 2. 尝试外部 API
+    if api_key:
         try:
             async with httpx.AsyncClient(timeout=30) as client:
                 resp = await client.post(
-                    f"{LLM_API_BASE}/chat/completions",
-                    headers={"Authorization": f"Bearer {LLM_API_KEY}"},
+                    f"{api_base}/chat/completions",
+                    headers={"Authorization": f"Bearer {api_key}"},
                     json={
-                        "model": LLM_FILL_MODEL,
+                        "model": model,
                         "messages": messages,
                         "temperature": temperature,
                         "max_tokens": max_tokens,
                     },
                 )
                 resp.raise_for_status()
-                return resp.json()["choices"][0]["message"]["content"].strip()
+                result = resp.json()["choices"][0]["message"]["content"].strip()
+                # 外部 API 成功 → 记录用量
+                if key_id and db:
+                    record_success(db, key_id)
+                return result
         except Exception as e:
-            logger.warning(f"外部 LLM 调用失败，回落本地推理服务: {e}")
+            logger.warning(f"外部 LLM 调用失败（Key #{key_id or 'env'}），回落本地推理服务: {e}")
+            # 记录失败
+            if key_id and db:
+                record_failure(db, key_id)
 
-    # 本地推理服务
+    # 3. 回退到本地推理服务
     async with httpx.AsyncClient(timeout=120) as client:
         resp = await client.post(
             f"{LLAMA_SERVER_URL}/v1/chat/completions",
@@ -291,7 +319,7 @@ async def check_compliance(form_json: dict, doc_type: str, db: Session) -> dict:
 }}"""
 
     try:
-        raw = await _call_llm(prompt, max_tokens=600)
+        raw = await _call_llm(prompt, max_tokens=600, db=db)
         result = _extract_json(raw)
     except Exception as e:
         logger.warning(f"合规分析 LLM 失败: {e}")
