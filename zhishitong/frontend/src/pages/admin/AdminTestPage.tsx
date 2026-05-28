@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import GlassCard from '../../components/GlassCard'
+import { useAuth } from '../../hooks/useAuth'
 
 interface TestSession {
   active: boolean
@@ -27,6 +29,8 @@ const PRESET_SCENARIOS = [
 ]
 
 export default function AdminTestPage() {
+  const navigate = useNavigate()
+  const { refreshUser } = useAuth()
   const [session, setSession] = useState<TestSession | null>(null)
   const [customTier, setCustomTier] = useState('')
   const [customDept, setCustomDept] = useState('')
@@ -47,12 +51,14 @@ export default function AdminTestPage() {
   const applyOverrides = async (overrides: Record<string, any>, reset = false) => {
     try {
       await axios.post('/api/admin/test-session', { ...overrides, reset })
-      if (reset) {
-        window.location.href = '/admin/members'
-        return
-      }
       await fetchSession()
-      alert('✅ 模拟已激活！点击下方测试入口或侧栏导航跳转测试。')
+      if (reset) {
+        // 还原管理员：刷新上下文并跳转回管理员工作台
+        await refreshUser()
+        navigate('/admin/members')
+      } else {
+        alert('✅ 模拟已激活！刷新任意页面即可看到效果。\n\n返回工作台测试不同角色的功能。')
+      }
     } catch (e: any) {
       alert('❌ ' + (e?.response?.data?.detail || '操作失败'))
     }
@@ -99,7 +105,8 @@ export default function AdminTestPage() {
           </span>
           <button onClick={async () => {
             await axios.delete('/api/admin/test-session')
-            window.location.href = '/admin/members'
+            await refreshUser()   // 刷新真实身份
+            navigate('/admin/members')  // 跳回管理员工作台
           }} className="glass-btn glass-btn-sm" style={{ background: 'var(--orange)', color: '#fff' }}>
             🚪 退出模拟
           </button>
