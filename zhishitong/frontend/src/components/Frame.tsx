@@ -338,8 +338,7 @@ export default function Frame({ children }: { children: React.ReactNode }) {
 
       {/* 主内容区 */}
       <main>
-        {/* 模拟状态提示（仅管理员可见） */}
-        {user?.is_admin && <SimulationBanner />}
+        <SimulationBanner />
         <div className="content-container">
           {children}
         </div>
@@ -348,7 +347,7 @@ export default function Frame({ children }: { children: React.ReactNode }) {
   )
 }
 
-/** 管理员模拟身份提示条 + 侧栏退出按钮 */
+/** 模拟身份提示 — 侧栏按钮 + 内容区横幅，退出后硬刷新回管理页 */
 function SimulationBanner({ isSidebar = false }: { isSidebar?: boolean }) {
   const loc = useLocation()
   const [sim, setSim] = useState<{ active: boolean; overrides: Record<string, any> } | null>(null)
@@ -360,48 +359,38 @@ function SimulationBanner({ isSidebar = false }: { isSidebar?: boolean }) {
       .then(r => r.ok ? r.json() : null)
       .then(d => setSim(d))
       .catch(() => {})
-  }, [loc.pathname])  // 路由切换时重新检查
+  }, [loc.pathname])
 
   if (!sim?.active) return null
 
   const exit = async () => {
     const token = localStorage.getItem('token')
     await fetch('/api/admin/test-session', { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } })
-    setSim(null)
+    // 硬刷新回 admin 首页，彻底清除 React 状态中的模拟身份
+    window.location.href = '/admin/members'
   }
 
-  // 侧栏版本：紧凑按钮
   if (isSidebar) {
     return (
-      <button
-        onClick={exit}
-        className="glass-btn glass-btn-sm"
+      <button onClick={exit} className="glass-btn glass-btn-sm"
         style={{
           width: '100%', marginTop: 6,
           background: 'rgba(255,149,0,0.15)',
           border: '1px solid var(--orange)',
-          color: 'var(--orange)',
-          fontWeight: 600,
-        }}
-      >
+          color: 'var(--orange)', fontWeight: 600,
+        }}>
         ⚡ 退出模拟
       </button>
     )
   }
 
-  // 主内容区横幅版本
   return (
     <div style={{
-      margin: '0 0 12px 0',
-      padding: '6px 14px',
-      borderRadius: 10,
-      background: 'rgba(255,149,0,0.12)',
-      border: '1px solid rgba(255,149,0,0.25)',
-      display: 'flex', alignItems: 'center', gap: 10,
-      fontSize: 13,
-      flexWrap: 'wrap',
+      margin: '0 0 12px 0', padding: '6px 14px', borderRadius: 10,
+      background: 'rgba(255,149,0,0.12)', border: '1px solid rgba(255,149,0,0.25)',
+      display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, flexWrap: 'wrap',
     }}>
-      <span style={{ color: 'var(--orange)', fontWeight: 600 }}>⚡ 模拟身份激活中</span>
+      <span style={{ color: 'var(--orange)', fontWeight: 600 }}>⚡ 模拟中</span>
       <span style={{ color: 'var(--text-secondary)' }}>
         {sim.overrides.tier || ''}
         {sim.overrides.is_dept_admin ? ' · 部门管理员' : ''}
@@ -409,8 +398,7 @@ function SimulationBanner({ isSidebar = false }: { isSidebar?: boolean }) {
         {sim.overrides.is_finance_admin ? ' · 财务管理员' : ''}
         {!sim.overrides.is_dept_admin && !sim.overrides.is_school_admin && !sim.overrides.is_finance_admin && sim.overrides.is_admin === false ? ' · 普通用户' : ''}
       </span>
-      <button onClick={exit}
-        className="glass-btn glass-btn-sm"
+      <button onClick={exit} className="glass-btn glass-btn-sm"
         style={{ marginLeft: 'auto', background: 'var(--orange)', color: '#fff', flexShrink: 0 }}>
         🚪 退出模拟
       </button>

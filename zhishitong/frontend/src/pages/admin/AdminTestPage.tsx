@@ -47,12 +47,12 @@ export default function AdminTestPage() {
   const applyOverrides = async (overrides: Record<string, any>, reset = false) => {
     try {
       await axios.post('/api/admin/test-session', { ...overrides, reset })
-      await fetchSession()
       if (reset) {
-        alert('✅ 已还原管理员身份')
-      } else {
-        alert('✅ 模拟已激活！刷新任意页面即可看到效果。\n\n返回工作台测试不同角色的功能。')
+        window.location.href = '/admin/members'
+        return
       }
+      await fetchSession()
+      alert('✅ 模拟已激活！点击下方测试入口或侧栏导航跳转测试。')
     } catch (e: any) {
       alert('❌ ' + (e?.response?.data?.detail || '操作失败'))
     }
@@ -99,8 +99,7 @@ export default function AdminTestPage() {
           </span>
           <button onClick={async () => {
             await axios.delete('/api/admin/test-session')
-            await fetchSession()
-            alert('✅ 已退出模拟，恢复管理员身份')
+            window.location.href = '/admin/members'
           }} className="glass-btn glass-btn-sm" style={{ background: 'var(--orange)', color: '#fff' }}>
             🚪 退出模拟
           </button>
