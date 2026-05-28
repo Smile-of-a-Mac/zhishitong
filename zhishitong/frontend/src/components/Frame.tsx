@@ -332,6 +332,7 @@ export default function Frame({ children }: { children: React.ReactNode }) {
           >
             退出登录
           </button>
+          <SimulationBanner isSidebar />
         </div>
       </aside>
 
@@ -347,9 +348,11 @@ export default function Frame({ children }: { children: React.ReactNode }) {
   )
 }
 
-/** 管理员模拟身份提示条 */
-function SimulationBanner() {
+/** 管理员模拟身份提示条 + 侧栏退出按钮 */
+function SimulationBanner({ isSidebar = false }: { isSidebar?: boolean }) {
+  const loc = useLocation()
   const [sim, setSim] = useState<{ active: boolean; overrides: Record<string, any> } | null>(null)
+
   useEffect(() => {
     const token = localStorage.getItem('token')
     if (!token) return
@@ -357,7 +360,7 @@ function SimulationBanner() {
       .then(r => r.ok ? r.json() : null)
       .then(d => setSim(d))
       .catch(() => {})
-  }, [])
+  }, [loc.pathname])  // 路由切换时重新检查
 
   if (!sim?.active) return null
 
@@ -367,6 +370,26 @@ function SimulationBanner() {
     setSim(null)
   }
 
+  // 侧栏版本：紧凑按钮
+  if (isSidebar) {
+    return (
+      <button
+        onClick={exit}
+        className="glass-btn glass-btn-sm"
+        style={{
+          width: '100%', marginTop: 6,
+          background: 'rgba(255,149,0,0.15)',
+          border: '1px solid var(--orange)',
+          color: 'var(--orange)',
+          fontWeight: 600,
+        }}
+      >
+        ⚡ 退出模拟
+      </button>
+    )
+  }
+
+  // 主内容区横幅版本
   return (
     <div style={{
       margin: '0 0 12px 0',
