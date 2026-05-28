@@ -109,8 +109,8 @@ async def ocr_upload(
         mime_type=mime,
         file_size=len(content),
         ocr_provider=provider.value,
-        ocr_model=model if provider == OCRProvider.LLM else (
-            f"easyocr+{fill_model}" if fill_api_key else "easyocr+qwen3-0.5b"
+        ocr_model=ocr_cfg.model if provider == OCRProvider.LLM else (
+            f"easyocr+{fill_cfg.model}" if fill_cfg.api_key else "easyocr+qwen3-0.5b"
         ),
         raw_ocr_text=text,
         filled_json=json.dumps(filled_json, ensure_ascii=False) if filled_json else None,

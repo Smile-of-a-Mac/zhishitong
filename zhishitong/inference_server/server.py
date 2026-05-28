@@ -75,7 +75,7 @@ logger = logging.getLogger("inference_server")
 
 MODEL_PATH = os.getenv(
     "MODEL_PATH",
-    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
                  "models", "qwen2.5-0.5b.gguf")
 )
 PORT = int(os.getenv("PORT", "18080"))

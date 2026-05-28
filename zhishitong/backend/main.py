@@ -1,7 +1,8 @@
 """智审通 FastAPI 主入口"""
-import logging, time
+import logging, time, traceback
 from fastapi import FastAPI, Request, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from database import engine
 from models import Base
 
@@ -21,6 +22,24 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ---- 全局未捕获异常处理器（确保监控系统能看到所有错误） ----
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    tb = traceback.format_exc()
+    from services.logging_service import LogCategory, log_error
+    log_error(
+        LogCategory.SYSTEM,
+        f"未捕获异常: {request.method} {request.url.path}",
+        exc=exc,
+        method=request.method,
+        path=request.url.path,
+        error_trace=tb[:2000],
+    )
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"服务器内部错误: {exc}"},
+    )
 
 # ---- 请求日志中间件 ----
 @app.middleware("http")
