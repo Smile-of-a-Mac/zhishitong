@@ -61,8 +61,39 @@ cleanup() {
 }
 trap cleanup SIGINT SIGTERM
 
-# ---------- 5. 启动推理服务 ----------
-log "启动本地推理服务 (llama.cpp + Qwen2.5-0.5B)…"
+# ---------- 5. 切换微调模型（如有） ----------
+MERGED_DIR="$ROOT_DIR/../lora_output_merged"
+LORA_GGUF="$ROOT_DIR/../models/qwen2.5-0.5b-lora.gguf"
+
+if [ -d "$MERGED_DIR" ]; then
+  if [ ! -f "$LORA_GGUF" ]; then
+    log "检测到微调模型，正在转换为 GGUF (Q8_0)…"
+    CONVERT_SCRIPT=$("$VENV_PYTHON" -c "
+import site, os
+for p in site.getsitepackages():
+    f = os.path.join(p, 'bin', 'convert_hf_to_gguf.py')
+    if os.path.exists(f):
+        print(f)
+        break
+")
+    if [ -n "$CONVERT_SCRIPT" ]; then
+      "$VENV_PYTHON" "$CONVERT_SCRIPT" "$MERGED_DIR" \
+        --outfile "$LORA_GGUF" --outtype q8_0
+      log "微调模型转换完成"
+    else
+      warn "未找到 convert_hf_to_gguf.py，将使用原始模型"
+    fi
+  else
+    log "微调模型 GGUF 已存在"
+  fi
+  if [ -f "$LORA_GGUF" ]; then
+    export MODEL_PATH="$LORA_GGUF"
+    log "使用微调模型: qwen2.5-0.5b-lora.gguf"
+  fi
+fi
+
+# ---------- 6. 启动推理服务 ----------
+log "启动本地推理服务 (llama.cpp)…"
 PYTHONPATH="$INFER_DIR" "$VENV_UVICORN" server:app \
   --host 0.0.0.0 --port 18080 &
 INFER_PID=$!
@@ -76,7 +107,7 @@ for i in $(seq 1 60); do
   sleep 2
 done
 
-# ---------- 6. 启动后端 ----------
+# ---------- 7. 启动后端 ----------
 log "启动后端 (uvicorn)…"
 PYTHONPATH="$BACKEND_DIR" "$VENV_UVICORN" main:app \
   --host 0.0.0.0 --port 8080 --reload &
@@ -91,7 +122,7 @@ for i in $(seq 1 30); do
   sleep 1
 done
 
-# ---------- 7. 启动前端 ----------
+# ---------- 8. 启动前端 ----------
 log "启动前端 (vite dev server)…"
 cd "$FRONTEND_DIR"
 npx vite --host 0.0.0.0 --port 5173 &
