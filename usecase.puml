@@ -1,0 +1,115 @@
+@startuml 智审通用例图
+' ============================================================
+' 智审通 — 高校行政审批自动化 Agent
+' 用例图（按角色）
+' ============================================================
+
+skinparam packageStyle rectangle
+skinparam actorStyle awesome
+skinparam defaultFontSize 13
+
+' ── 角色定义 ──
+actor "超级管理员\n(admin)" as Admin
+actor "学校管理员" as SchoolAdmin
+actor "部门管理员" as DeptAdmin
+actor "财务管理员" as FinanceAdmin
+actor "学生" as Student
+
+' ── 系统边界 ──
+rectangle "智审通 系统" {
+  
+  ' ── 超级管理员用例 ──
+  package "超级管理员" as AdminUC {
+    usecase "管理 API Key\n(添加/停用/恢复)" as UC_ApiKey
+    usecase "创建学校" as UC_CreateSchool
+    usecase "切换学校服务等级\n(Free ↔ Pro)" as UC_SchoolTier
+    usecase "管理成员\n(添加/移除/角色调整)" as UC_MemberMgmt
+    usecase "系统监控" as UC_Monitor
+    usecase "查看审计日志" as UC_Audit
+  }
+
+  ' ── 学校管理员用例 ──
+  package "学校管理员" as SchoolUC {
+    usecase "管理部门管理员\n(创建/编辑/删除)" as UC_DeptAdminMgmt
+    usecase "查看全校事务总览" as UC_SchoolOverview
+    usecase "学校级审批\n(通过/驳回)" as UC_SchoolReview
+    usecase "使用智能建议" as UC_SchoolAI
+    usecase "设置用户学校字段" as UC_SetSchool
+  }
+
+  ' ── 部门管理员用例 ──
+  package "部门管理员" as DeptUC {
+    usecase "查看本部门事务\n(按状态/阶段筛选)" as UC_DeptList
+    usecase "部门审批\n(通过/驳回/需修改)" as UC_DeptReview
+    usecase "查看事务详情\n(材料/表单/审批历程)" as UC_DeptDetail
+    usecase "使用智能建议" as UC_DeptAI
+  }
+
+  ' ── 财务管理员用例 ──
+  package "财务管理员" as FinanceUC {
+    usecase "查看报销事务" as UC_FinanceList
+    usecase "财务审批\n(审核金额/发票)" as UC_FinanceReview
+    usecase "使用智能建议" as UC_FinanceAI
+  }
+
+  ' ── 学生用例 ──
+  package "学生" as StudentUC {
+    usecase "上传材料\n(图片/PDF)" as UC_Upload
+    usecase "智能 OCR 识别\n→ 自动填表" as UC_OCR
+    usecase "手动填写表单" as UC_ManualForm
+    usecase "提交审批" as UC_Submit
+    usecase "查看历史记录" as UC_History
+    usecase "编辑个人信息" as UC_Profile
+  }
+
+  ' ── 公共用例 ──
+  package "公共" as CommonUC {
+    usecase "注册/登录" as UC_Auth
+  }
+}
+
+' ── 角色 → 用例关联 ──
+Admin --> UC_ApiKey
+Admin --> UC_CreateSchool
+Admin --> UC_SchoolTier
+Admin --> UC_MemberMgmt
+Admin --> UC_Monitor
+Admin --> UC_Audit
+
+SchoolAdmin --> UC_DeptAdminMgmt
+SchoolAdmin --> UC_SchoolOverview
+SchoolAdmin --> UC_SchoolReview
+SchoolAdmin --> UC_SchoolAI
+SchoolAdmin --> UC_SetSchool
+
+DeptAdmin --> UC_DeptList
+DeptAdmin --> UC_DeptReview
+DeptAdmin --> UC_DeptDetail
+DeptAdmin --> UC_DeptAI
+
+FinanceAdmin --> UC_FinanceList
+FinanceAdmin --> UC_FinanceReview
+FinanceAdmin --> UC_FinanceAI
+
+Student --> UC_Upload
+Student --> UC_OCR
+Student --> UC_ManualForm
+Student --> UC_Submit
+Student --> UC_History
+Student --> UC_Profile
+
+Admin --> UC_Auth
+SchoolAdmin --> UC_Auth
+DeptAdmin --> UC_Auth
+FinanceAdmin --> UC_Auth
+Student --> UC_Auth
+
+' ── 用例间关系 ──
+UC_Upload ..> UC_OCR : <<include>>
+UC_OCR ..> UC_Submit : <<extend>>
+UC_ManualForm ..> UC_Submit : <<extend>>
+UC_SchoolReview ..> UC_SchoolAI : <<extend>>
+UC_DeptReview ..> UC_DeptAI : <<extend>>
+UC_FinanceReview ..> UC_FinanceAI : <<extend>>
+
+@enduml

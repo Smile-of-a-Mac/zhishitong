@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+python-multipart
+pydantic
+sqlalchemy
+aiosqlite
+httpx
+python-jose[cryptography]
+passlib[bcrypt]
+cryptography
+python-magic
+Pillow
+bcrypt==4.0.1

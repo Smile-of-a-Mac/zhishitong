@@ -1,0 +1,823 @@
+/* ===== 智审通 Glass 设计系统 ===== */
+
+/* --- 1. 核心变量 --- */
+:root {
+  --bg-color: #f2f2f7;
+  --text-primary: #1d1d1f;
+  --text-secondary: #86868b;
+  --text-tertiary: #aeaeb2;
+  --divider: rgba(60, 60, 67, 0.1);
+  --glass-bg: rgba(255, 255, 255, 0.65);
+  --glass-bg-strong: rgba(255, 255, 255, 0.82);
+  --glass-border: rgba(255, 255, 255, 0.5);
+  --glass-border-subtle: rgba(255, 255, 255, 0.3);
+  --shadow-sm: 0 2px 10px rgba(0, 0, 0, 0.04);
+  --shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+  --shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.08);
+  --accent: #007aff;
+  --accent-hover: #0066d6;
+  --green: #34c759;
+  --red: #ff3b30;
+  --orange: #ff9500;
+  --purple: #af52de;
+  --radius: 22px;
+  --radius-sm: 12px;
+  --radius-xs: 8px;
+  --font-stack: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', sans-serif;
+  --sidebar-width: 220px;
+}
+
+@media (max-width: 768px) {
+  :root {
+    --sidebar-width: 200px;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-color: #000000;
+    --text-primary: #f5f5f7;
+    --text-secondary: #98989d;
+    --text-tertiary: #6e6e73;
+    --divider: rgba(254, 254, 254, 0.1);
+    --glass-bg: rgba(28, 28, 30, 0.6);
+    --glass-bg-strong: rgba(28, 28, 30, 0.75);
+    --glass-border: rgba(255, 255, 255, 0.1);
+    --glass-border-subtle: rgba(255, 255, 255, 0.05);
+    --shadow-sm: 0 2px 10px rgba(0, 0, 0, 0.3);
+    --shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.5);
+    --accent: #0a84ff;
+    --accent-hover: #409cff;
+    --green: #30d158;
+    --red: #ff453a;
+    --orange: #ff9f0a;
+    --purple: #bf5af2;
+  }
+}
+
+/* --- 2. 基础重置 --- */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-stack);
+  background: var(--bg-color);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* --- 3. 滚动条美化 --- */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--text-tertiary);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
+}
+
+/* --- 4. Aurora 画布 --- */
+#aurora-canvas {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  filter: blur(40px);
+  transform: scale(1.1);
+  pointer-events: none;
+}
+
+/* --- 4b. 应用布局 --- */
+.app-layout {
+  display: flex;
+  min-height: 100vh;
+  position: relative;
+  z-index: 1;
+}
+
+@media (max-width: 768px) {
+  .app-layout {
+    flex-direction: column;
+  }
+}
+
+/* 主内容区 */
+main {
+  flex: 1;
+  padding: 28px 28px 28px 20px;
+  overflow: auto;
+  min-height: 100vh;
+}
+
+@media (max-width: 768px) {
+  main {
+    padding: 16px;
+  }
+}
+
+/* 内容容器：占满可用宽度 */
+.content-container {
+  width: 100%;
+  max-width: 100%;
+}
+
+/* --- 5. 玻璃卡片 --- */
+.glass-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(25px) saturate(180%);
+  -webkit-backdrop-filter: blur(25px) saturate(180%);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  padding: 20px;
+  box-shadow: var(--shadow);
+  position: relative;
+  overflow: hidden;
+  /* iOS Safari 圆角遮罩修复 */
+  -webkit-mask-image: -webkit-radial-gradient(white, black);
+  mask-image: radial-gradient(white, black);
+  transition: box-shadow 0.2s ease;
+}
+
+.glass-card-strong {
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(30px) saturate(200%);
+  -webkit-backdrop-filter: blur(30px) saturate(200%);
+}
+
+.glass-card-sm {
+  border-radius: var(--radius-sm);
+  padding: 16px;
+}
+
+.glass-card-xs {
+  border-radius: var(--radius-xs);
+  padding: 12px;
+}
+
+/* --- 6. 排版 --- */
+.page-title {
+  margin: 0 0 24px 0;
+  font-size: clamp(22px, 3.5vw, 28px);
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+/* 当 page-title 后跟 page-subtitle 时，减少间距（由 subtitle 承担 separator） */
+.page-title:has(+ .page-subtitle) {
+  margin-bottom: 6px;
+}
+
+@media (max-width: 768px) {
+  .page-title {
+    font-size: 20px;
+  }
+}
+
+.page-subtitle {
+  margin: 0 0 24px 0;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--divider);
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.section-title {
+  font-size: 17px;
+  font-weight: 600;
+  margin: 0 0 12px 0;
+  color: var(--text-primary);
+}
+
+/* --- 7. 表格 --- */
+.glass-table-wrapper {
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+  border: 1px solid var(--glass-border);
+  -webkit-overflow-scrolling: touch;
+}
+
+.glass-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  min-width: max-content;
+}
+
+@media (max-width: 768px) {
+  .glass-table {
+    font-size: 12px;
+  }
+  .glass-table th,
+  .glass-table td {
+    padding: 8px 10px;
+  }
+}
+
+.glass-table thead {
+  background: var(--glass-bg);
+  backdrop-filter: blur(10px);
+}
+
+.glass-table th {
+  padding: 10px 16px;
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--divider);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.glass-table td {
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--divider);
+  color: var(--text-primary);
+}
+
+.glass-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* 表格行 hover 效果 */
+.glass-table-row-hover:hover {
+  background: rgba(0, 122, 255, 0.04);
+}
+
+/* 响应式双列表单网格 */
+.responsive-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 16px;
+}
+
+@media (max-width: 520px) {
+  .responsive-form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* --- 8. 表单元素 --- */
+.glass-input {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xs);
+  font-size: 13px;
+  font-family: var(--font-stack);
+  color: var(--text-primary);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  outline: none;
+}
+
+.glass-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.15);
+}
+
+.glass-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+select.glass-input {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%2386868b' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 28px;
+}
+
+textarea.glass-input {
+  resize: none;
+  min-height: 60px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+/* --- 9. 按钮 --- */
+.glass-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 7px 18px;
+  border: none;
+  border-radius: var(--radius-xs);
+  font-size: 13px;
+  font-weight: 500;
+  font-family: var(--font-stack);
+  cursor: pointer;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  background: var(--accent);
+  color: #fff;
+}
+
+.glass-btn:hover {
+  opacity: 0.85;
+  transform: scale(0.98);
+}
+
+.glass-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.glass-btn-outline {
+  background: transparent;
+  border: 1px solid var(--glass-border);
+  color: var(--text-primary);
+}
+
+.glass-btn-outline:hover {
+  background: var(--glass-bg);
+}
+
+.glass-btn-danger {
+  background: transparent;
+  border: 1px solid var(--red);
+  color: var(--red);
+}
+
+.glass-btn-danger:hover {
+  background: rgba(255, 59, 48, 0.1);
+}
+
+.glass-btn-success {
+  background: var(--green);
+  color: #fff;
+}
+
+.glass-btn-sm {
+  padding: 4px 12px;
+  font-size: 12px;
+}
+
+/* --- 10. 分割线 --- */
+.glass-divider {
+  border: 0;
+  height: 1px;
+  background: var(--divider);
+  margin: 16px 0;
+}
+
+/* --- 11. 徽章 / Tag --- */
+.glass-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.glass-tag-blue {
+  background: rgba(0, 122, 255, 0.12);
+  color: var(--accent);
+}
+
+.glass-tag-green {
+  background: rgba(52, 199, 89, 0.12);
+  color: var(--green);
+}
+
+.glass-tag-red {
+  background: rgba(255, 59, 48, 0.12);
+  color: var(--red);
+}
+
+.glass-tag-orange {
+  background: rgba(255, 149, 0, 0.12);
+  color: var(--orange);
+}
+
+.glass-tag-purple {
+  background: rgba(175, 82, 222, 0.12);
+  color: var(--purple);
+}
+
+/* --- 12. 统计卡片网格 --- */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(140px, 25vw), 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+@media (max-width: 480px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+}
+
+.stat-card {
+  text-align: center;
+}
+
+.stat-card-value {
+  font-size: clamp(20px, 3vw, 26px);
+  font-weight: 700;
+  margin-top: 4px;
+}
+
+.stat-card-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* --- 13. 链接 --- */
+.glass-link {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.2s ease, text-decoration 0.2s ease;
+}
+
+.glass-link:hover {
+  text-decoration: underline;
+}
+
+/* --- 14. 动画全局定义 --- */
+
+/* -- 卡片过渡 -- */
+.glass-card {
+  transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+/* -- 统计卡片逐个入场 -- */
+.stats-grid > * {
+  animation: fadeInUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.stats-grid > *:nth-child(1) { animation-delay: 0.00s; }
+.stats-grid > *:nth-child(2) { animation-delay: 0.05s; }
+.stats-grid > *:nth-child(3) { animation-delay: 0.10s; }
+.stats-grid > *:nth-child(4) { animation-delay: 0.15s; }
+.stats-grid > *:nth-child(5) { animation-delay: 0.20s; }
+.stats-grid > *:nth-child(6) { animation-delay: 0.25s; }
+
+/* -- 表格行过渡 -- */
+.glass-table tbody tr {
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+}
+.glass-table tbody tr:hover {
+  background: rgba(0, 122, 255, 0.04);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+/* -- 标签徽章过渡 -- */
+.glass-tag {
+  transition: background 0.25s ease, color 0.25s ease, transform 0.2s ease;
+}
+.glass-tag:hover {
+  transform: translateY(-1px);
+}
+
+/* -- 分割线过渡 -- */
+.glass-divider {
+  transition: background 0.3s ease;
+}
+
+/* -- 页面标题入场 -- */
+.page-title {
+  animation: fadeInDown 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.page-subtitle {
+  animation: fadeInDown 0.5s 0.08s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* -- 按钮过渡增强 -- */
+.glass-btn {
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.glass-btn-outline {
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* -- 输入框过渡增强 -- */
+.glass-input {
+  transition: border-color 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
+}
+.glass-input:hover:not(:focus):not(:disabled) {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.06);
+}
+
+/* -- 组合框 (select) 箭头动画 -- */
+select.glass-input {
+  transition: border-color 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
+  background-position: right 10px center;
+}
+select.glass-input:focus {
+  background-position: right 8px center;
+}
+
+/* -- checkbox 过渡 -- */
+input[type="checkbox"] {
+  accent-color: var(--accent);
+  transition: transform 0.15s ease;
+}
+input[type="checkbox"]:active {
+  transform: scale(0.9);
+}
+
+/* -- details/summary 展开动画 -- */
+details summary {
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+details summary:hover {
+  color: var(--accent);
+}
+details[open] > *:not(summary) {
+  animation: fadeInDown 0.3s ease both;
+}
+
+/* -- 结果反馈卡片入场 -- */
+.glass-card-xs:last-child {
+  animation: fadeInDown 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* ===== 关键帧动画 ===== */
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    max-height: 0;
+    transform: translateY(-12px);
+  }
+  to {
+    opacity: 1;
+    max-height: 2000px;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeInDown {
+  from { opacity: 0; transform: translateY(-12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.92); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* -- 加载中骨架屏效果 -- */
+.loading-skeleton {
+  background: linear-gradient(90deg,
+    var(--glass-bg) 0%,
+    var(--glass-bg-strong) 50%,
+    var(--glass-bg) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: var(--radius);
+}
+
+/* -- 导航链接过渡 -- */
+nav a, nav button {
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* -- 文件预览图标脉冲 -- */
+.file-preview-icon {
+  animation: scaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* --- 15. Ant Design 兼容覆盖 --- */
+.ant-select-selector,
+.ant-input,
+.ant-btn {
+  border-radius: var(--radius-xs) !important;
+}
+
+/* 适配暗色模式下 Ant Design 弹窗等 */
+@media (prefers-color-scheme: dark) {
+  .ant-modal-content,
+  .ant-drawer-content {
+    background: var(--glass-bg-strong) !important;
+    backdrop-filter: blur(25px) !important;
+  }
+  .ant-modal-header {
+    background: transparent !important;
+  }
+}
+
+/* --- 16. 排版优化 --- */
+
+/* --- 17. 登录页增强对比度 --- */
+
+.login-page-wrapper {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.login-card {
+  width: min(90vw, 400px);
+  padding: 36px;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(28px) saturate(160%);
+  -webkit-backdrop-filter: blur(28px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+/* 登录页 tab 切换 */
+.login-tab-group {
+  display: flex;
+  margin-bottom: 24px;
+  background: rgba(128, 128, 128, 0.12);
+  border-radius: var(--radius-xs);
+  padding: 3px;
+}
+
+.login-tab-active {
+  flex: 1;
+  text-align: center;
+  padding: 8px 0;
+  cursor: pointer;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  background: #fff;
+  color: #1d1d1f;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.14);
+  transition: all 0.2s ease;
+}
+
+.login-tab-inactive {
+  flex: 1;
+  text-align: center;
+  padding: 8px 0;
+  cursor: pointer;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  background: transparent;
+  color: #6e6e73;
+  transition: all 0.2s ease;
+}
+
+.login-tab-inactive:hover {
+  color: #1d1d1f;
+}
+
+/* 登录页输入框 — 更高对比度 */
+.login-input {
+  width: 100%;
+  padding: 11px 14px;
+  background: rgba(0, 0, 0, 0.04);
+  border: 1.5px solid rgba(0, 0, 0, 0.15);
+  border-radius: var(--radius-xs);
+  font-size: 15px;
+  font-family: var(--font-stack);
+  color: #1d1d1f;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  outline: none;
+}
+
+.login-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.18);
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.login-input::placeholder {
+  color: #aeaeb2;
+  font-size: 15px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .login-card {
+    background: rgba(28, 28, 32, 0.78);
+    border-color: rgba(255, 255, 255, 0.10);
+    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+
+  .login-tab-group {
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .login-tab-active {
+    background: rgba(255, 255, 255, 0.18);
+    color: #f5f5f7;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  }
+
+  .login-tab-inactive {
+    color: #98989d;
+  }
+
+  .login-tab-inactive:hover {
+    color: #f5f5f7;
+  }
+
+  .login-input {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: rgba(255, 255, 255, 0.14);
+    color: #f5f5f7;
+  }
+
+  .login-input:focus {
+    border-color: var(--accent);
+    background: rgba(255, 255, 255, 0.10);
+  }
+
+  .login-input::placeholder {
+    color: rgba(255, 255, 255, 0.30);
+  }
+}
+
+/* --- 18. 原有排版优化 --- */
+
+/* 页面标题与副标题间距统一 */
+.page-title + .page-subtitle {
+  margin-top: -4px;
+}
+
+/* 卡片间间距统一 */
+main > div > .glass-card + .glass-card {
+  margin-top: 14px;
+}
+
+/* 表单字段间距 */
+.responsive-form-grid > div {
+  min-width: 0;
+}
+
+/* 表格内长文本截断优化 */
+.glass-table td.text-ellipsis {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+  .glass-table td.text-ellipsis {
+    max-width: 120px;
+  }
+}
+
+/* 历史记录表格：决策理由列 */
+@media (max-width: 768px) {
+  .glass-table th:nth-child(4),
+  .glass-table td:nth-child(4) {
+    display: none;
+  }
+}
+
+/* 按钮组间距 */
+.glass-btn + .glass-btn {
+  margin-left: 6px;
+}
+
+/* 移动端按钮组不折行 */
+@media (max-width: 480px) {
+  .btn-group-responsive {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .btn-group-responsive .glass-btn {
+    flex: 1 1 auto;
+    min-width: fit-content;
+  }
+}

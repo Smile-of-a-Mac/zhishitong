@@ -1,0 +1,57 @@
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+*.egg
+
+# ===== Node.js / Frontend =====
+node_modules/
+dist/
+.vite/
+
+# ===== 数据库 =====
+*.db
+*.db-shm
+*.db-wal
+
+# ===== 上传文件 =====
+uploads/
+zhishitong/uploads/
+
+# ===== 安全密钥（禁止提交到版本库） =====
+.encryption_key
+**/.encryption_key
+
+# ===== 模型文件 =====
+models/*.gguf
+*.gguf
+*.bin
+*.onnx
+*.pt
+*.pth
+
+# ===== 环境变量 =====
+.env
+.env.*
+!.env.example
+
+# ===== IDE =====
+.vscode/
+.idea/
+
+# ===== 系统文件 =====
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# ===== 日志 =====
+*.log
+logs/

@@ -1,0 +1,249 @@
+{
+  "templates": {
+    "reimbursement": {
+      "label": "报销申请",
+      "icon": "💰",
+      "fields": [
+        {"key":"applicant","label":"申请人","type":"text","required":true},
+        {"key":"college","label":"所属学院","type":"text","required":true},
+        {"key":"department","label":"所属部门","type":"text","required":true},
+        {"key":"amount","label":"报销金额","type":"number","required":true,"hint":"单位：元"},
+        {"key":"invoice_no","label":"发票号码","type":"text","required":true},
+        {"key":"date","label":"发生日期","type":"date","required":true},
+        {"key":"category","label":"费用类别","type":"select","options":["办公用品","差旅交通","印刷资料","实验耗材","图书资料","会议费","维修","其他"],"required":true},
+        {"key":"payment_method","label":"收款方式","type":"select","options":["对公转账","个人银行卡","支付宝","微信"],"required":true},
+        {"key":"bank_account","label":"银行账号","type":"text"},
+        {"key":"bank_name","label":"开户行","type":"text"},
+        {"key":"reason","label":"报销事由","type":"textarea","required":true},
+        {"key":"notes","label":"备注","type":"textarea"}
+      ]
+    },
+    "leave": {
+      "label": "请假申请",
+      "icon": "📝",
+      "fields": [
+        {"key":"college","label":"学院","type":"text","required":true},
+        {"key":"class_name","label":"班级","type":"text","required":true},
+        {"key":"student_id","label":"学号","type":"text"},
+        {"key":"applicant","label":"姓名","type":"text","required":true},
+        {"key":"phone","label":"本人联系方式","type":"text","required":true},
+        {"key":"leave_type","label":"请假类型","type":"select","options":["事假","病假","公假"],"required":true},
+        {"key":"reason","label":"请假事由","type":"textarea","required":true},
+        {"key":"start_date","label":"请假开始时间","type":"datetime","required":true},
+        {"key":"end_date","label":"请假结束时间","type":"datetime","required":true},
+        {"key":"destination","label":"去向","type":"text","required":true},
+        {"key":"transportation","label":"交通工具","type":"text"},
+        {"key":"advisor","label":"辅导员姓名","type":"text","required":true},
+        {"key":"advisor_phone","label":"辅导员联系方式","type":"text","required":true},
+        {"key":"parent_phone","label":"家长联系方式","type":"text"}
+      ]
+    },
+    "club_application": {
+      "label": "社团活动申请",
+      "icon": "🎉",
+      "fields": [
+        {"key":"club_name","label":"社团名称","type":"text","required":true},
+        {"key":"club_type","label":"社团类别","type":"select","options":["文化体育","学术科技","志愿服务","创新创业","其他"],"required":true},
+        {"key":"activity","label":"活动名称","type":"text","required":true},
+        {"key":"purpose","label":"活动目的","type":"textarea","required":true},
+        {"key":"date","label":"活动日期","type":"date","required":true},
+        {"key":"start_time","label":"活动开始时间","type":"text","required":true},
+        {"key":"end_time","label":"活动结束时间","type":"text","required":true},
+        {"key":"venue","label":"活动地点","type":"text","required":true},
+        {"key":"participants","label":"预计参与人数","type":"number","required":true},
+        {"key":"budget","label":"经费预算","type":"number","hint":"单位：元"},
+        {"key":"advisor","label":"指导老师","type":"text"},
+        {"key":"description","label":"活动详细方案","type":"textarea","required":true}
+      ]
+    },
+    "classroom_booking": {
+      "label": "教室借用",
+      "icon": "🏫",
+      "fields": [
+        {"key":"applicant","label":"申请人","type":"text","required":true},
+        {"key":"college","label":"所属学院","type":"text","required":true},
+        {"key":"room_no","label":"教室编号","type":"text","required":true},
+        {"key":"date","label":"使用日期","type":"date","required":true},
+        {"key":"start_time","label":"开始时间","type":"text","required":true},
+        {"key":"end_time","label":"结束时间","type":"text","required":true},
+        {"key":"purpose","label":"用途","type":"textarea","required":true},
+        {"key":"participants","label":"使用人数","type":"number"},
+        {"key":"need_multimedia","label":"需多媒体设备","type":"boolean"}
+      ]
+    },
+    "business_trip": {
+      "label": "出差申请",
+      "icon": "✈️",
+      "fields": [
+        {"key":"applicant","label":"申请人","type":"text","required":true},
+        {"key":"department","label":"所属部门","type":"text","required":true},
+        {"key":"destination","label":"目的地","type":"text","required":true},
+        {"key":"start_date","label":"出发日期","type":"date","required":true},
+        {"key":"end_date","label":"返回日期","type":"date","required":true},
+        {"key":"purpose","label":"出差事由","type":"textarea","required":true},
+        {"key":"estimated_cost","label":"预估费用","type":"number","hint":"单位：元"},
+        {"key":"transportation","label":"交通工具","type":"select","options":["火车","飞机","汽车","轮船","其他"]},
+        {"key":"accommodation","label":"住宿安排","type":"text"},
+        {"key":"international","label":"是否出境","type":"boolean"}
+      ]
+    },
+    "seal_application": {
+      "label": "用章申请",
+      "icon": "🔖",
+      "fields": [
+        {"key":"applicant","label":"申请人","type":"text","required":true},
+        {"key":"department","label":"所属部门","type":"text","required":true},
+        {"key":"seal_type","label":"印章类型","type":"select","options":["校章","院章","处章","党委章","合同专用章","其他"],"required":true},
+        {"key":"document_name","label":"用印文件名称","type":"text","required":true},
+        {"key":"copies","label":"用印份数","type":"number","required":true},
+        {"key":"purpose","label":"用印事由","type":"textarea","required":true},
+        {"key":"date","label":"用印日期","type":"date","required":true},
+        {"key":"recipient","label":"文件接收单位","type":"text"},
+        {"key":"notes","label":"备注","type":"textarea"}
+      ]
+    },
+    "dorm_change": {
+      "label": "宿舍调换申请",
+      "icon": "🏠",
+      "fields": [
+        {"key":"applicant","label":"申请人","type":"text","required":true},
+        {"key":"student_id","label":"学号","type":"text","required":true},
+        {"key":"college","label":"学院","type":"text","required":true},
+        {"key":"current_building","label":"现宿舍楼","type":"text","required":true},
+        {"key":"current_room","label":"现宿舍号","type":"text","required":true},
+        {"key":"reason","label":"调换原因","type":"textarea","required":true},
+        {"key":"preferred_building","label":"意向宿舍楼","type":"text"},
+        {"key":"preferred_room","label":"意向宿舍号","type":"text"},
+        {"key":"phone","label":"联系电话","type":"text","required":true}
+      ]
+    },
+    "scholarship": {
+      "label": "奖学金申请",
+      "icon": "🏆",
+      "fields": [
+        {"key":"applicant","label":"申请人","type":"text","required":true},
+        {"key":"student_id","label":"学号","type":"text","required":true},
+        {"key":"college","label":"学院","type":"text","required":true},
+        {"key":"major","label":"专业","type":"text","required":true},
+        {"key":"class_name","label":"班级","type":"text","required":true},
+        {"key":"scholarship_type","label":"申请奖项","type":"select","options":["国家奖学金","学业奖学金","单项奖学金","企业奖学金","其他"],"required":true},
+        {"key":"gpa","label":"平均绩点","type":"number","hint":"例：3.8"},
+        {"key":"achievements","label":"主要成果/奖项","type":"textarea","required":true},
+        {"key":"essay","label":"申请陈述","type":"textarea","required":true},
+        {"key":"advisor","label":"辅导员","type":"text"}
+      ]
+    },
+    "suspend_resume": {
+      "label": "休学/复学申请",
+      "icon": "🎓",
+      "fields": [
+        {"key":"applicant","label":"申请人","type":"text","required":true},
+        {"key":"student_id","label":"学号","type":"text","required":true},
+        {"key":"college","label":"学院","type":"text","required":true},
+        {"key":"major","label":"专业","type":"text","required":true},
+        {"key":"apply_type","label":"申请类型","type":"select","options":["休学","复学"],"required":true},
+        {"key":"start_date","label":"开始日期","type":"date","required":true},
+        {"key":"end_date","label":"结束日期","type":"date"},
+        {"key":"reason","label":"申请原因","type":"textarea","required":true},
+        {"key":"phone","label":"联系电话","type":"text","required":true},
+        {"key":"parent_name","label":"家长姓名","type":"text"},
+        {"key":"parent_phone","label":"家长电话","type":"text"}
+      ]
+    },
+    "enrollment_proof": {
+      "label": "在读证明申请",
+      "icon": "📄",
+      "fields": [
+        {"key":"applicant","label":"申请人","type":"text","required":true},
+        {"key":"student_id","label":"学号","type":"text","required":true},
+        {"key":"college","label":"学院","type":"text","required":true},
+        {"key":"major","label":"专业","type":"text","required":true},
+        {"key":"class_name","label":"班级","type":"text","required":true},
+        {"key":"purpose","label":"用途","type":"select","options":["出国签证","实习","就业","考试报名","银行贷款","其他"],"required":true},
+        {"key":"copies","label":"需要份数","type":"number","required":true},
+        {"key":"notes","label":"备注说明","type":"textarea"}
+      ]
+    },
+    "abroad_application": {
+      "label": "因公出国申请",
+      "icon": "🌍",
+      "fields": [
+        {"key":"applicant","label":"申请人","type":"text","required":true},
+        {"key":"department","label":"所属部门","type":"text","required":true},
+        {"key":"employee_id","label":"工号","type":"text"},
+        {"key":"title","label":"职称","type":"text"},
+        {"key":"destination_country","label":"目的国家","type":"text","required":true},
+        {"key":"destination_city","label":"目的城市","type":"text","required":true},
+        {"key":"start_date","label":"出发日期","type":"date","required":true},
+        {"key":"end_date","label":"返回日期","type":"date","required":true},
+        {"key":"purpose","label":"出访事由","type":"textarea","required":true},
+        {"key":"funding_source","label":"经费来源","type":"select","options":["科研经费","学院经费","学校经费","外方资助","自费"],"required":true},
+        {"key":"host_institution","label":"邀请方/接待单位","type":"text"},
+        {"key":"companions","label":"同行人员","type":"text"}
+      ]
+    },
+    "onboarding": {
+      "label": "入职报到",
+      "icon": "💼",
+      "fields": [
+        {"key":"applicant","label":"姓名","type":"text","required":true},
+        {"key":"gender","label":"性别","type":"select","options":["男","女"],"required":true},
+        {"key":"id_number","label":"身份证号","type":"text","required":true},
+        {"key":"department","label":"入职部门","type":"text","required":true},
+        {"key":"position","label":"岗位","type":"text","required":true},
+        {"key":"title","label":"职称","type":"text"},
+        {"key":"education","label":"最高学历","type":"select","options":["博士","硕士","本科","其他"]},
+        {"key":"graduate_school","label":"毕业院校","type":"text"},
+        {"key":"phone","label":"联系电话","type":"text","required":true},
+        {"key":"email","label":"电子邮箱","type":"text","required":true},
+        {"key":"entry_date","label":"入职日期","type":"date","required":true},
+        {"key":"notes","label":"备注","type":"textarea"}
+      ]
+    },
+    "office_supplies": {
+      "label": "办公用品领用",
+      "icon": "🖊️",
+      "fields": [
+        {"key":"applicant","label":"申请人","type":"text","required":true},
+        {"key":"department","label":"所属部门","type":"text","required":true},
+        {"key":"items","label":"领用物品清单","type":"textarea","required":true,"hint":"逐项列出，每项注明名称和数量"},
+        {"key":"estimated_cost","label":"预估金额","type":"number","hint":"单位：元"},
+        {"key":"purpose","label":"用途说明","type":"textarea","required":true},
+        {"key":"date","label":"领用日期","type":"date"},
+        {"key":"receiver","label":"领取人","type":"text"}
+      ]
+    },
+    "book_purchase": {
+      "label": "图书采购申请",
+      "icon": "📚",
+      "fields": [
+        {"key":"applicant","label":"申请人","type":"text","required":true},
+        {"key":"department","label":"所属部门","type":"text","required":true},
+        {"key":"book_title","label":"书名","type":"text","required":true},
+        {"key":"author","label":"作者","type":"text"},
+        {"key":"publisher","label":"出版社","type":"text"},
+        {"key":"isbn","label":"ISBN","type":"text"},
+        {"key":"quantity","label":"采购数量","type":"number","required":true},
+        {"key":"unit_price","label":"单价","type":"number","hint":"单位：元"},
+        {"key":"purpose","label":"采购理由","type":"textarea","required":true},
+        {"key":"funding_source","label":"经费来源","type":"select","options":["科研经费","教学经费","图书经费","其他"]}
+      ]
+    }
+  },
+  "detection_rules": {
+    "reimbursement":     {"keywords":["发票","报销","金额","收款","报销单","财务","报销申请"],"weight":3},
+    "leave":             {"keywords":["请假","请假时间","去向","交通工具","外出请假单","辅导员签字","返校时间","请假条","事假","病假"],"weight":3},
+    "club_application":  {"keywords":["社团","活动","场地","参与者","社团活动","协会","社团申请","活动方案","指导老师"],"weight":3},
+    "classroom_booking": {"keywords":["教室","借用","多媒体","课室","教室借用","教学楼","设备"],"weight":3},
+    "business_trip":     {"keywords":["出差","差旅","目的地","出差申请","差旅费","出差报告"],"weight":3},
+    "seal_application":  {"keywords":["用章","公章","盖章","印章","用印","院章","校章","用章申请","印章使用"],"weight":3},
+    "dorm_change":       {"keywords":["宿舍","调换","换寝","寝室","住宿","调宿","换宿舍"],"weight":3},
+    "scholarship":       {"keywords":["奖学金","助学金","评奖","国家奖学金","学业奖学金","奖励"],"weight":3},
+    "suspend_resume":    {"keywords":["休学","复学","保留学籍","休学申请","复学申请"],"weight":3},
+    "enrollment_proof":  {"keywords":["在读证明","学籍证明","在校证明","就读证明"],"weight":3},
+    "abroad_application":{"keywords":["出国","出境","因公出国","访学","交流","护照","签证"],"weight":3},
+    "onboarding":        {"keywords":["入职","报到","新员工","入职手续","入职申请"],"weight":3},
+    "office_supplies":   {"keywords":["办公用品","领用","文具","耗材","领取","申领"],"weight":3},
+    "book_purchase":     {"keywords":["图书","采购","购书","书籍","教材","文献"],"weight":3}
+  }
+}

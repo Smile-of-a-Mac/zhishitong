@@ -1,0 +1,10 @@
+# 智审通 · 本地推理服务依赖
+# GPU 加速包 (按需选一):
+#   Apple Silicon: CMAKE_ARGS="-DGGML_METAL=on" pip install llama-cpp-python
+#   NVIDIA GPU:    CMAKE_ARGS="-DGGML_CUDA=on" pip install llama-cpp-python
+#   AMD GPU:       CMAKE_ARGS="-DGGML_HIPBLAS=on" pip install llama-cpp-python
+#   CPU only:      pip install llama-cpp-python
+llama-cpp-python>=0.3.0
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+pydantic>=2.0.0
