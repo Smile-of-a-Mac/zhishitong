@@ -9,6 +9,7 @@ import AdminSchoolsPage from './pages/admin/AdminSchoolsPage'
 import AdminMonitorPage from './pages/admin/AdminMonitorPage'
 import AdminUsersPage from './pages/admin/AdminUsersPage'
 import AdminDataPage from './pages/admin/AdminDataPage'
+import AdminTestPage from './pages/admin/AdminTestPage'
 import DeptAdminPage from './pages/dept/DeptAdminPage'
 import SchoolAdminPage from './pages/school/SchoolAdminPage'
 import FinanceAdminPage from './pages/finance/FinanceAdminPage'
@@ -98,6 +99,7 @@ export default function App() {
         <Route path="/admin/members" element={<NeedAuth><NeedAdmin><Frame><AdminUsersPage /></Frame></NeedAdmin></NeedAuth>} />
         <Route path="/admin/monitor" element={<NeedAuth><NeedAdmin><Frame><AdminMonitorPage /></Frame></NeedAdmin></NeedAuth>} />
         <Route path="/admin/data" element={<NeedAuth><NeedAdmin><Frame><AdminDataPage /></Frame></NeedAdmin></NeedAuth>} />
+        <Route path="/admin/test" element={<NeedAuth><NeedAdmin><Frame><AdminTestPage /></Frame></NeedAdmin></NeedAuth>} />
         <Route path="/dept" element={<NeedAuth><NeedDeptStaff><Frame><DeptAdminPage /></Frame></NeedDeptStaff></NeedAuth>} />
         <Route path="/school" element={<NeedAuth><NeedSchoolStaff><Frame><SchoolAdminPage /></Frame></NeedSchoolStaff></NeedAuth>} />
         <Route path="/school/affairs" element={<NeedAuth><NeedSchoolStaff><Frame><SchoolAffairsPage /></Frame></NeedSchoolStaff></NeedAuth>} />

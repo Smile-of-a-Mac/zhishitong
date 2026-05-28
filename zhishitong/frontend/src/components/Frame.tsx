@@ -22,6 +22,7 @@ const COMMUNITY_NAV: NavItem[] = [
 ]
 
 const ADMIN_NAV: NavItem[] = [
+  { to: '/admin/test', label: '🧪 模拟测试' },
   { to: '/admin/api-keys', label: '🔑 API Key' },
   { to: '/admin/schools', label: '🏫 学校管理' },
   { to: '/admin/members', label: '👥 成员管理' },

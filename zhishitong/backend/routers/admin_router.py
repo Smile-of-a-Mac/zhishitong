@@ -17,6 +17,7 @@ from schemas import (
     AuditLogOut,
 )
 from auth import require_admin, require_school_admin, hash_password, verify_password
+from auth import set_test_override, clear_test_override, get_test_override
 from services.crypto_service import encrypt, decrypt
 from config import MAX_OCR_KEYS, MAX_FILL_KEYS, MAX_LLM_KEYS
 from services.logging_service import LogCategory, log
@@ -833,3 +834,83 @@ def key_pool_stats(
             for t in ["ocr", "json_fill", "llm"]
         ]
     }
+
+
+# ==============================
+# 测试模拟面板（管理员专用）
+# ==============================
+
+class TestSessionOverride(BaseModel):
+    tier: Optional[str] = None          # free | pro | pro_plus
+    is_dept_admin: Optional[bool] = None
+    is_school_admin: Optional[bool] = None
+    is_finance_admin: Optional[bool] = None
+    department: Optional[str] = None
+    school: Optional[str] = None
+    reset: bool = False                  # True = 清除所有覆盖
+
+
+@router.get("/test-session")
+def get_test_session(
+    admin: User = Depends(require_admin),
+):
+    """获取当前测试模拟状态"""
+    override = get_test_override(admin.id)
+    return {
+        "active": override is not None,
+        "overrides": override or {},
+        "original": {
+            "username": admin.username,
+            "tier": admin.tier.value,
+            "is_dept_admin": admin.is_dept_admin,
+            "is_school_admin": admin.is_school_admin,
+            "is_finance_admin": admin.is_finance_admin,
+            "department": admin.department,
+            "school": admin.school,
+        },
+    }
+
+
+@router.post("/test-session")
+def set_test_session(
+    body: TestSessionOverride,
+    admin: User = Depends(require_admin),
+):
+    """设置测试模拟覆盖"""
+    if body.reset:
+        clear_test_override(admin.id)
+        log(LogCategory.ADMIN, "info", "测试模拟: 已清除",
+            user_id=admin.id)
+        return {"active": False, "message": "已恢复原始身份"}
+
+    overrides = {}
+    if body.tier is not None:
+        if body.tier not in ("free", "pro", "pro_plus"):
+            raise HTTPException(400, f"无效订阅层级: {body.tier}")
+        overrides["tier"] = body.tier
+    for field in ("is_dept_admin", "is_school_admin", "is_finance_admin"):
+        if getattr(body, field) is not None:
+            overrides[field] = getattr(body, field)
+    if body.department is not None:
+        overrides["department"] = body.department
+    if body.school is not None:
+        overrides["school"] = body.school
+
+    if not overrides:
+        raise HTTPException(400, "请至少设置一个覆盖字段，或设置 reset=true 清除")
+
+    set_test_override(admin.id, overrides)
+    log(LogCategory.ADMIN, "info",
+        f"测试模拟: {', '.join(f'{k}={v}' for k, v in overrides.items())}",
+        user_id=admin.id, **overrides)
+    return {"active": True, "overrides": overrides, "message": "模拟已激活，刷新页面生效"}
+
+
+@router.delete("/test-session")
+def delete_test_session(
+    admin: User = Depends(require_admin),
+):
+    """清除测试模拟"""
+    clear_test_override(admin.id)
+    log(LogCategory.ADMIN, "info", "测试模拟: 已清除", user_id=admin.id)
+    return {"active": False, "message": "已恢复原始身份"}

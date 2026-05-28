@@ -1,11 +1,12 @@
-"""JWT 认证 + 用户依赖注入"""
+"""JWT 认证 + 用户依赖注入 + 管理员测试模拟"""
 import datetime
+from typing import Optional
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
-from models import User
+from models import User, TierEnum
 from database import get_db
 from config import JWT_SECRET, JWT_ALGORITHM, JWT_EXPIRE_DAYS
 
@@ -13,6 +14,41 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 bearer_scheme = HTTPBearer()
 
 UTC = datetime.timezone.utc
+
+# ===== 管理员测试模拟：在内存中临时覆盖角色/订阅/学校 =====
+# key: admin_user_id, value: 覆盖字段 dict
+_test_overrides: dict[int, dict] = {}
+
+
+def set_test_override(admin_id: int, overrides: dict):
+    """设置测试覆盖（仅管理员可用）"""
+    _test_overrides[admin_id] = overrides
+
+
+def clear_test_override(admin_id: int):
+    """清除测试覆盖"""
+    _test_overrides.pop(admin_id, None)
+
+
+def get_test_override(admin_id: int) -> Optional[dict]:
+    """获取当前测试覆盖"""
+    return _test_overrides.get(admin_id)
+
+
+def _apply_overrides(user: User, overrides: dict):
+    """将覆盖字段应用到 User 对象（不写库）"""
+    if "tier" in overrides:
+        try:
+            user.tier = TierEnum(overrides["tier"])
+        except ValueError:
+            pass
+    for field in ("is_dept_admin", "is_school_admin", "is_finance_admin", "is_admin"):
+        if field in overrides:
+            setattr(user, field, bool(overrides[field]))
+    if "department" in overrides:
+        user.department = overrides["department"] or ""
+    if "school" in overrides:
+        user.school = overrides["school"] or ""
 
 
 def hash_password(password: str) -> str:
@@ -52,6 +88,11 @@ async def get_current_user(
     user = db.query(User).filter(User.id == user_id).first()
     if not user or not user.is_active:
         raise HTTPException(status_code=401, detail="用户不存在或未激活")
+
+    # ── 管理员测试模拟：应用临时覆盖 ──
+    if user.is_admin and user_id in _test_overrides:
+        _apply_overrides(user, _test_overrides[user_id])
+
     return user
 
 
