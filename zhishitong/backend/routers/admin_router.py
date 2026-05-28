@@ -18,6 +18,7 @@ from schemas import (
 )
 from auth import require_admin, require_school_admin, hash_password, verify_password
 from auth import set_test_override, clear_test_override, get_test_override
+from auth import get_raw_user
 from services.crypto_service import encrypt, decrypt
 from config import MAX_OCR_KEYS, MAX_FILL_KEYS, MAX_LLM_KEYS
 from services.logging_service import LogCategory, log
@@ -853,22 +854,24 @@ class TestSessionOverride(BaseModel):
 
 @router.get("/test-session")
 def get_test_session(
-    admin: User = Depends(require_admin),
+    raw: User = Depends(get_raw_user),
 ):
-    """获取当前测试模拟状态"""
-    override = get_test_override(admin.id)
+    """获取当前测试模拟状态（绕过覆盖，管理员始终可查）"""
+    if not raw.is_admin:
+        raise HTTPException(403, "需要管理员权限")
+    override = get_test_override(raw.id)
     return {
         "active": override is not None,
         "overrides": override or {},
         "original": {
-            "username": admin.username,
-            "tier": admin.tier.value,
-            "is_admin": admin.is_admin,
-            "is_dept_admin": admin.is_dept_admin,
-            "is_school_admin": admin.is_school_admin,
-            "is_finance_admin": admin.is_finance_admin,
-            "department": admin.department,
-            "school": admin.school,
+            "username": raw.username,
+            "tier": raw.tier.value,
+            "is_admin": raw.is_admin,
+            "is_dept_admin": raw.is_dept_admin,
+            "is_school_admin": raw.is_school_admin,
+            "is_finance_admin": raw.is_finance_admin,
+            "department": raw.department,
+            "school": raw.school,
         },
     }
 
@@ -876,13 +879,15 @@ def get_test_session(
 @router.post("/test-session")
 def set_test_session(
     body: TestSessionOverride,
-    admin: User = Depends(require_admin),
+    raw: User = Depends(get_raw_user),
 ):
     """设置测试模拟覆盖"""
+    if not raw.is_admin:
+        raise HTTPException(403, "需要管理员权限")
     if body.reset:
-        clear_test_override(admin.id)
+        clear_test_override(raw.id)
         log(LogCategory.ADMIN, "info", "测试模拟: 已清除",
-            user_id=admin.id)
+            user_id=raw.id)
         return {"active": False, "message": "已恢复原始身份"}
 
     overrides = {}
@@ -901,18 +906,20 @@ def set_test_session(
     if not overrides:
         raise HTTPException(400, "请至少设置一个覆盖字段，或设置 reset=true 清除")
 
-    set_test_override(admin.id, overrides)
+    set_test_override(raw.id, overrides)
     log(LogCategory.ADMIN, "info",
         f"测试模拟: {', '.join(f'{k}={v}' for k, v in overrides.items())}",
-        user_id=admin.id, **overrides)
+        user_id=raw.id, **overrides)
     return {"active": True, "overrides": overrides, "message": "模拟已激活，刷新页面生效"}
 
 
 @router.delete("/test-session")
 def delete_test_session(
-    admin: User = Depends(require_admin),
+    raw: User = Depends(get_raw_user),
 ):
     """清除测试模拟"""
-    clear_test_override(admin.id)
-    log(LogCategory.ADMIN, "info", "测试模拟: 已清除", user_id=admin.id)
+    if not raw.is_admin:
+        raise HTTPException(403, "需要管理员权限")
+    clear_test_override(raw.id)
+    log(LogCategory.ADMIN, "info", "测试模拟: 已清除", user_id=raw.id)
     return {"active": False, "message": "已恢复原始身份"}
