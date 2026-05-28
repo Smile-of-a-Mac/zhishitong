@@ -34,6 +34,70 @@ WORKFLOWS: dict[str, dict] = {
         ],
         "skip_rules": {},
     },
+    # ===== 山科大实际流程 =====
+    "transcript_print": {
+        "label": "成绩单打印",
+        "stages": [
+            {"key": "dept_review",    "label": "学院审核",   "role": "dept_admin"},
+            {"key": "school_review",  "label": "教务处办理", "role": "school_admin"},
+        ],
+        "skip_rules": {},
+    },
+    "diploma_verification": {
+        "label": "学历学位证明",
+        "stages": [
+            {"key": "dept_review",    "label": "学院审核",   "role": "dept_admin"},
+            {"key": "school_review",  "label": "教务处办理", "role": "school_admin"},
+        ],
+        "skip_rules": {},
+    },
+    "exam_review": {
+        "label": "试卷查阅",
+        "stages": [
+            {"key": "dept_review",    "label": "教务管理审核", "role": "dept_admin"},
+        ],
+        "skip_rules": {},
+    },
+    "class_reschedule": {
+        "label": "调停课申请",
+        "stages": [
+            {"key": "dept_review",    "label": "学院审核",   "role": "dept_admin"},
+            {"key": "school_review",  "label": "教务处审批", "role": "school_admin"},
+        ],
+        "skip_rules": {},
+    },
+    "makeup_exam": {
+        "label": "缓考/补考申请",
+        "stages": [
+            {"key": "dept_review",    "label": "学院审核",   "role": "dept_admin"},
+            {"key": "school_review",  "label": "教务处审批", "role": "school_admin"},
+        ],
+        "skip_rules": {},
+    },
+    "enrollment_proof": {
+        "label": "在读证明申请",
+        "stages": [
+            {"key": "dept_review",    "label": "学院审核",   "role": "dept_admin"},
+            {"key": "school_review",  "label": "教务处办理", "role": "school_admin"},
+        ],
+        "skip_rules": {},
+    },
+    "suspend_resume": {
+        "label": "休学/复学申请",
+        "stages": [
+            {"key": "dept_review",    "label": "学院审核",           "role": "dept_admin"},
+            {"key": "school_review",  "label": "教务处/研究生院审批", "role": "school_admin"},
+        ],
+        "skip_rules": {},
+    },
+    "scholarship": {
+        "label": "奖学金申请",
+        "stages": [
+            {"key": "dept_review",    "label": "学院评审", "role": "dept_admin"},
+            {"key": "school_review",  "label": "学校评审", "role": "school_admin"},
+        ],
+        "skip_rules": {},
+    },
 }
 
 

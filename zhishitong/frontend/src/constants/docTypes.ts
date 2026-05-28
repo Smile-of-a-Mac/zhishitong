@@ -14,6 +14,11 @@ export const DOC_TYPE_LABELS: Record<string, string> = {
   onboarding: '💼 入职报到',
   office_supplies: '🖊️ 办公用品领用',
   book_purchase: '📚 图书采购',
+  transcript_print: '📜 成绩单打印',
+  diploma_verification: '📜 学历学位证明',
+  exam_review: '📋 试卷查阅',
+  class_reschedule: '🔀 调停课申请',
+  makeup_exam: '📝 缓考/补考申请',
 }
 
 // 纯文本（无 emoji）
@@ -24,6 +29,9 @@ const DOC_LABEL_TEXT: Record<string, string> = {
   suspend_resume: '休学/复学', enrollment_proof: '在读证明',
   abroad_application: '因公出国', onboarding: '入职报到',
   office_supplies: '办公用品领用', book_purchase: '图书采购',
+  transcript_print: '成绩单打印', diploma_verification: '学历学位证明',
+  exam_review: '试卷查阅', class_reschedule: '调停课申请',
+  makeup_exam: '缓考/补考申请',
 }
 
 // emoji 图标
@@ -34,6 +42,9 @@ const DOC_ICON: Record<string, string> = {
   suspend_resume: '🎓', enrollment_proof: '📄',
   abroad_application: '🌍', onboarding: '💼',
   office_supplies: '🖊️', book_purchase: '📚',
+  transcript_print: '📜', diploma_verification: '📜',
+  exam_review: '📋', class_reschedule: '🔀',
+  makeup_exam: '📝',
 }
 
 export const getDocTypeLabel = (key: string | null | undefined): string => {

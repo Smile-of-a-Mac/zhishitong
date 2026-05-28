@@ -228,6 +228,87 @@
         {"key":"purpose","label":"采购理由","type":"textarea","required":true},
         {"key":"funding_source","label":"经费来源","type":"select","options":["科研经费","教学经费","图书经费","其他"]}
       ]
+    },
+    "transcript_print": {
+      "label": "成绩单打印",
+      "icon": "📜",
+      "fields": [
+        {"key":"applicant","label":"申请人","type":"text","required":true},
+        {"key":"student_id","label":"学号","type":"text","required":true},
+        {"key":"college","label":"学院","type":"text","required":true},
+        {"key":"major","label":"专业","type":"text","required":true},
+        {"key":"class_name","label":"班级","type":"text","required":true},
+        {"key":"transcript_type","label":"成绩单类型","type":"select","options":["中文成绩单","中英文成绩单"],"required":true},
+        {"key":"copies","label":"打印份数","type":"number","required":true},
+        {"key":"purpose","label":"用途","type":"select","options":["出国留学","求职","考研","其他"],"required":true},
+        {"key":"phone","label":"联系电话","type":"text","required":true},
+        {"key":"notes","label":"备注","type":"textarea"}
+      ]
+    },
+    "diploma_verification": {
+      "label": "学历学位证明",
+      "icon": "📜",
+      "fields": [
+        {"key":"applicant","label":"申请人","type":"text","required":true},
+        {"key":"student_id","label":"学号","type":"text","required":true},
+        {"key":"college","label":"学院","type":"text","required":true},
+        {"key":"major","label":"专业","type":"text","required":true},
+        {"key":"class_name","label":"班级","type":"text","required":true},
+        {"key":"cert_type","label":"证明类型","type":"select","options":["中英文学历学位证明","中文在读证明","中英文在读证明"],"required":true},
+        {"key":"purpose","label":"用途","type":"select","options":["出国签证","就业","考试报名","银行贷款","其他"],"required":true},
+        {"key":"copies","label":"需要份数","type":"number","required":true},
+        {"key":"phone","label":"联系电话","type":"text","required":true},
+        {"key":"notes","label":"备注","type":"textarea"}
+      ]
+    },
+    "exam_review": {
+      "label": "试卷查阅",
+      "icon": "📋",
+      "fields": [
+        {"key":"applicant","label":"申请人","type":"text","required":true},
+        {"key":"student_id","label":"学号","type":"text","required":true},
+        {"key":"college","label":"学院","type":"text","required":true},
+        {"key":"major","label":"专业","type":"text","required":true},
+        {"key":"course_name","label":"课程名称","type":"text","required":true},
+        {"key":"exam_date","label":"考试日期","type":"date","required":true},
+        {"key":"reason","label":"查阅理由","type":"textarea","required":true},
+        {"key":"phone","label":"联系电话","type":"text","required":true},
+        {"key":"notes","label":"备注","type":"textarea"}
+      ]
+    },
+    "class_reschedule": {
+      "label": "调停课申请",
+      "icon": "🔀",
+      "fields": [
+        {"key":"applicant","label":"申请人（教师）","type":"text","required":true},
+        {"key":"college","label":"开课学院","type":"text","required":true},
+        {"key":"course_name","label":"课程名称","type":"text","required":true},
+        {"key":"class_id","label":"课程序号","type":"text","required":true},
+        {"key":"reschedule_type","label":"调整类型","type":"select","options":["调课","停课","补课"],"required":true},
+        {"key":"original_date","label":"原上课日期","type":"date","required":true},
+        {"key":"original_time","label":"原上课时间","type":"text","required":true},
+        {"key":"new_date","label":"拟调整日期","type":"date"},
+        {"key":"new_time","label":"拟调整时间","type":"text"},
+        {"key":"reason","label":"事由","type":"textarea","required":true},
+        {"key":"affected_classes","label":"受影响班级","type":"text"},
+        {"key":"notes","label":"备注","type":"textarea"}
+      ]
+    },
+    "makeup_exam": {
+      "label": "缓考/补考申请",
+      "icon": "📝",
+      "fields": [
+        {"key":"applicant","label":"申请人","type":"text","required":true},
+        {"key":"student_id","label":"学号","type":"text","required":true},
+        {"key":"college","label":"学院","type":"text","required":true},
+        {"key":"major","label":"专业","type":"text","required":true},
+        {"key":"course_name","label":"课程名称","type":"text","required":true},
+        {"key":"exam_type","label":"申请类型","type":"select","options":["缓考","补考"],"required":true},
+        {"key":"original_exam_date","label":"原考试日期","type":"date","required":true},
+        {"key":"reason","label":"申请原因","type":"textarea","required":true},
+        {"key":"phone","label":"联系电话","type":"text","required":true},
+        {"key":"notes","label":"备注","type":"textarea"}
+      ]
     }
   },
   "detection_rules": {
@@ -244,6 +325,11 @@
     "abroad_application":{"keywords":["出国","出境","因公出国","访学","交流","护照","签证"],"weight":3},
     "onboarding":        {"keywords":["入职","报到","新员工","入职手续","入职申请"],"weight":3},
     "office_supplies":   {"keywords":["办公用品","领用","文具","耗材","领取","申领"],"weight":3},
-    "book_purchase":     {"keywords":["图书","采购","购书","书籍","教材","文献"],"weight":3}
+    "book_purchase":     {"keywords":["图书","采购","购书","书籍","教材","文献"],"weight":3},
+    "transcript_print":  {"keywords":["成绩单","打印成绩单","中英文成绩单","成绩单打印","成绩证明"],"weight":3},
+    "diploma_verification": {"keywords":["学历学位","中英文学历","学位证明","学历证明","学历认证","学位认证"],"weight":3},
+    "exam_review":       {"keywords":["试卷查阅","查卷","复查试卷","试卷复核","查阅试卷"],"weight":3},
+    "class_reschedule":  {"keywords":["调课","停课","补课","调停课","调课申请","停课申请"],"weight":3},
+    "makeup_exam":       {"keywords":["缓考","补考","缓考申请","补考申请","缺考"],"weight":3}
   }
 }
