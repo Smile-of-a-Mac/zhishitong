@@ -5,18 +5,18 @@
 
 ## 📐 设计图集
 
-所有 UML 图的 SVG 渲染版本位于 `docs/diagrams/`，也可通过 `usecase.html` 在浏览器中统一查看。
+所有 UML 图的 SVG 渲染版本位于 `docs/diagrams/`，也可通过 `docs/usecase.html` 在浏览器中统一查看。
 
 | 图名 | 文件 | 说明 |
 |------|------|------|
-| 📋 用例图 | `usecase.puml` → `docs/diagrams/usecase.svg` | 按角色划分的完整用例图（5 类角色 × 30+ 用例） |
-| 🏗️ 系统架构图 | `architecture.puml` → `docs/diagrams/architecture.svg` | 前端/后端/服务/数据/AI 推理/LoRA 六层架构 |
-| 🔄 审批状态机 | `state_approval.puml` → `docs/diagrams/state_approval.svg` | pending/approved/rejected/needs_revision/cancelled/withdrawn 六态流转 |
-| 📝 审批时序图 | `sequence_approval.puml` → `docs/diagrams/sequence_approval.svg` | 以报销为例的多阶段审批完整时序（部门→财务→学校） |
-| 📷 OCR 时序图 | `sequence_ocr.puml` → `docs/diagrams/sequence_ocr.svg` | Free/Pro 多级降级 OCR 处理流程 |
-| 🗃️ 数据模型类图 | `class_diagram.puml` → `docs/diagrams/class_diagram.svg` | 15 张数据表 + 枚举 + 关系 |
-| 🧪 LoRA 管线 | `activity_lora.puml` → `docs/diagrams/activity_lora.svg` | 数据制备→训练→合并→GGUF 转换→推理部署 |
-| 🚀 部署架构图 | `deployment.puml` → `docs/diagrams/deployment.svg` | 多容器 Docker Compose 部署方案 |
+| 📋 用例图 | `usecase.puml` → `diagrams/usecase.svg` | 按角色划分的完整用例图（5 类角色 × 30+ 用例） |
+| 🏗️ 系统架构图 | `architecture.puml` → `diagrams/architecture.svg` | 前端/后端/服务/数据/AI 推理/LoRA 六层架构 |
+| 🔄 审批状态机 | `state_approval.puml` → `diagrams/state_approval.svg` | pending/approved/rejected/needs_revision/cancelled/withdrawn 六态流转 |
+| 📝 审批时序图 | `sequence_approval.puml` → `diagrams/sequence_approval.svg` | 以报销为例的多阶段审批完整时序（部门→财务→学校） |
+| 📷 OCR 时序图 | `sequence_ocr.puml` → `diagrams/sequence_ocr.svg` | Free/Pro 多级降级 OCR 处理流程 |
+| 🗃️ 数据模型类图 | `class_diagram.puml` → `diagrams/class_diagram.svg` | 15 张数据表 + 枚举 + 关系 |
+| 🧪 LoRA 管线 | `activity_lora.puml` → `diagrams/activity_lora.svg` | 数据制备→训练→合并→GGUF 转换→推理部署 |
+| 🚀 部署架构图 | `deployment.puml` → `diagrams/deployment.svg` | 多容器 Docker Compose 部署方案 |
 
 ---
 
