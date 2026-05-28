@@ -1,7 +1,7 @@
-# 智审通 — 产品设计文档 v4.0
+# 智审通 — 产品设计文档 v5.0
 
 > 状态：**迭代中**
-> 最后更新：2026-05-26
+> 最后更新：2026-05-28
 
 ---
 
@@ -1440,7 +1440,417 @@ v2.0.0  审批规则重大变更（如报销额度算法重构）
 
 ---
 
-## 十五、待定/待讨论事项
+## 十五、RAG + TF-IDF 政策知识库服务（v5.0 新增）
+
+> **核心思路：** 从 `data/policy_kb.json` 加载结构化的校规政策知识库，使用 TF-IDF 向量检索替代简单关键词匹配，所有 LLM 调用统一走本地推理服务。
+
+### 15.1 知识库结构
+
+```json
+{
+  "documents": [
+    {
+      "id": "sdust_reimbursement",
+      "title": "山东科技大学财务报销管理办法",
+      "category": "财务",
+      "applicable_types": ["reimbursement", "business_trip"],
+      "chunks": [
+        {
+          "id": "reim_001",
+          "title": "报销金额限制",
+          "text": "单笔报销金额不超过5000元的，由部门负责人审批；超过5000元的，需经财务处审核后报分管校领导审批。",
+          "keywords": ["报销", "金额", "5000", "限额"]
+        }
+      ]
+    }
+  ]
+}
+```
+
+### 15.2 检索流程
+
+```
+用户提问 "报销金额上限是多少"
+      │
+      ▼
+┌──────────────────────────────────────┐
+│ Step 1: 字符级 TF-IDF 向量化          │
+│   analyzer="char", ngram_range=(2,4) │
+│   中文友好，无需分词器                │
+└─────────┬────────────────────────────┘
+          │
+          ▼
+┌──────────────────────────────────────┐
+│ Step 2: Cosine Similarity 检索 Top-K │
+│   默认返回 top 5 个最相关 chunk       │
+└─────────┬────────────────────────────┘
+          │
+          ▼
+┌──────────────────────────────────────┐
+│ Step 3: 拼接 Prompt → LLM 生成回答    │
+│   system: "你是高校行政审批政策助手"   │
+│   context: [检索到的条文原文]          │
+│   question: "报销金额上限是多少"       │
+└─────────┬────────────────────────────┘
+          │
+          ▼
+        LLM 回答 + 引用来源
+```
+
+### 15.3 RAG 服务端点（`routers/rag_router.py`）
+
+| 端点 | 方法 | 功能 |
+|------|------|------|
+| `/api/ai/intent` | POST | 自然语言意图识别 → 推荐文档类型和预填字段 |
+| `/api/ai/compliance/{id}` | POST | 对指定审批记录进行合规性 RAG 分析 |
+| `/api/ai/similar/{id}` | POST | 检索相似历史案例 |
+| `/api/ai/opinion` | POST | 审批意见草稿生成 |
+| `/api/ai/chat` | POST | 政策问答 Chatbot（支持多轮对话） |
+| `/api/ai/search` | POST | 自然语言搜索 → 返回过滤参数 |
+
+### 15.4 容错降级
+
+```python
+# 当 LLM 不可用时，降级为纯规则检索模式
+if not llm_available:
+    return {
+        "answer": "未找到匹配的政策条文",
+        "sources": tfidf_search(question, top_k=3),
+        "fallback": True
+    }
+```
+
+---
+
+## 十六、智能预审规则引擎（v5.0 新增）
+
+> **设计原则：** 在 LLM 分析之前执行硬性规则检查，拦截明显不合规的申请，减少 LLM 调用成本。
+
+### 16.1 规则类型
+
+| 规则类型 | 说明 | 示例 |
+|---------|------|------|
+| `field_required` | 必填字段检查 | 报销金额不能为空 |
+| `field_range` | 数值范围检查 | 报销金额 > 0 且 ≤ 50000 |
+| `duplicate_check` | 发票号查重 | 同一发票号不能重复报销 |
+| `date_validity` | 日期合法性 | 请假结束日期不能早于开始日期 |
+
+### 16.2 规则配置（`RuleConfig` 模型）
+
+```python
+class RuleConfig(Base):
+    rule_key: str          # 唯一标识，如 "reim_amount_positive"
+    rule_name: str         # 中文名，如 "报销金额为正数"
+    document_type: str     # 适用文档类型（null=全局）
+    rule_type: str         # field_required / field_range / duplicate_check
+    field_key: str         # 校验字段
+    operator: str          # gt/lt/gte/lte/eq/contains
+    threshold_value: str   # 阈值
+    error_message: str     # 不通过提示语
+    severity: str          # error(拦截) / warning(提醒)
+    is_active: bool        # 是否启用
+    priority: int          # 优先级（数字越大越先执行）
+```
+
+### 16.3 执行流程
+
+```
+审批提交 → check_rules()
+  ├─ 加载所有 is_active=True 的规则（按 priority 降序）
+  ├─ 逐条执行 _evaluate_rule()
+  │   ├─ field_required → 检查字段是否为空
+  │   ├─ field_range → 数值与阈值比较
+  │   └─ duplicate_check → 数据库查重
+  ├─ 收集所有结果
+  └─ 返回 { record_id, all_passed, results[] }
+```
+
+---
+
+## 十七、站内信通知系统（v5.0 新增）
+
+### 17.1 通知类型
+
+| 类型 | 触发时机 | 接收人 |
+|------|---------|--------|
+| `approval_submitted` | 用户提交新申请 | 对应审批阶段的审批人 |
+| `approval_approved` | 审批通过 | 申请人 |
+| `approval_rejected` | 审批驳回 | 申请人 |
+| `approval_needs_revision` | 标记需修改 | 申请人 |
+| `approval_urged` | 申请人催办 | 当前审批人 |
+| `approval_overdue` | 超时未处理 | 当前审批人 |
+| `stage_advanced` | 进入下一审批阶段 | 申请人 + 下一阶段审批人 |
+| `system_announcement` | 系统公告 | 全体或指定用户 |
+
+### 17.2 前端呈现
+
+- **红点角标**：侧栏「通知」菜单项显示未读数
+- **通知列表页**：`/notifications`，支持按已读/未读筛选
+- **类型区分**：每种通知有独立图标（📩新申请 ✅通过 ❌驳回 📝需修改）和颜色
+- **快捷跳转**：点击通知可直接跳转到关联的审批记录详情
+
+---
+
+## 十八、资源预约系统（v5.0 新增）
+
+### 18.1 资源类型
+
+| 资源 | 模型 | 字段 |
+|------|------|------|
+| 📋 **会议室** | `ResourceRoom` | 名称、位置、容纳人数、设备（投影仪/白板/视频会议） |
+| 🚗 **公车** | `ResourceVehicle` | 车牌号、车型、座位数、司机 |
+
+### 18.2 预约流程
+
+```
+用户浏览可用资源 → 选择时间段 → 填写事由 → 提交预约申请
+                                                    │
+                                                    ▼
+                                            管理员审批 → 通过/驳回
+```
+
+- `ResourceBooking` 表统一管理会议室和车辆预约
+- 支持按时间段查询冲突检测
+- 审批状态：`pending` / `approved` / `rejected` / `cancelled`
+- 前端页面：`/resources`，Tab 切换会议室/车辆
+
+---
+
+## 十九、数据看板 Dashboard（v5.0 新增）
+
+### 19.1 按角色展示
+
+| 角色 | 可见数据维度 |
+|------|------------|
+| 普通用户 | 个人提交统计、审批进度 |
+| 部门管理员 | 本部门审批量、待审数、通过率 |
+| 财务管理员 | 报销类事务统计 |
+| 学校管理员 | 全校审批概览、各部门对比 |
+| 信息管理员 | 全平台数据（所有学校汇总） |
+
+### 19.2 看板指标
+
+- **概览卡片**：总用户、总审批量、待审批数、今日新增
+- **趋势图**：近 30 天每日审批量折线图
+- **类型分布**：按文档类型（报销/请假/社团等）的饼图
+- **状态分布**：pending / approved / rejected / needs_revision 占比
+- **效率指标**：平均处理时长、审批通过率、驳回率
+- **部门排行**：Top 部门审批量
+- **高频申请人**：Top 用户提交量
+
+---
+
+## 二十、公告 & 制度文库（v5.0 新增）
+
+### 20.1 公告分类
+
+| 分类 | 说明 |
+|------|------|
+| `announcement` | 系统公告（维护通知、新功能上线） |
+| `policy` | 校规制度（财务管理办法、请假规定等） |
+| `guide` | 办事指南（如何报销、如何请假等流程说明） |
+
+### 20.2 功能特性
+
+- **置顶**：`is_pinned=True` 的公告始终排在最前
+- **关联文档类型**：公告可关联特定审批类型，在对应申请页展示
+- **阅读量统计**：每次查看详情 `view_count += 1`
+- **发布/隐藏**：`is_published` 控制是否对外可见
+- 前端页面：`/announcements`
+
+---
+
+## 二十一、AI 政策问答助手 ChatBot（v5.0 新增）
+
+### 21.1 悬浮面板设计
+
+```
+┌──────────────────────────────────┐
+│  右下角悬浮按钮 💬                 │
+│       ↓ 点击展开                   │
+│  ┌─────────────────────────┐     │
+│  │  智审通政策助手           │     │
+│  │  ─────────────────────  │     │
+│  │  用户: 报销需要什么材料？  │     │
+│  │  助手: 根据《财务报销管理  │     │
+│  │        办法》第三章...     │     │
+│  │         📎 引用来源       │     │
+│  │  ─────────────────────  │     │
+│  │  建议问题:               │     │
+│  │  · 报销需要什么材料？     │     │
+│  │  · 请假超过3天怎么办？    │     │
+│  │  · 差旅住宿费标准是多少？  │     │
+│  │  [输入框___________] [发送] │     │
+│  └─────────────────────────┘     │
+└──────────────────────────────────┘
+```
+
+### 21.2 技术实现
+
+- **前端**：React 组件 `AIChatPanel.tsx`，仅登录用户可见
+- **聊天记录持久化**：按 `user_id` 隔离存储在 `localStorage`
+- **后端**：调用 `/api/ai/chat`，内部走 RAG 检索 + LLM 生成
+- **多轮对话**：支持传入 `history` 上下文
+- **引用来源**：返回匹配的政策条文原文
+
+---
+
+## 二十二、LoRA 微调管线（v5.0 新增）
+
+> **目标：** 用山东科技大学实际事务流程数据微调 Qwen2.5-0.5B，使其成为「山科大事务流程专家」。
+
+### 22.1 数据制备
+
+```
+data/
+├── pages/                          # 爬取的原始 HTML 页面
+│   ├── jwc.sdust.edu.cn/           # 教务处
+│   │   ├── gzlc/                   #   工作流程
+│   │   └── info/                   #   通知公告
+│   └── yjsy.sdust.edu.cn/          # 研究生院
+│       ├── gzb/                    #   工作部
+│       └── gzzd/                   #   规章制度
+├── build_corpus_local.py           # 语料构建脚本
+├── sdust_process_corpus_raw.jsonl  # 原始语料
+└── sdust_process_corpus_lora.jsonl # LoRA 训练数据（instruction/input/output 格式）
+```
+
+### 22.2 训练配置
+
+```python
+# training/train_lora.py
+BASE_MODEL = "Qwen2.5-0.5B"    # 基座模型（本地 GGUF）
+LORA_R = 16                     # LoRA 秩
+LORA_ALPHA = 32                 # 缩放因子
+LORA_TARGETS = [                # 目标模块
+    "q_proj", "k_proj", "v_proj", "o_proj",
+    "gate_proj", "up_proj", "down_proj"
+]
+NUM_EPOCHS = 50                # 训练轮数
+BATCH_SIZE = 1                  # 批大小（9条数据，小批量）
+GRAD_ACCUM = 8                  # 梯度累积（等效 batch=8）
+LEARNING_RATE = 2e-4
+MAX_SEQ_LENGTH = 1024
+```
+
+### 22.3 产出物
+
+```
+lora_output/
+├── checkpoint-50/           # 中间检查点
+├── checkpoint-100/          # 最终检查点
+└── final/                   # 最终 LoRA adapter
+    ├── adapter_config.json
+    ├── adapter_model.safetensors
+    └── ...
+
+lora_output_merged/          # 合并后的完整模型（HuggingFace 格式）
+├── model.safetensors        # 约 1GB
+├── config.json
+├── tokenizer.json
+└── ...
+
+models/
+└── qwen2.5-0.5b-lora.gguf   # 转换为 GGUF 格式（给 llama.cpp 推理用）
+```
+
+### 22.4 训练 & 合并 & 转换流程
+
+```bash
+# Step 1: LoRA 微调
+cd training && python train_lora.py
+
+# Step 2: 合并 LoRA adapter 到基座模型
+python merge_lora.py
+
+# Step 3: 转换为 GGUF（start.sh 自动检测并执行）
+# 或手动：
+python -m llama_cpp.convert_hf_to_gguf lora_output_merged \
+  --outfile models/qwen2.5-0.5b-lora.gguf --outtype q8_0
+```
+
+### 22.5 start.sh 自动切换
+
+```bash
+# start.sh 检测逻辑（v5.0 新增）
+if [ -d "$MERGED_DIR" ]; then
+  if [ ! -f "$LORA_GGUF" ]; then
+    # 自动转换 HF → GGUF
+    python convert_hf_to_gguf.py "$MERGED_DIR" --outfile "$LORA_GGUF"
+  fi
+  export MODEL_PATH="$LORA_GGUF"  # 使用微调模型
+fi
+```
+
+---
+
+## 二十三、管理员模拟测试面板（v5.0 新增）
+
+> **场景：** 信息管理员需要以任意用户身份登录系统，验证不同角色/套餐下的功能表现，而无需实际切换账号。
+
+### 23.1 功能
+
+| 能力 | 说明 |
+|------|------|
+| 🔄 **临时切换身份** | 选择目标用户，临时以该用户角色查看系统 |
+| 🎛️ **覆盖属性** | 可覆盖 `is_admin`、`tier`、`school`、`department` 等字段 |
+| 🚪 **一键退出** | 顶部横幅 + 侧栏提示条均可一键退出模拟，恢复管理员身份 |
+| 🔒 **安全隔离** | 模拟覆盖使用 `db.expunge()` 防止误写数据库；管理员登录自动清除模拟状态 |
+| 🔄 **自动刷新** | 退出模拟后正确刷新 React 身份上下文并跳回管理员工作台 |
+
+### 23.2 实现细节
+
+- **后端**：`auth.py` 的 `get_current_user` 依赖注入支持模拟覆盖；`get_raw_user` 绕过覆盖用于测试端点
+- **前端**：`AdminTestPage.tsx` 面板；`Frame.tsx` 中的 `SimulationBanner` 横幅随路由切换自动刷新
+- **状态管理**：模拟状态存储在服务端 Session，非客户端 Cookie，防止篡改
+
+---
+
+## 二十四、推理服务 GPU 自动检测（v5.0 新增）
+
+> `inference_server/server.py` 在启动时自动检测最优 GPU 后端，无需手动配置。
+
+### 24.1 检测优先级
+
+| 优先级 | 硬件 | 后端 | 说明 |
+|--------|------|------|------|
+| 1 | Apple Silicon (M1/M2/M3/M4) | Metal (MPS) | `n_gpu_layers=-1` 全层 GPU |
+| 2 | NVIDIA GPU | CUDA (cuBLAS) | 自动检测 `torch.cuda.is_available()` |
+| 3 | AMD GPU | ROCm (hipBLAS) | 检测 `torch.hip` 或环境变量 |
+| 4 | 无 GPU | CPU (AVX2) | `n_gpu_layers=0`，多线程推理 |
+
+### 24.2 暴露接口
+
+- `POST /v1/chat/completions` — OpenAI 兼容的 Chat API
+- `GET /health` — 健康检查端点
+- `GET /metrics` — Prometheus 指标（已启用 `--metrics`）
+
+---
+
+## 二十五、审批意见模板 & 审批代理（v5.0 新增）
+
+### 25.1 审批意见模板（`ApprovalOpinionTemplate`）
+
+审批人可预设常用批语，一键填入审批意见：
+
+| 分类 | 示例模板 |
+|------|---------|
+| `approve` | "材料齐全，同意报销"、"符合请假规定，批准" |
+| `reject` | "发票信息不完整，请补充后重新提交" |
+| `revision` | "请补充发票原件照片"、"请假事由需更详细说明" |
+
+### 25.2 审批代理（`ApprovalDelegation`）
+
+审批人休假/出差时可将审批权委托给他人：
+
+- 设置委托时间段（`start_date` ~ `end_date`）
+- 委托期间，被委托人可代为审批
+- 到期自动失效
+- 操作记录可追溯
+
+---
+
+## 二十六、待定/待讨论事项
 
 > ⬜ 未决 | ✅ 已确认
 
@@ -1463,15 +1873,12 @@ v2.0.0  审批规则重大变更（如报销额度算法重构）
 
 ---
 
-## 十六、变更摘要
+## 二十七、变更摘要
 
 | 版本 | 变更内容 |
 |------|---------|
 | v1.0 → v2.0 | 三级分层体系；API Key 池；软删除；4 面板管理后台 |
 | **v2.0 → v3.0** | Free 层改为 EasyOCR 提取 + 本地小模型 JSON 填充（两阶段）；LangGraph 审批流程；AES Fernet 密钥存储；JSON 动态模板渲染；文件上传安全；单/多容器架构 |
 | **v3.0 → v4.0** | 新增学校管理员角色；审批引擎改为「AI 辅助，不自动结论」；文档类型前端汉化；请假单固定字段；学校字段 tenant 化 |
-| **v4.0 → v4.1** | 本章新增 |
-| | 角色体系：去掉「超级管理员」，改为「信息管理员」（API Key/数据/监控，不参与审批和用户管理） |
-| | 新增第十二章「学校租户模型」：学校级套餐、租户隔离、学校管理员边界 |
-| | 新增第十三章「流程版本治理」：版本号规范、实例迁移策略、回滚与灰度 |
-| | 新增第十四章「审计合规与日志治理」：审计分层、日志防篡改、留存期限、数据脱敏、取证流程 |
+| **v4.0 → v4.1** | 角色体系：去掉「超级管理员」，改为「信息管理员」（API Key/数据/监控，不参与审批和用户管理）；新增第十二章「学校租户模型」：学校级套餐、租户隔离、学校管理员边界；新增第十三章「流程版本治理」：版本号规范、实例迁移策略、回滚与灰度；新增第十四章「审计合规与日志治理」：审计分层、日志防篡改、留存期限、数据脱敏、取证流程 |
+| **v4.1 → v5.0** | 🆕 **重大更新** — 对接山科大真实审批流程（5 类新模板：成绩单打印、学历学位证明、试卷查阅、调停课申请、缓考补考、在读证明）；多阶段审批流（部门→财务→学校，金额阈值跳过）；新增 RAG + TF-IDF 政策知识库（6 个 AI 端点）；智能预审规则引擎（field_required / field_range / duplicate_check）；站内信通知系统（8 种通知类型 + 红点角标）；资源预约系统（会议室 + 公车）；数据看板 Dashboard（按角色展示 + 30天趋势）；公告 & 制度文库（公告/政策/办事指南 + 置顶 + 阅读量）；AI 政策问答 ChatBot（右下角悬浮 + localStorage 持久化）；LoRA 微调管线（山科大语料 → Qwen2.5-0.5B → GGUF）；管理员模拟测试面板（临时切换身份 + 安全隔离）；推理服务 GPU 自动检测（Metal/CUDA/ROCm/CPU）；审批意见模板 + 审批代理；start.sh 自动检测微调模型并切换；前端极光背景性能优化 |

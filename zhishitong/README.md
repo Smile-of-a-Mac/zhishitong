@@ -1,79 +1,185 @@
-# 智审通 — 高校行政审批自动化 Agent
+# 智审通 — 高校行政审批自动化 Agent v5.0
 
-高校行政审批自动化平台，支持多学校、多角色协同审批，集成智能 OCR 与 LLM 驱动的表单填写。
+高校行政审批自动化平台，支持多学校、多角色协同审批，集成智能 OCR、LLM 驱动的表单填写、RAG 政策检索、LoRA 微调问答与可视化数据看板。
 
 ---
 
 ## 项目结构
 
 ```
-zhishitong/
-├── backend/                # Python 后端
-│   ├── main.py             # FastAPI 入口
-│   ├── config.py           # 全局配置（JWT、数据库、LLM等）
-│   ├── database.py         # SQLAlchemy 引擎与 Session
-│   ├── seed.py             # 种子数据初始化
-│   ├── auth.py             # JWT 认证（hash、token、依赖注入）
-│   ├── models.py           # SQLAlchemy 数据模型
-│   ├── schemas.py          # Pydantic 请求/响应模型
-│   ├── templates.json      # 审批表单模板
-│   ├── routers/            # API 路由（按模块）
-│   │   ├── auth_router.py       # 注册/登录/个人信息
-│   │   ├── ocr_router.py        # 图片上传 & OCR 识别
-│   │   ├── approval_router.py   # 审批提交/查询/智能建议
-│   │   ├── admin_router.py      # 学校管理/成员管理/API Key
-│   │   ├── dept_router.py       # 部门审批
-│   │   ├── finance_router.py    # 财务审批
-│   │   ├── school_router.py     # 学校审批
-│   │   └── monitor_router.py    # 系统监控
-│   └── services/           # 业务逻辑层
-│       ├── ocr_service.py       # OCR 层（多级路由+JSON填充）
-│       ├── approval_service.py  # LangGraph 审批引擎
-│       ├── workflow.py          # 多阶段审批流程定义
-│       ├── crypto_service.py    # Fernet 加密
-│       ├── file_service.py      # 文件校验/存储/清理
-│       ├── template_service.py  # 模板加载 & 文档类型检测
-│       └── logging_service.py   # 结构化日志
-├── frontend/               # React 前端
-│   └── src/
-│       ├── App.tsx              # 路由定义
-│       ├── components/          # 通用组件
-│       │   ├── Frame.tsx        # 玻璃侧边栏布局
-│       │   └── GlassCard.tsx    # 毛玻璃卡片
-│       ├── pages/               # 页面（按模块）
-│       │   ├── auth/            # LoginPage
-│       │   ├── workbench/       # WorkbenchPage, ManualFormPage
-│       │   ├── history/         # HistoryPage
-│       │   ├── profile/         # ProfilePage
-│       │   ├── admin/           # API Keys, 学校管理, 成员管理, 监控
-│       │   ├── dept/            # 部门审批
-│       │   ├── finance/         # 财务审批
-│       │   └── school/          # 学校管理 & 事务总览
-│       ├── hooks/useAuth.tsx    # 认证 Hook
-│       └── constants/           # 文档类型 & 字段标签
-├── inference_server/       # llama.cpp 本地推理服务（可选）
-├── data/                   # SQLite 数据库
-├── uploads/                # 上传文件存储
-└── start.sh                # 一键启动脚本
+sito/
+├── zhishitong/                         # 主应用
+│   ├── backend/                        # Python 后端（FastAPI）
+│   │   ├── main.py                     # 应用入口 & 中间件
+│   │   ├── config.py                   # 全局配置（JWT、DB、LLM 等）
+│   │   ├── database.py                 # SQLAlchemy 引擎 & Session
+│   │   ├── seed.py                     # 种子数据（8 校 × 全角色）
+│   │   ├── auth.py                     # JWT 认证 + 模拟身份覆盖
+│   │   ├── models.py                   # SQLAlchemy 数据模型（15 张表）
+│   │   ├── schemas.py                  # Pydantic 请求/响应模型
+│   │   ├── templates.json              # 审批模板 Schema（11 类）
+│   │   ├── data/policy_kb.json         # RAG 政策知识库
+│   │   ├── routers/                    # API 路由（14 个模块）
+│   │   │   ├── auth_router.py          #   注册/登录/个人信息/模拟身份
+│   │   │   ├── ocr_router.py           #   图片上传 & 多级 OCR
+│   │   │   ├── approval_router.py      #   审批提交/查询/催办/多阶段流转
+│   │   │   ├── admin_router.py         #   用户管理/成员管理/API Key/模拟测试
+│   │   │   ├── dept_router.py          #   部门审批队列
+│   │   │   ├── finance_router.py       #   财务审批队列
+│   │   │   ├── school_router.py        #   学校审批 & 事务总览
+│   │   │   ├── monitor_router.py       #   系统监控（概览/日志/错误）
+│   │   │   ├── dashboard_router.py     #   数据看板（按角色）
+│   │   │   ├── notification_router.py  #   站内信通知
+│   │   │   ├── announcement_router.py  #   公告 & 制度文库
+│   │   │   ├── resource_router.py      #   资源预约（会议室+车辆）
+│   │   │   ├── rag_router.py           #   AI 增强（意图/合规/案例/建议/对话/搜索）
+│   │   │   └── shared.py              #   公共查询辅助
+│   │   └── services/                   # 业务逻辑层
+│   │       ├── ocr_service.py          #   OCR 多级路由 + JSON 填充
+│   │       ├── approval_service.py     #   审批引擎（LLM + 多阶段）
+│   │       ├── workflow.py             #   11 种事务的多阶段审批流程定义
+│   │       ├── rule_engine.py          #   智能预审规则引擎
+│   │       ├── rag_service.py          #   RAG + TF-IDF 知识库检索
+│   │       ├── notification_service.py #   站内信推送
+│   │       ├── key_pool.py             #   智能 API Key 池（多 Key 轮询+故障转移）
+│   │       ├── crypto_service.py       #   Fernet 加密
+│   │       ├── file_service.py         #   文件校验/存储/清理
+│   │       ├── template_service.py     #   模板加载 & 文档类型检测
+│   │       └── logging_service.py      #   结构化日志
+│   ├── frontend/                       # React 18 + TypeScript + Vite
+│   │   └── src/
+│   │       ├── App.tsx                 #   路由定义（18 个路由）
+│   │       ├── main.tsx                #   入口
+│   │       ├── components/             #   通用组件
+│   │       │   ├── Frame.tsx           #     玻璃侧边栏 + 角色导航 + 模拟横幅
+│   │       │   ├── GlassCard.tsx       #     毛玻璃卡片（触控高光）
+│   │       │   ├── AuroraBackground.tsx #    动态极光背景 Canvas
+│   │       │   ├── AIChatPanel.tsx     #     右下角 AI 政策问答悬浮面板
+│   │       │   ├── AIDecisionPanel.tsx #     AI 审批决策辅助面板
+│   │       │   └── ApprovalProgressBar.tsx # 多阶段审批进度条
+│   │       ├── pages/                  #   页面
+│   │       │   ├── auth/LoginPage.tsx            # 登录（演示账号收起动画）
+│   │       │   ├── workbench/
+│   │       │   │   ├── WorkbenchPage.tsx         # 智能 OCR 工作台
+│   │       │   │   ├── ManualFormPage.tsx        # 手动填表
+│   │       │   │   ├── DashboardPage.tsx         # 数据看板
+│   │       │   │   ├── NotificationsPage.tsx     # 通知中心
+│   │       │   │   ├── AnnouncementsPage.tsx     # 公告 & 制度文库
+│   │       │   │   └── ResourceBookingPage.tsx   # 资源预约
+│   │       │   ├── history/HistoryPage.tsx       # 我的事务
+│   │       │   ├── profile/ProfilePage.tsx       # 个人信息
+│   │       │   ├── admin/
+│   │       │   │   ├── AdminUsersPage.tsx        # 用户管理
+│   │       │   │   ├── AdminSchoolsPage.tsx      # 学校管理
+│   │       │   │   ├── AdminApiKeysPage.tsx      # API Key 池
+│   │       │   │   ├── AdminDataPage.tsx         # 数据管理（软删除）
+│   │       │   │   ├── AdminMonitorPage.tsx      # 系统监控
+│   │       │   │   └── AdminTestPage.tsx         # 模拟测试面板
+│   │       │   ├── dept/DeptAdminPage.tsx        # 部门审批
+│   │       │   ├── finance/FinanceAdminPage.tsx  # 财务审批
+│   │       │   └── school/
+│   │       │       ├── SchoolAdminPage.tsx       # 学校管理
+│   │       │       └── SchoolAffairsPage.tsx     # 全校事务总览
+│   │       ├── hooks/
+│   │       │   ├── useAuth.tsx         #   认证 Hook
+│   │       │   └── useFormStorage.ts   #   表单本地暂存
+│   │       └── constants/
+│   │           ├── docTypes.ts         #   文档类型标签
+│   │           └── fieldLabels.ts      #   字段中文标签映射
+│   ├── inference_server/               # llama.cpp 本地推理服务
+│   │   ├── server.py                   #   自动 GPU 检测 + OpenAI 兼容 API
+│   │   └── requirements.txt
+│   ├── uploads/                        # 上传文件存储（按 user_id 隔离）
+│   └── start.sh                        # 一键启动（自动检测微调模型）
+├── training/                           # LoRA 微调管线
+│   ├── train_lora.py                   #   训练脚本（Qwen2.5-0.5B）
+│   ├── merge_lora.py                   #   合并 adapter → 完整模型
+│   └── train_requirements.txt
+├── lora_output/                        # LoRA 训练产出
+│   ├── checkpoint-50/                  #   中间检查点
+│   ├── checkpoint-100/                 #   最终检查点
+│   └── final/                          #   最终 LoRA adapter
+├── lora_output_merged/                 # 合并后的完整模型（HF 格式）
+├── models/                             # 模型文件
+│   ├── qwen2.5-0.5b.gguf               #   原始 GGUF
+│   ├── qwen2.5-0.5b-lora.gguf          #   微调后 GGUF
+│   └── qwen2.5-0.5b-local/             #   本地基座模型文件
+├── data/                               # 训练数据 & 语料
+│   ├── build_corpus_local.py           #   语料构建脚本
+│   ├── sdust_process_corpus_lora.jsonl #   LoRA 训练数据
+│   ├── sdust_process_corpus_raw.jsonl  #   原始语料
+│   └── pages/                          #   爬取的山科大原始页面
+│       ├── jwc.sdust.edu.cn/           #     教务处
+│       └── yjsy.sdust.edu.cn/          #     研究生院
+└── docs/
+    ├── DESIGN.md                       #   产品设计文档（27 章）
+    └── TROUBLESHOOTING.md              #   运维排查手册
 ```
+
+---
 
 ## 核心功能
 
+### 🤖 审批流程
 | 模块 | 功能 |
 |------|------|
-| 🤖 **智能 OCR** | 上传图片/PDF → EasyOCR 文本提取 → LLM JSON 填充，多级降级 |
-| 📝 **审批工作流** | 多阶段审批（部门 → 财务 → 学校），支持金额阈值跳过 |
-| 🏫 **多学校管理** | 每校独立服务等级（Free/Pro），全员统一层级 |
-| 👥 **角色体系** | 超级管理员 → 学校管理员 → 部门/财务管理员 → 学生 |
-| 🔑 **API Key 池** | 加密存储多个 LLM Key，故障转移和配额管理 |
-| 💡 **智能建议** | 审批时调用 LLM 生成批语参考 |
+| 📄 **11 类审批模板** | 报销、请假、社团活动、教室借用、出差、用章、成绩单打印、学历学位证明、试卷查阅、调停课、缓考补考、在读证明 |
+| 🔀 **多阶段审批** | 部门审批 → 财务审批 → 学校审批，支持金额阈值自动跳过 |
+| 📊 **数据看板** | 按角色展示审批量、趋势、效率指标、部门排行 |
+| 💬 **AI 辅助决策** | LLM 生成批语参考、政策条文引用、缺失信息标记 |
+
+### 🧠 AI 能力
+| 模块 | 功能 |
+|------|------|
+| 📷 **智能 OCR** | EasyOCR 文字提取 → LLM JSON 填充，多级降级（Local → API） |
+| 📚 **RAG 政策检索** | TF-IDF 向量检索 + LLM 生成，6 个 AI 端点 |
+| 🎯 **意图识别** | 自然语言描述 → 自动推荐文档类型 + 预填字段 |
+| ⚖️ **合规性分析** | 自动检索相关政策条文，逐条核对申请合规性 |
+| 🔍 **相似案例** | 检索历史审批记录，辅助审批人决策 |
+| 💬 **政策问答 ChatBot** | 右下角悬浮面板，多轮对话 + 引用来源 |
+| 📏 **预审规则引擎** | 硬性规则检查（必填/范围/查重），拦截不合规申请 |
+
+### 🏫 学校 & 角色
+| 模块 | 功能 |
+|------|------|
+| 🏫 **多学校管理** | 每校独立服务等级（Free/Pro/Pro+），tenant 隔离 |
+| 👥 **角色体系** | 信息管理员 → 学校管理员 → 部门管理员 → 财务管理员 → 普通用户 |
+| 🔄 **模拟测试** | 管理员可临时切换身份测试系统，安全隔离不误写库 |
+| 📢 **公告 & 制度文库** | 公告/政策/办事指南分类，置顶 + 阅读量统计 |
+
+### 🔔 协作 & 资源
+| 模块 | 功能 |
+|------|------|
+| 📬 **站内信通知** | 8 种通知类型 + 红点角标 + 快捷跳转 |
+| 📋 **资源预约** | 会议室 + 公车预约，时间冲突检测 |
+| 📝 **审批意见模板** | 预设常用批语，一键填入 |
+| 🔄 **审批代理** | 审批人休假时可委托他人代为审批 |
+
+### 🔐 安全 & 运维
+| 模块 | 功能 |
+|------|------|
+| 🔑 **API Key 池** | 多 Key 加密存储、轮询、故障自动转移、用量追踪 |
+| 🛡️ **数据安全** | JWT + bcrypt + Fernet 加密 + 文件魔数校验 |
+| 🗑️ **软删除** | 用户标记删除 → 管理员恢复/彻底删除 |
+| 📋 **系统监控** | 概览/日志/错误 三面板 + 审计日志 |
+| 🔍 **OCR 工具链追踪** | 监控日志显示 provider/model/tier 完整调用链 |
+| 🧪 **LoRA 微调** | 山科大实际流程数据 → 微调 Qwen2.5-0.5B → GGUF 推理 |
+
+---
 
 ## 技术栈
 
-- **前端**: React 18 + TypeScript + Vite
-- **后端**: FastAPI + SQLAlchemy + SQLite + LangGraph
-- **AI**: EasyOCR + 外部 LLM API（MiMo/DeepSeek）+ llama.cpp（可选本地）
-- **安全**: JWT + bcrypt + Fernet 加密
+| 层 | 技术 |
+|----|------|
+| **前端** | React 18 + TypeScript + Vite + 玻璃拟态 UI |
+| **后端** | FastAPI + SQLAlchemy + SQLite + LangGraph |
+| **AI/OCR** | EasyOCR + 外部 LLM API（MiMo/DeepSeek/Qwen-VL）+ llama.cpp 本地推理 |
+| **RAG** | TF-IDF (scikit-learn) + 自定义 JSON 知识库 |
+| **LoRA** | PEFT + Transformers + PyTorch（Apple MPS / CUDA / CPU） |
+| **安全** | JWT + bcrypt + Fernet + MIME 魔数校验 |
+| **GPU 加速** | Metal (Apple Silicon) / CUDA (NVIDIA) / ROCm (AMD) / CPU 自动检测 |
+
+---
 
 ## 快速开始
 
@@ -88,6 +194,8 @@ zhishitong/
 cd zhishitong && bash start.sh
 ```
 
+start.sh 自动完成：虚拟环境检测 → 依赖安装 → 推理服务启动（含 GPU 检测） → 微调模型检测与 GGUF 转换 → 后端启动 → 前端启动。
+
 ### 手动启动
 
 ```bash
@@ -98,47 +206,80 @@ PYTHONPATH="$PWD/backend" uvicorn main:app --host 0.0.0.0 --port 8080 --reload
 
 # 前端（新终端）
 cd zhishitong/frontend && npm install && npx vite --host 0.0.0.0 --port 5173
+
+# 本地推理服务（可选，新终端）
+cd zhishitong && source ../.venv/bin/activate
+PYTHONPATH="$PWD/inference_server" uvicorn server:app --host 0.0.0.0 --port 18080
 ```
 
 ### 种子数据
 
 ```bash
+cd zhishitong
+source ../.venv/bin/activate
 PYTHONPATH="$PWD/backend" python backend/seed.py
 ```
+
+### LoRA 微调（可选）
+
+```bash
+cd training
+pip install -r train_requirements.txt
+python train_lora.py      # 训练
+python merge_lora.py       # 合并
+# start.sh 会自动检测并转换 GGUF
+```
+
+---
 
 ## 演示账号
 
 | 账号 | 密码 | 角色 | 学校 |
 |------|------|------|------|
-| admin | admin123 | 超级管理员 | — |
-| sdu_school_admin | admin123 | 学校管理员 | 山东科技大学 |
-| sdu_dept_cs | 123456 | 部门管理员 | 山东科技大学 |
-| sdu_finance_admin | admin123 | 财务管理员 | 山东科技大学 |
-| sdu_student_a | 123456 | 学生 | 山东科技大学 |
-| sdujn_school_admin | admin123 | 学校管理员 | 山东科技大学（济南校区） |
-| sdujn_student_a | 123456 | 学生 | 山东科技大学（济南校区） |
+| `admin` | `admin123` | 信息管理员（超级管理员） | — |
+| `sdu_school_admin` | `admin123` | 学校管理员 | 山东科技大学 |
+| `sdu_dept_cs` | `123456` | 部门管理员（计算机学院） | 山东科技大学 |
+| `sdu_dept_ee` | `123456` | 部门管理员（电气学院） | 山东科技大学 |
+| `sdu_finance_admin` | `admin123` | 财务管理员 | 山东科技大学 |
+| `sdu_student_a` | `123456` | 学生 | 山东科技大学 |
+| `sdu_student_b` | `123456` | 学生 | 山东科技大学 |
+| `sdujn_school_admin` | `admin123` | 学校管理员 | 山东科技大学（济南校区） |
+| `sdujn_student_a` | `123456` | 学生 | 山东科技大学（济南校区） |
 
 > 山东科技大学是 Pro 版（LLM OCR 30次/月），济南校区是 Free 版（仅本地 OCR）。
 > 每校均有完整角色，格式 `{前缀}_{角色}`。
+
+---
 
 ## 使用流程
 
 | 角色 | 主要操作 |
 |------|---------|
-| 学生 | 上传材料 → 自动填表 → 提交审批 → 查看进度 |
-| 部门管理员 | 查看本部门待审 → 核实材料 → 智能建议 → 通过/驳回 |
-| 学校管理员 | 管理部门管理员 → 查看全校事务 → 学校级审批 |
-| 财务管理员 | 查看报销待审 → 审核金额发票 → 财务通过 |
-| 超级管理员 | API Key 管理 → 创建/管理学校 → 添加成员调整权限 → 系统监控 |
+| 👨‍🎓 **学生** | 上传材料 → 自动填表 → 编辑确认 → 提交审批 → 查看进度 & 通知 |
+| 🏢 **部门管理员** | 查看本部门待审队列 → 核实材料 → 查看 AI 建议/政策条文 → 通过/驳回/需修改 |
+| 💰 **财务管理员** | 查看报销待审 → 审核金额发票 → 财务通过/驳回 |
+| 🏫 **学校管理员** | 管理部门管理员 → 查看全校事务总览 → 学校级审批 |
+| 🔧 **信息管理员** | API Key 管理 → 创建/管理学校 → 用户管理 → 模拟测试 → 系统监控 → 数据看板 |
+
+---
 
 ## 环境变量
 
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
 | `JWT_SECRET` | JWT 签名密钥 | 开发默认值 |
-| `ENCRYPTION_KEY` | API Key 加密密钥 | 自动生成 |
-| `LLAMA_SERVER_URL` | 本地推理服务 | `http://127.0.0.1:18080` |
-| `LLM_API_BASE` | LLM API 地址 | DashScope |
-| `LLM_API_KEY` | LLM Key | 空（使用池） |
+| `ENCRYPTION_KEY` | API Key Fernet 加密密钥 | 自动生成 |
+| `LLAMA_SERVER_URL` | 本地推理服务地址 | `http://127.0.0.1:18080` |
+| `MODEL_PATH` | 推理模型路径 | `models/qwen2.5-0.5b.gguf`（微调后自动切换） |
+| `LLM_API_BASE` | 外部 LLM API 地址 | DashScope |
+| `LLM_API_KEY` | 外部 LLM Key | 空（使用 Key 池） |
+| `LLM_FILL_MODEL` | JSON 填充默认模型 | `qwen-turbo` |
 | `UPLOAD_DIR` | 上传目录 | `./uploads` |
 | `MAX_FILE_SIZE_MB` | 文件大小上限 | `10` |
+
+---
+
+## 设计文档
+
+- 📐 [产品设计文档（27 章）](../docs/DESIGN.md) — 完整的产品架构、数据模型、审批流程、安全策略
+- 🔧 [运维排查手册](../docs/TROUBLESHOOTING.md) — 系统架构、常见问题排查、日志格式参考
