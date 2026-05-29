@@ -81,25 +81,25 @@
 1. 打开监控面板 → 概览 → 检查「推理服务」和「EasyOCR」状态
 2. 如果推理服务状态为 `down`：
    ```bash
-   # 检查推理容器是否运行
-   docker ps | grep inference
-   # 查看推理服务日志
-   docker logs zhishitong_inference_1
+   # 检查推理服务进程是否运行
+   lsof -i :18080
+   # 查看终端中推理服务的输出日志
    ```
 3. 如果 EasyOCR 状态为 `down`：
    ```bash
-   # 进入主容器检查
-   docker exec -it zhishitong_zhishitong_1 python -c "import easyocr; print('OK')"
+   # 检查 EasyOCR 是否正确安装
+   source .venv/bin/activate
+   python -c "import easyocr; print('EasyOCR OK')"
    ```
-4. 检查日志标签「错误」页签，按 `ocr` 分类筛选
+4. 检查监控面板「错误」页签，按 `ocr` 分类筛选
 
 **常见原因**：
 | 原因 | 解决方案 |
 |------|----------|
-| 推理容器未启动 | `docker compose up -d inference` |
-| 模型文件未挂载 | 检查 `docker-compose.yml` 中 `volumes` 路径 |
-| EasyOCR 未安装 | 重建镜像：`docker compose build --no-cache zhishitong` |
-| 内存不足 | 0.5B 模型需约 2GB RAM，检查 `docker stats` |
+| 推理服务未启动 | 重新运行 `bash start.sh` 或手动启动推理服务 |
+| 模型文件缺失 | 检查 `models/qwen2.5-0.5b.gguf` 是否存在 |
+| EasyOCR 未安装 | `pip install easyocr` |
+| 内存不足 | 0.5B 模型需约 2GB RAM，检查 `top` 或 `htop` |
 
 ### 3.2 Pro 用户外部 LLM 调用失败
 
@@ -121,7 +121,7 @@
 | API Key 余额不足 | 联系供应商充值 |
 | API Base 地址错误 | 修改为正确地址（管理员 → API Key → 编辑） |
 | 模型不支持多模态 | 检查模型名是否支持 vision（如 `qwen-vl-plus`） |
-| 网络不通 | 检查容器是否能访问外网：`docker exec zhishitong_zhishitong_1 curl -I https://api.example.com` |
+| 网络不通 | 检查本机网络：`curl -I https://api.example.com` |
 
 ### 3.3 审批流程卡住
 
@@ -132,8 +132,8 @@
 2. 查看是否有 `审批流程异常` 错误
 3. 检查审批记录状态：
    ```bash
-   # 进入容器
-   docker exec -it zhishitong_zhishitong_1 python -c "
+   cd zhishitong && source ../.venv/bin/activate
+   PYTHONPATH="$PWD/backend" python -c "
    from database import SessionLocal
    from models import ApprovalRecord
    db = SessionLocal()
@@ -168,15 +168,43 @@
 **排查步骤**：
 ```bash
 # 检查数据库文件完整性
-docker exec -it zhishitong_zhishitong_1 ls -la /app/data/zhishitong.db
+ls -la zhishitong/data/zhishitong.db
 
 # 备份数据库
-docker cp zhishitong_zhishitong_1:/app/data/zhishitong.db ./backup_zhishitong.db
+cp zhishitong/data/zhishitong.db ./backup_zhishitong.db
 
 # 如需重置（谨慎！这会丢失所有数据）
-docker compose down -v
-docker compose up -d
+rm zhishitong/data/zhishitong.db
+cd zhishitong && bash start.sh  # 重新初始化
 ```
+
+### 3.7 Redis 相关问题
+
+**症状**：OCR 缓存不生效、Key 池计数异常、速率限制不工作
+
+**注意**：Redis 为可选组件，不可用时全静默降级——不影响核心功能。
+
+**排查步骤**：
+```bash
+# 检查 Redis 是否运行
+redis-cli ping
+# 或
+lsof -i :6379
+
+# 检查环境变量
+echo $REDIS_URL
+
+# 启动 Redis（如已安装）
+redis-server --daemonize yes
+```
+
+**常见原因**：
+| 原因 | 解决方案 |
+|------|----------|
+| Redis 未安装 | `brew install redis` (macOS) 或 `apt install redis` (Linux) |
+| Redis 未启动 | `redis-server --daemonize yes` |
+| REDIS_URL 配置错误 | 检查是否指向 `redis://127.0.0.1:6379/0` |
+| 降级模式下工作 | 系统自动降级，不影响核心流程 |
 
 ---
 
@@ -198,7 +226,7 @@ docker compose up -d
   "extra": {
     "tier": "free",
     "provider": "local_easyocr",
-    "model": "easyocr+qwen3-0.5b",
+    "model": "easyocr+qwen2.5-0.5b",
     "doc_type": "reimbursement",
     "text_len": 156,
     "has_filled_json": true
@@ -263,29 +291,30 @@ curl -s -X POST http://localhost:18080/v1/chat/completions \
 
 ---
 
-## 7. Docker 常用运维命令
+## 7. 常用运维命令
 
 ```bash
-# 查看所有容器状态
-docker compose ps
+# 一键启动所有服务
+cd zhishitong && bash start.sh
 
-# 查看主服务日志（实时）
-docker compose logs -f zhishitong
+# 一键停止所有服务
+cd zhishitong && bash shutdown.sh
 
-# 查看推理服务日志
-docker compose logs -f inference
+# 检查服务进程
+lsof -i :5173  # 前端
+lsof -i :8080  # 后端
+lsof -i :18080 # 推理服务
+lsof -i :6379  # Redis（可选）
 
-# 重启服务
-docker compose restart zhishitong
+# 查看后端日志（实时）
+tail -f zhishitong/data/*.log
 
-# 重建并重启（代码更新后）
-docker compose up -d --build
-
-# 进入容器调试
-docker exec -it zhishitong_zhishitong_1 /bin/bash
+# 重启后端（开发模式）
+# Ctrl+C 停止 → 重新运行 start.sh
 
 # 资源监控
-docker stats
+top -o mem  # 按内存排序
+htop        # 更友好的界面（需安装）
 ```
 
 ---
@@ -294,13 +323,18 @@ docker stats
 
 ```bash
 # 备份数据库和上传文件
-docker cp zhishitong_zhishitong_1:/app/data ./backup/data_$(date +%Y%m%d)
-docker cp zhishitong_zhishitong_1:/app/uploads ./backup/uploads_$(date +%Y%m%d)
+tar -czf backup_$(date +%Y%m%d).tar.gz \
+  zhishitong/data/zhishitong.db \
+  uploads/
 
 # 恢复
-docker cp ./backup/data_20260526 zhishitong_zhishitong_1:/app/data
-docker cp ./backup/uploads_20260526 zhishitong_zhishitong_1:/app/uploads
-docker compose restart zhishitong
+tar -xzf backup_20260529.tar.gz
+# 手动将文件复制回原位
+cp -r zhishitong/data/zhishitong.db zhishitong/data/
+cp -r uploads/ ./
+
+# 备份 LoRA 训练产出
+tar -czf lora_backup.tar.gz lora_output/ lora_output_merged/ models/qwen2.5-0.5b-lora.gguf
 ```
 
 ---
@@ -317,4 +351,4 @@ docker compose restart zhishitong
 
 ---
 
-*文档版本: 1.0 | 最后更新: 2026-05-26*
+*文档版本: 2.0 | 最后更新: 2026-05-29*

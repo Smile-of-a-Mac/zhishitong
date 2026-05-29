@@ -14,45 +14,44 @@
 # -------------------------------
 # Backend: Web/API & Data
 # -------------------------------
-fastapi==0.115.0
-uvicorn[standard]==0.30.0
-python-multipart==0.0.12
-pydantic==2.9.0
-sqlalchemy==2.0.35
-aiosqlite==0.20.0
-httpx==0.27.0
+fastapi>=0.115.0,<1.0
+uvicorn[standard]>=0.30.0,<1.0
+python-multipart>=0.0.12,<1.0
+pydantic>=2.9.0,<3.0
+sqlalchemy>=2.0.35,<3.0
+aiosqlite>=0.20.0,<1.0
+httpx>=0.28.0,<1.0
 
 # Auth / Security
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
-bcrypt==4.0.1
-cryptography==43.0.0
+python-jose[cryptography]>=3.3.0,<4.0
+passlib[bcrypt]>=1.7.4,<2.0
+bcrypt>=4.0.1,<5.0
+cryptography>=43.0.0,<49.0
 
 # File / Image / OCR
-python-magic==0.4.27
-Pillow==10.4.0
-easyocr==1.7.2
+python-magic>=0.4.27,<1.0
+Pillow>=10.4.0,<13.0
+easyocr>=1.7.2,<2.0
+pypdf>=5.0.0,<7.0
 
 # Redis (缓存 + 限流 + Key 池计数)
 redis[hiredis]>=5.0.0
 
 # Workflow / RAG
-langgraph==0.2.0
-langchain==0.3.0
-chromadb==0.5.0
-scikit-learn==1.5.1
+langgraph>=1.2.0,<2.0
+scikit-learn>=1.7.2,<1.9
 
 # -------------------------------
 # Inference Server (llama.cpp)
 # -------------------------------
 # 可按硬件环境设置 CMAKE_ARGS 以启用 Metal/CUDA/ROCm
-llama-cpp-python>=0.3.0
+llama-cpp-python>=0.3.0,<0.4
 
 # -------------------------------
 # Training: LoRA Fine-tuning
 # -------------------------------
-torch>=2.0.0
-transformers>=4.40.0
-peft>=0.10.0
-sentencepiece>=0.1.99
-tqdm>=4.60.0
+torch>=2.0.0,<3.0
+transformers>=4.40.0,<6.0
+peft>=0.10.0,<1.0
+sentencepiece>=0.1.99,<1.0
+tqdm>=4.60.0,<5.0

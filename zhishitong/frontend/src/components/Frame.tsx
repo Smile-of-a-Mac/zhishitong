@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
+import axios from 'axios'
 import { useAuth } from '../hooks/useAuth'
 
 type NavItem = { to: string; label: string }
@@ -107,14 +108,9 @@ export default function Frame({ children }: { children: React.ReactNode }) {
 
   const fetchUnread = useCallback(async () => {
     try {
-      const token = localStorage.getItem('token')
-      if (!token || document.visibilityState !== 'visible') return
-      const res = await fetch('/api/notifications/unread-count', {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (!res.ok) return
-      const d = await res.json()
-      setUnreadCount(d.unread_count || 0)
+      if (document.visibilityState !== 'visible') return
+      const res = await axios.get('/api/notifications/unread-count')
+      setUnreadCount(res.data.unread_count || 0)
     } catch {
       // 轮询失败不打断用户
     }
@@ -366,19 +362,15 @@ function SimulationBanner({ isSidebar = false }: { isSidebar?: boolean }) {
   const [sim, setSim] = useState<{ active: boolean; overrides: Record<string, any> } | null>(null)
 
   useEffect(() => {
-    const token = localStorage.getItem('token')
-    if (!token) return
-    fetch('/api/admin/test-session', { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.ok ? r.json() : null)
-      .then(d => setSim(d))
+    axios.get('/api/admin/test-session')
+      .then(r => setSim(r.data))
       .catch(() => {})
   }, [loc.pathname])  // 路由切换时重新检查
 
   if (!sim?.active) return null
 
   const exit = async () => {
-    const token = localStorage.getItem('token')
-    await fetch('/api/admin/test-session', { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } })
+    await axios.delete('/api/admin/test-session')
     setSim(null)
     await refreshUser()    // 重新拉取真实身份，刷新 React 上下文
     nav('/admin/members')  // React Router 跳转，无需整页刷新

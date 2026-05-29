@@ -1,5 +1,6 @@
 """JWT 认证 + 用户依赖注入 + 管理员测试模拟"""
 import datetime
+import threading
 from typing import Optional
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -8,7 +9,10 @@ from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 from models import User, TierEnum
 from database import get_db
-from config import JWT_SECRET, JWT_ALGORITHM, JWT_EXPIRE_DAYS
+from config import (
+    JWT_SECRET, JWT_ALGORITHM,
+    JWT_EXPIRE_DAYS, JWT_ACCESS_EXPIRE_MINUTES, JWT_REFRESH_EXPIRE_DAYS,
+)
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 bearer_scheme = HTTPBearer()
@@ -18,21 +22,25 @@ UTC = datetime.timezone.utc
 # ===== 管理员测试模拟：在内存中临时覆盖角色/订阅/学校 =====
 # key: admin_user_id, value: 覆盖字段 dict
 _test_overrides: dict[int, dict] = {}
+_test_overrides_lock = threading.RLock()
 
 
 def set_test_override(admin_id: int, overrides: dict):
     """设置测试覆盖（仅管理员可用）"""
-    _test_overrides[admin_id] = overrides
+    with _test_overrides_lock:
+        _test_overrides[admin_id] = overrides
 
 
 def clear_test_override(admin_id: int):
     """清除测试覆盖"""
-    _test_overrides.pop(admin_id, None)
+    with _test_overrides_lock:
+        _test_overrides.pop(admin_id, None)
 
 
 def get_test_override(admin_id: int) -> Optional[dict]:
     """获取当前测试覆盖"""
-    return _test_overrides.get(admin_id)
+    with _test_overrides_lock:
+        return _test_overrides.get(admin_id)
 
 
 def _apply_overrides(user: User, overrides: dict):
@@ -60,6 +68,7 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 
 def create_token(user: User) -> str:
+    """创建旧版长期 Token（向后兼容）"""
     payload = {
         "sub": str(user.id),
         "username": user.username,
@@ -73,6 +82,45 @@ def create_token(user: User) -> str:
         "exp": datetime.datetime.now(UTC) + datetime.timedelta(days=JWT_EXPIRE_DAYS),
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+
+def create_access_token(user: User) -> str:
+    """创建短期 Access Token（默认 30 分钟）"""
+    payload = {
+        "sub": str(user.id),
+        "username": user.username,
+        "tier": user.tier.value,
+        "is_admin": user.is_admin,
+        "is_school_admin": user.is_school_admin,
+        "is_dept_admin": user.is_dept_admin,
+        "is_finance_admin": user.is_finance_admin,
+        "department": user.department or "",
+        "school": user.school or "",
+        "type": "access",
+        "exp": datetime.datetime.now(UTC) + datetime.timedelta(minutes=JWT_ACCESS_EXPIRE_MINUTES),
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+
+def create_refresh_token(user: User) -> str:
+    """创建长期 Refresh Token（默认 7 天）"""
+    payload = {
+        "sub": str(user.id),
+        "type": "refresh",
+        "exp": datetime.datetime.now(UTC) + datetime.timedelta(days=JWT_REFRESH_EXPIRE_DAYS),
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+
+def verify_refresh_token(token: str) -> int:
+    """验证 Refresh Token，返回 user_id"""
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        if payload.get("type") != "refresh":
+            raise HTTPException(status_code=401, detail="无效的 Refresh Token 类型")
+        return int(payload["sub"])
+    except (JWTError, ValueError, KeyError):
+        raise HTTPException(status_code=401, detail="无效的 Refresh Token")
 
 
 async def get_current_user(

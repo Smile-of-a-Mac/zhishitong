@@ -9,6 +9,7 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
+ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 log()  { printf "${GREEN}[✓]${NC} %s\n" "$1"; }
 warn() { printf "${YELLOW}[!]${NC} %s\n" "$1"; }
@@ -17,26 +18,39 @@ err()  { printf "${RED}[✗]${NC} %s\n" "$1"; }
 # ── 按端口号查找进程并终止 ──
 kill_by_port() {
   local port=$1 name=$2
-  local pid
-  pid=$(lsof -ti :"$port" 2>/dev/null)
-  if [ -n "$pid" ]; then
-    kill "$pid" 2>/dev/null
-    # 等待最多 3 秒让进程退出
-    for _ in $(seq 1 3); do
-      if ! kill -0 "$pid" 2>/dev/null; then
-        break
-      fi
-      sleep 1
-    done
-    # 如果还没退出，强制 kill
-    if kill -0 "$pid" 2>/dev/null; then
-      kill -9 "$pid" 2>/dev/null
-      warn "$name (pid $pid) 已强制停止"
-    else
-      log "$name 已停止"
-    fi
-  else
+  local pids
+  pids=$(lsof -ti :"$port" 2>/dev/null || true)
+  if [ -z "$pids" ]; then
     warn "$name 未运行"
+    return
+  fi
+
+  local pid
+  for pid in $pids; do
+    kill_one "$pid" "$name"
+  done
+}
+
+kill_one() {
+  local pid=$1 name=$2
+  if [ -z "$pid" ] || [ "$pid" = "$$" ] || ! kill -0 "$pid" 2>/dev/null; then
+    return
+  fi
+
+  pkill -TERM -P "$pid" 2>/dev/null || true
+  kill "$pid" 2>/dev/null || true
+  for _ in $(seq 1 3); do
+    if ! kill -0 "$pid" 2>/dev/null; then
+      log "$name (pid $pid) 已停止"
+      return
+    fi
+    sleep 1
+  done
+
+  if kill -0 "$pid" 2>/dev/null; then
+    pkill -KILL -P "$pid" 2>/dev/null || true
+    kill -9 "$pid" 2>/dev/null || true
+    warn "$name (pid $pid) 已强制停止"
   fi
 }
 
@@ -44,20 +58,15 @@ kill_by_port() {
 kill_by_name() {
   local pattern=$1 name=$2
   local pids
-  pids=$(pgrep -f "$pattern" 2>/dev/null | grep -v "grep\|$$" || true)
-  if [ -n "$pids" ]; then
-    # shellcheck disable=SC2086
-    kill $pids 2>/dev/null
-    sleep 1
-    # shellcheck disable=SC2086
-    if kill -0 $pids 2>/dev/null 2>&1; then
-      # shellcheck disable=SC2086
-      kill -9 $pids 2>/dev/null
-      warn "$name 已强制停止"
-    else
-      log "$name 已停止"
-    fi
+  pids=$(pgrep -f "$pattern" 2>/dev/null || true)
+  if [ -z "$pids" ]; then
+    return
   fi
+
+  local pid
+  for pid in $pids; do
+    kill_one "$pid" "$name"
+  done
 }
 
 echo ""
@@ -66,16 +75,15 @@ echo "  智审通 — 正在停止所有服务"
 echo "========================================"
 echo ""
 
-# ── 1. 按端口停止（精确） ──
-kill_by_port 18080 "推理服务 (llama.cpp)"
-kill_by_port 8080  "后端 (uvicorn)"
-kill_by_port 5173  "前端 (vite)"
+# ── 1. 优先按本项目路径停止，降低误杀其他服务的概率 ──
+kill_by_name "$ROOT_DIR/inference_server.*server:app" "推理服务 (本项目)"
+kill_by_name "$ROOT_DIR/backend.*main:app"           "后端 (本项目)"
+kill_by_name "$ROOT_DIR/frontend.*vite"              "前端 (本项目)"
 
-# ── 2. 按进程名兜底（防止端口查找遗漏） ──
-# 部分系统上 lsof 可能查不到 uvicorn 的子进程
-kill_by_name "uvicorn.*main:app"  "后端 (uvicorn, 进程名)"
-kill_by_name "vite"               "前端 (vite, 进程名)"
-kill_by_name "llama-server\|server:app.*18080" "推理服务 (llama.cpp, 进程名)"
+# ── 2. 按端口兜底。若端口被其他项目占用，这里仍可能停止该端口进程。 ──
+kill_by_port 18080 "推理服务 (端口 18080)"
+kill_by_port 8080  "后端 (端口 8080)"
+kill_by_port 5173  "前端 (端口 5173)"
 
 echo ""
 echo "========================================"

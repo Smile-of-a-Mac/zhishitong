@@ -1,13 +1,23 @@
 """Pydantic 请求/响应模型"""
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, Generic, TypeVar
 from datetime import datetime
+
+
+# ===== 统一 API 响应格式 =====
+
+T = TypeVar("T")
+
+class ApiResponse(BaseModel, Generic[T]):
+    success: bool
+    message: str
+    data: Optional[T] = None
 
 
 # ===== 认证 =====
 
 class LoginRequest(BaseModel):
-    """登录请求：不限制密码长度（历史用户可能使用短密码）"""
+    """登录请求"""
     username: str = Field(..., min_length=2, max_length=64)
     password: str = Field(..., min_length=1, max_length=128)
 
@@ -50,6 +60,7 @@ class UserOut(BaseModel):
 
 class Token(BaseModel):
     access_token: str
+    refresh_token: Optional[str] = None
     token_type: str = "bearer"
     user: UserOut
 
@@ -100,7 +111,7 @@ class OCRResult(BaseModel):
     tier: str
     quota_remaining: Optional[int] = None
     document_type: Optional[str] = None
-    filled_json: Optional[dict] = None
+    filled_json: Optional[dict] = None  # 可能为空 dict 或 None
     # 文件信息，供用户确认后提交时使用
     storage_path: Optional[str] = None
     original_filename: Optional[str] = None

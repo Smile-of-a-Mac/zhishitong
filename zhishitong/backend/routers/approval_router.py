@@ -118,9 +118,17 @@ async def submit_approval(
     # 执行 LangGraph 审批
     try:
         record = await run_approval(record, db)
+    except TimeoutError as e:
+        log_error(LogCategory.APPROVAL, f"审批流程超时: record_id={body.record_id}", exc=e, user_id=user.id)
+        raise HTTPException(504, f"审批流程超时，请稍后重试")
+    except ValueError as e:
+        log_error(LogCategory.APPROVAL, f"审批参数错误: record_id={body.record_id}", exc=e, user_id=user.id)
+        raise HTTPException(400, f"审批参数错误: {e}")
     except Exception as e:
-        log_error(LogCategory.APPROVAL, f"审批流程异常: record_id={body.record_id}", exc=e, user_id=user.id)
-        raise HTTPException(500, f"审批流程异常: {e}")
+        import uuid
+        ref_id = str(uuid.uuid4())[:8]
+        log_error(LogCategory.APPROVAL, f"审批流程异常 [{ref_id}]: record_id={body.record_id}", exc=e, user_id=user.id)
+        raise HTTPException(500, f"审批流程异常 (追踪ID: {ref_id})")
 
     duration_ms = round((time.time() - t_start) * 1000)
 
@@ -304,8 +312,16 @@ async def resubmit_record(
     # 重新运行审批辅助引擎
     try:
         record = await run_approval(record, db)
+    except TimeoutError as e:
+        log_error(LogCategory.APPROVAL, f"重新提交审批超时: record_id={record_id}", exc=e, user_id=user.id)
+        raise HTTPException(504, "审批超时，请稍后重试")
+    except ValueError as e:
+        log_error(LogCategory.APPROVAL, f"重新提交审批参数错误: record_id={record_id}", exc=e, user_id=user.id)
+        raise HTTPException(400, str(e))
     except Exception as e:
-        log_error(LogCategory.APPROVAL, f"重新提交审批异常: record_id={record_id}", exc=e, user_id=user.id)
+        import uuid
+        ref_id = str(uuid.uuid4())[:8]
+        log_error(LogCategory.APPROVAL, f"重新提交审批异常 [{ref_id}]: record_id={record_id}", exc=e, user_id=user.id)
 
     db.refresh(record)
 
@@ -479,9 +495,17 @@ async def manual_submit(
     # 运行审批辅助引擎
     try:
         record = await run_approval(record, db)
+    except TimeoutError as e:
+        log_error(LogCategory.APPROVAL, f"手动申报审批超时", exc=e, user_id=user.id)
+        raise HTTPException(504, "审批超时，请稍后重试")
+    except ValueError as e:
+        log_error(LogCategory.APPROVAL, f"手动申报审批参数错误", exc=e, user_id=user.id)
+        raise HTTPException(400, str(e))
     except Exception as e:
-        log_error(LogCategory.APPROVAL, f"手动申报审批异常", exc=e, user_id=user.id)
-        raise HTTPException(500, f"审批流程异常: {e}")
+        import uuid
+        ref_id = str(uuid.uuid4())[:8]
+        log_error(LogCategory.APPROVAL, f"手动申报审批异常 [{ref_id}]", exc=e, user_id=user.id)
+        raise HTTPException(500, f"审批流程异常 (追踪ID: {ref_id})")
 
     # 通知部门管理员：有新的手动申报待审批
     _notify_dept_admins(db, user, record)

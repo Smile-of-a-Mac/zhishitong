@@ -26,6 +26,18 @@ def get_db():
         db.close()
 
 
+def can_manage_resources(user: User) -> bool:
+    return bool(user.is_admin or user.is_school_admin)
+
+
+def get_resource_name(db: Session, resource_type: ResourceType, resource_id: int) -> str:
+    if resource_type == ResourceType.meeting_room:
+        room = db.query(ResourceRoom).filter(ResourceRoom.id == resource_id).first()
+        return room.name if room else ""
+    vehicle = db.query(ResourceVehicle).filter(ResourceVehicle.id == resource_id).first()
+    return vehicle.plate_number if vehicle else ""
+
+
 # ── 会议室 ──
 
 @router.get("/rooms", response_model=list[ResourceRoomOut])
@@ -42,8 +54,8 @@ def create_room(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if not current_user.is_admin:
-        raise HTTPException(403, "仅信息管理员可管理资源")
+    if not can_manage_resources(current_user):
+        raise HTTPException(403, "仅管理员可管理资源")
     room = ResourceRoom(**data.model_dump())
     db.add(room)
     db.commit()
@@ -57,7 +69,7 @@ def delete_room(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if not current_user.is_admin:
+    if not can_manage_resources(current_user):
         raise HTTPException(403)
     room = db.query(ResourceRoom).filter(ResourceRoom.id == room_id).first()
     if not room:
@@ -83,7 +95,7 @@ def create_vehicle(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if not current_user.is_admin:
+    if not can_manage_resources(current_user):
         raise HTTPException(403)
     vehicle = ResourceVehicle(**data.model_dump())
     db.add(vehicle)
@@ -98,7 +110,7 @@ def delete_vehicle(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if not current_user.is_admin:
+    if not can_manage_resources(current_user):
         raise HTTPException(403)
     v = db.query(ResourceVehicle).filter(ResourceVehicle.id == vehicle_id).first()
     if not v:
@@ -129,13 +141,7 @@ def list_bookings(
     bookings = q.order_by(ResourceBooking.start_time.desc()).limit(100).all()
     result = []
     for b in bookings:
-        resource_name = ""
-        if b.resource_type == ResourceType.meeting_room:
-            room = db.query(ResourceRoom).filter(ResourceRoom.id == b.resource_id).first()
-            resource_name = room.name if room else ""
-        else:
-            v = db.query(ResourceVehicle).filter(ResourceVehicle.id == b.resource_id).first()
-            resource_name = v.plate_number if v else ""
+        resource_name = get_resource_name(db, b.resource_type, b.resource_id)
 
         username = ""
         u = db.query(User).filter(User.id == b.user_id).first()
@@ -200,7 +206,7 @@ def create_booking(
         id=booking.id,
         resource_type=booking.resource_type.value,
         resource_id=booking.resource_id,
-        resource_name="",
+        resource_name=get_resource_name(db, booking.resource_type, booking.resource_id),
         user_id=booking.user_id,
         username=current_user.real_name or current_user.username,
         title=booking.title,

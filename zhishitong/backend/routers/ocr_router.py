@@ -31,16 +31,109 @@ def _infer_doc_type_from_filled(filled_json: dict | None) -> str | None:
     if not keys:
         return None
 
+    # ── 报销：金额 + 发票号 / 金额 + 事由 / 单金额兜底 ──
     if (
         {"invoice_no", "amount"}.issubset(keys)
         or "invoice_no" in keys
         or "invoice_number" in keys
         or "total_amount" in keys
+        or ("amount" in keys and len(keys) >= 2)  # 金额 + 至少一个其他字段
+        or ("amount" in keys and "reason" in keys)
     ):
         return "reimbursement"
-    if {"leave_type", "start_date", "end_date"}.intersection(keys):
+
+    # ── 请假：请假类型 / 起止日期 / duration / 去向+交通工具+事由 ──
+    if (
+        "leave_type" in keys
+        or ({"start_date", "end_date"}.issubset(keys) and "reason" in keys)
+        or {"leave_type", "start_date", "end_date", "duration"}.intersection(keys)
+        or ("destination" in keys and "transportation" in keys)
+        or ("advisor" in keys and "reason" in keys and "destination" in keys)
+    ):
         return "leave"
+
+    # ── 社团活动：社团名 / 活动名 ──
+    if {"club_name", "activity"}.intersection(keys):
+        return "club_application"
+
+    # ── 教室借用：教室编号 ──
+    if "room_no" in keys:
+        return "classroom_booking"
+
+    # ── 出差：目的地 + 出差事由 ──
+    if "destination" in keys and ("purpose" in keys or "estimated_cost" in keys):
+        return "business_trip"
+
+    # ── 用章：印章类型 / 用印文件 ──
+    if {"seal_type", "document_name"}.intersection(keys):
+        return "seal_application"
+
+    # ── 宿舍调换：宿舍相关字段 ──
+    if {"dorm_from", "dorm_to"}.intersection(keys):
+        return "dorm_change"
+
+    # ── 奖学金：奖学金类型 / GPA ──
+    if {"scholarship_type", "gpa", "rank"}.intersection(keys):
+        return "scholarship"
+
+    # ── 休学/复学 ──
+    if "suspend_type" in keys:
+        return "suspend_resume"
+
+    # ── 在读证明 ──
+    if "enrollment_date" in keys and "expected_grad" in keys:
+        return "enrollment_proof"
+
+    # ── 出国申请 ──
+    if {"country", "visa_type", "passport_no"}.intersection(keys):
+        return "abroad_application"
+
+    # ── 成绩单/学历学位 ──
+    if "gpa" in keys and "major" in keys:
+        return "transcript_print"
+
+    # ── 如果仅有 applicant + amount，大概率是报销 ──
+    if "applicant" in keys and "amount" in keys and len(keys) <= 3:
+        return "reimbursement"
+
     return None
+
+
+# 所有模板已知 key 的白名单，用于过滤 LLM 垃圾输出
+_KNOWN_FIELD_KEYS: set[str] = {
+    "applicant", "amount", "invoice_no", "date", "category", "reason", "department",
+    "college", "class_name", "student_id", "phone", "leave_type", "start_date",
+    "end_date", "days", "duration", "destination", "transportation", "advisor", "advisor_phone",
+    "parent_phone", "club_name", "club_type", "activity", "purpose", "start_time",
+    "end_time", "venue", "participants", "budget", "description", "room_no",
+    "need_multimedia", "estimated_cost", "accommodation", "international",
+    "seal_type", "document_name", "copies", "recipient", "notes",
+    "dorm_from", "dorm_to", "roommates", "suspend_type", "expected_duration",
+    "scholarship_type", "gpa", "rank", "award_level", "enrollment_date",
+    "expected_grad", "usage", "country", "visa_type", "passport_no",
+    "employee_id", "position", "entry_date", "item_list", "quantity", "unit_price",
+    "isbn", "book_title", "author", "publisher", "language", "course_name",
+    "class_id", "reschedule_type", "original_date", "original_time",
+    "new_date", "new_time", "affected_classes", "exam_type", "original_exam_date",
+    "major", "title", "tax", "name",
+}
+
+
+def _sanitize_filled_json(filled_json: dict | None) -> dict | None:
+    """
+    过滤 LLM 返回的垃圾 JSON。
+    只保留白名单字段，且至少有一个非空值，否则返回 None。
+    """
+    if not isinstance(filled_json, dict):
+        return None
+    # 过滤掉明显的 API 响应结构（如 {"code":200, "data":{...}}）
+    if "code" in filled_json or "status" in filled_json or "data" in filled_json:
+        return None
+    cleaned = {
+        k: v for k, v in filled_json.items()
+        if k in _KNOWN_FIELD_KEYS and v not in (None, "", [], {})
+    }
+    return cleaned if cleaned else None
 
 
 def _resolve_llm_config(db: Session) -> tuple:
@@ -80,8 +173,8 @@ async def ocr_upload(
     if not allowed:
         raise HTTPException(429, f"请求过于频繁，请 {_RL_WINDOW}s 后重试")
 
-    # 1.6 OCR 缓存查询
-    cached = await ocr_cache_get(content)
+    # 1.6 OCR 缓存查询（按用户隔离）
+    cached = await ocr_cache_get(content, user_id=user.id)
     if cached:
         duration_ms = round((time.time() - t_start) * 1000)
         cached_quota = max(0, user.llm_ocr_quota - user.llm_ocr_used)
@@ -117,6 +210,7 @@ async def ocr_upload(
             content,
             tier=user.tier.value,
             llm_quota_remaining=quota_remaining,
+            mime_type=mime,
             api_base=ocr_cfg.api_base,
             api_key=ocr_cfg.api_key,
             model=ocr_cfg.model,
@@ -124,6 +218,9 @@ async def ocr_upload(
             fill_api_key=fill_cfg.api_key,
             fill_model=fill_cfg.model,
         )
+    except ValueError as e:
+        log_error(LogCategory.OCR, f"OCR 识别失败: {file.filename}", exc=e, user_id=user.id, tier=user.tier.value)
+        raise HTTPException(400, str(e))
     except Exception as e:
         # 记录失败（保守：两个 Key 都标记）
         record_failure(db, ocr_cfg.key_id)
@@ -131,19 +228,25 @@ async def ocr_upload(
         log_error(LogCategory.OCR, f"OCR 识别失败: {file.filename}", exc=e, user_id=user.id, tier=user.tier.value)
         raise HTTPException(500, f"OCR 识别失败: {e}")
     
-    # 记录成功（两个 Key 的使用量 +1）
-    record_success(db, ocr_cfg.key_id)
-    if fill_cfg.key_id != ocr_cfg.key_id:
-        record_success(db, fill_cfg.key_id)
+    # 记录成功（仅当实际使用了 LLM 多模态时才记录 OCR Key）
+    if provider == OCRProvider.LLM:
+        record_success(db, ocr_cfg.key_id)
+        # 多模态一步完成时，fill key 未使用，不记录
+    elif provider == OCRProvider.LOCAL:
+        # EasyOCR 降级时，可能用了外部 fill key；但此处不追踪 fill key 的成功
+        pass
 
     duration_ms = round((time.time() - t_start) * 1000)
 
-    # 4. 检测文档类型
+    # 4. 清洗 filled_json：过滤 LLM 垃圾输出
+    filled_json = _sanitize_filled_json(filled_json)
+
+    # 5. 检测文档类型
     doc_type = detect_document_type(text)
     if not doc_type:
         doc_type = _infer_doc_type_from_filled(filled_json)
 
-    # 5. 扣减配额（Pro 层 LLM OCR）
+    # 6. 扣减配额（Pro 层 LLM OCR）
     if provider == OCRProvider.LLM and user.tier == TierEnum.pro:
         locked_user = db.query(User).filter(User.id == user.id).with_for_update().first()
         locked_user.llm_ocr_used += 1
@@ -177,7 +280,7 @@ async def ocr_upload(
         "document_type": doc_type,
         "filled_json": filled_json,
     }
-    asyncio.create_task(ocr_cache_set(content, cache_data))
+    asyncio.create_task(ocr_cache_set(content, cache_data, user_id=user.id))
 
     return OCRResult(
         text=text,

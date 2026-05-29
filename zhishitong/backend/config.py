@@ -17,6 +17,8 @@ if not _JWT_SECRET:
 JWT_SECRET = _JWT_SECRET
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_DAYS = int(os.getenv("JWT_EXPIRE_DAYS", "7"))
+JWT_ACCESS_EXPIRE_MINUTES = int(os.getenv("JWT_ACCESS_EXPIRE_MINUTES", "30"))
+JWT_REFRESH_EXPIRE_DAYS = int(os.getenv("JWT_REFRESH_EXPIRE_DAYS", "7"))
 ENFORCE_SECRETS = os.getenv("ENFORCE_SECRETS", "false").lower() == "true"
 
 if ENFORCE_SECRETS:
@@ -30,6 +32,15 @@ Fernet 加密密钥。
 生成方式: python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 部署时必须设置环境变量。
 """
+APP_ENV = os.getenv("APP_ENV", "development")
+if APP_ENV == "production" and not ENCRYPTION_KEY:
+    raise RuntimeError(
+        "生产环境必须设置 ENCRYPTION_KEY 环境变量。"
+        "生成方式: python3 -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""
+    )
+if not ENCRYPTION_KEY and APP_ENV != "production":
+    print("\n\033[93m[安全警告] ENCRYPTION_KEY 未设置环境变量，加密功能将不可用。"
+          "生产环境请务必设置 ENCRYPTION_KEY。\033[0m\n")
 
 # ---- 网络 ----
 ALLOWED_ORIGINS = [
@@ -78,3 +89,9 @@ RATE_LIMIT_ENABLED = os.getenv("RATE_LIMIT_ENABLED", "true").lower() == "true"
 
 # ---- 模板文件 ----
 TEMPLATES_PATH = Path(__file__).resolve().parent / "templates.json"
+
+# ---- RAG ----
+RAG_CACHE_PATH = os.getenv(
+    "RAG_CACHE_PATH",
+    str(BASE_DIR / "data" / "rag_tfidf_cache.pkl"),
+)

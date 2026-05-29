@@ -47,17 +47,24 @@ async def _get_redis() -> Optional[Redis]:
 
 # ========== Phase 1: OCR 结果缓存 ==========
 
-def _file_hash(image_bytes: bytes) -> str:
-    """计算图片 SHA256 作为缓存 key"""
+def _file_hash(image_bytes: bytes, user_id: int = 0) -> str:
+    """计算文件内容的 SHA256"""
     return hashlib.sha256(image_bytes).hexdigest()
 
 
-async def ocr_cache_get(image_bytes: bytes) -> Optional[dict]:
-    """查 OCR 缓存，命中返回完整 OCRResult 字典（不含 bytes），未命中返回 None"""
+def _cache_key(image_bytes: bytes, user_id: int) -> str:
+    """生成按用户隔离的 OCR 缓存 key"""
+    file_h = _file_hash(image_bytes)
+    composite = f"{user_id}:{file_h}"
+    return f"ocr:cache:{hashlib.sha256(composite.encode()).hexdigest()}"
+
+
+async def ocr_cache_get(image_bytes: bytes, user_id: int = 0) -> Optional[dict]:
+    """查 OCR 缓存（按 user_id 隔离），命中返回完整 OCRResult 字典（不含 bytes），未命中返回 None"""
     r = await _get_redis()
     if r is None:
         return None
-    key = f"ocr:cache:{_file_hash(image_bytes)}"
+    key = _cache_key(image_bytes, user_id)
     try:
         raw = await r.get(key)
         if raw:
@@ -69,12 +76,12 @@ async def ocr_cache_get(image_bytes: bytes) -> Optional[dict]:
     return None
 
 
-async def ocr_cache_set(image_bytes: bytes, result: dict, ttl: int = OCR_CACHE_TTL) -> None:
-    """写入 OCR 缓存"""
+async def ocr_cache_set(image_bytes: bytes, result: dict, user_id: int = 0, ttl: int = OCR_CACHE_TTL) -> None:
+    """写入 OCR 缓存（按 user_id 隔离）"""
     r = await _get_redis()
     if r is None:
         return
-    key = f"ocr:cache:{_file_hash(image_bytes)}"
+    key = _cache_key(image_bytes, user_id)
     try:
         await r.set(key, json.dumps(result, ensure_ascii=False, default=str), ex=ttl)
         logger.info(f"OCR 缓存写入 (key={key[:16]}..., ttl={ttl}s)")

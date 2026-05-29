@@ -60,7 +60,7 @@ async def parse_intent(body: IntentRequest, current_user: User = Depends(get_cur
         return result
     except Exception as e:
         logger.error(f"意图识别失败: {e}")
-        raise HTTPException(status_code=500, detail=f"意图识别失败: {str(e)}")
+        raise HTTPException(status_code=500, detail="意图识别服务暂时不可用")
 
 
 # ============================================================
@@ -106,7 +106,7 @@ async def check_compliance(
         return result
     except Exception as e:
         logger.error(f"合规分析失败 record={record_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"合规分析失败: {str(e)}")
+        raise HTTPException(status_code=500, detail="合规分析服务暂时不可用")
 
 
 # ============================================================
@@ -199,7 +199,7 @@ async def generate_opinion(
         return {"opinion": opinion}
     except Exception as e:
         logger.error(f"意见生成失败 record={body.record_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"意见生成失败: {str(e)}")
+        raise HTTPException(status_code=500, detail="意见生成服务暂时不可用")
 
 
 # ============================================================
@@ -225,7 +225,7 @@ async def chat(
         return result
     except Exception as e:
         logger.error(f"政策问答失败: {e}")
-        raise HTTPException(status_code=500, detail=f"问答服务暂时不可用: {str(e)}")
+        raise HTTPException(status_code=500, detail="问答服务暂时不可用")
 
 
 # ============================================================
@@ -247,4 +247,4 @@ async def nl_search(
         return {"filters": filters, "original_query": body.query}
     except Exception as e:
         logger.error(f"NL 搜索失败: {e}")
-        raise HTTPException(status_code=500, detail=f"搜索解析失败: {str(e)}")
+        raise HTTPException(status_code=500, detail="搜索解析服务暂时不可用")

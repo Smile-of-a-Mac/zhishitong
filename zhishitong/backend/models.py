@@ -2,7 +2,7 @@
 import datetime
 from sqlalchemy import (
     Column, Integer, String, DateTime, Boolean, Text, Enum as SAEnum,
-    ForeignKey, Float,
+    ForeignKey, Float, Index,
 )
 from sqlalchemy.orm import declarative_base, relationship
 import enum
@@ -176,7 +176,33 @@ class ApprovalRecord(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow, index=True)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
+    __table_args__ = (
+        Index('idx_record_user_type_status', 'user_id', 'document_type', 'status'),
+        Index('idx_record_status_stage', 'status', 'current_stage'),
+    )
+
     user = relationship("User", back_populates="approvals")
+    stage_histories = relationship("ApprovalStageHistory", back_populates="record",
+                                   cascade="all, delete-orphan", order_by="ApprovalStageHistory.id")
+
+
+# ===== 审批阶段历史（独立表，替代 stage_history_json） =====
+
+class ApprovalStageHistory(Base):
+    __tablename__ = "approval_stage_histories"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    record_id = Column(Integer, ForeignKey("approval_records.id", ondelete="CASCADE"), nullable=False)
+    stage = Column(String(64), nullable=False)
+    status = Column(String(32), nullable=False)
+    reviewer_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    reason = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+
+    __table_args__ = (Index("idx_stage_history_record", "record_id"),)
+
+    record = relationship("ApprovalRecord", back_populates="stage_histories")
+    reviewer = relationship("User")
 
 
 # ===== 审计日志 =====

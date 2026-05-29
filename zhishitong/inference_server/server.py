@@ -15,6 +15,7 @@ import time
 import json
 import logging
 import platform
+import uuid
 from threading import Lock
 
 # ============================================================
@@ -82,6 +83,11 @@ PORT = int(os.getenv("PORT", "18080"))
 N_CTX = int(os.getenv("N_CTX", "2048"))
 N_BATCH = int(os.getenv("N_BATCH", "512"))
 N_THREADS = int(os.getenv("N_THREADS", str(os.cpu_count() or 4)))
+ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv("ALLOWED_ORIGINS", "http://127.0.0.1:8080,http://localhost:8080,http://127.0.0.1:5173,http://localhost:5173").split(",")
+    if origin.strip()
+]
 
 logger.info(f"模型文件: {MODEL_PATH}")
 logger.info(f"上下文窗口: {N_CTX} tokens")
@@ -133,10 +139,10 @@ from pydantic import BaseModel
 app = FastAPI(title="智审通 · 本地推理服务", version="2.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
 )
 
 
@@ -205,12 +211,16 @@ def chat_completions(req: ChatRequest):
             )
         except Exception as exc:
             logger.error(f"推理失败: {exc}")
-            raise HTTPException(status_code=500, detail=f"推理服务错误: {str(exc)}")
+            raise HTTPException(status_code=500, detail="推理服务暂时不可用")
 
-    generated = output["choices"][0]["text"].strip()
+    try:
+        generated = output["choices"][0]["text"].strip()
+    except (KeyError, IndexError, TypeError) as exc:
+        logger.error(f"推理响应格式异常: {exc}")
+        raise HTTPException(status_code=500, detail="推理服务暂时不可用")
 
     return ChatResponse(
-        id=f"chatcmpl-{int(time.time())}",
+        id=f"chatcmpl-{uuid.uuid4().hex}",
         created=int(time.time()),
         choices=[{
             "index": 0,

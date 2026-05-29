@@ -34,10 +34,7 @@ export default function DashboardPage() {
     setLoading(true)
     setErrorMsg('')
     try {
-      const token = localStorage.getItem('token')
-      const res = await axios.get('/api/dashboard/overview', {
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-      })
+      const res = await axios.get('/api/dashboard/overview')
       setData(res.data)
     } catch (error: any) {
       setData(null)

@@ -1,6 +1,6 @@
 # 智审通 — 高校行政审批自动化 Agent
 
-高校行政审批自动化平台，支持多学校、多角色协同审批，集成智能 OCR（多模态 LLM 一步到位 + EasyOCR 降级）、LLM 驱动的表单填写与字段映射归一化、RAG 政策检索、LoRA 微调问答与可视化数据看板。
+高校行政审批自动化平台，支持多学校、多角色协同审批，集成智能 OCR（多模态 LLM 一步到位 + EasyOCR 降级 + PDF 文本提取）、LLM 驱动的表单填写与字段映射归一化、RAG 政策检索（TF-IDF）、LoRA 微调问答、Redis 缓存与限流、可视化数据看板。
 
 ---
 
@@ -15,9 +15,9 @@ sito/
 │   │   ├── database.py                 # SQLAlchemy 引擎 & Session
 │   │   ├── seed.py                     # 种子数据（8 校 × 全角色）
 │   │   ├── auth.py                     # JWT 认证 + 模拟身份覆盖
-│   │   ├── models.py                   # SQLAlchemy 数据模型（15 张表）
+│   │   ├── models.py                   # SQLAlchemy 数据模型（16 张表）
 │   │   ├── schemas.py                  # Pydantic 请求/响应模型
-│   │   ├── templates.json              # 审批模板 Schema（11 类）
+│   │   ├── templates.json              # 审批模板 Schema（19 类）
 │   │   ├── data/policy_kb.json         # RAG 政策知识库
 │   │   ├── routers/                    # API 路由（14 个模块）
 │   │   │   ├── auth_router.py          #   注册/登录/个人信息/模拟身份
@@ -37,11 +37,12 @@ sito/
 │   │   └── services/                   # 业务逻辑层
 │   │       ├── ocr_service.py          #   OCR 多级路由 + JSON 填充
 │   │       ├── approval_service.py     #   审批引擎（LLM + 多阶段）
-│   │       ├── workflow.py             #   11 种事务的多阶段审批流程定义
+│   │       ├── workflow.py             #   19 种事务的多阶段审批流程定义
 │   │       ├── rule_engine.py          #   智能预审规则引擎
 │   │       ├── rag_service.py          #   RAG + TF-IDF 知识库检索
 │   │       ├── notification_service.py #   站内信推送
 │   │       ├── key_pool.py             #   智能 API Key 池（多 Key 轮询+故障转移）
+│   │       ├── redis_service.py        #   Redis 缓存 + 限流 + Key 池原子计数
 │   │       ├── crypto_service.py       #   Fernet 加密
 │   │       ├── file_service.py         #   文件校验/存储/清理
 │   │       ├── template_service.py     #   模板加载 & 文档类型检测
@@ -124,7 +125,7 @@ sito/
 ### 🤖 审批流程
 | 模块 | 功能 |
 |------|------|
-| 📄 **11 类审批模板** | 报销、请假、社团活动、教室借用、出差、用章、成绩单打印、学历学位证明、试卷查阅、调停课、缓考补考、在读证明 |
+| 📄 **19 类审批模板** | 报销、请假、社团活动、教室借用、出差、用章、宿舍调换、奖学金、休学/复学、在读证明、因公出国、入职报到、办公用品领用、图书采购、成绩单打印、学历学位证明、试卷查阅、调停课、缓考补考 |
 | 🔀 **多阶段审批** | 部门审批 → 财务审批 → 学校审批，支持金额阈值自动跳过 |
 | 📊 **数据看板** | 按角色展示审批量、趋势、效率指标、部门排行 |
 | 💬 **AI 辅助决策** | LLM 生成批语参考、政策条文引用、缺失信息标记 |
@@ -132,7 +133,7 @@ sito/
 ### 🧠 AI 能力
 | 模块 | 功能 |
 |------|------|
-| 📷 **智能 OCR** | 多模态 LLM 一步到位（Pro/Pro+）→ 字段名映射归一化 + 正则兜底提取 → EasyOCR 降级 |
+| 📷 **智能 OCR** | 多模态 LLM 一步到位（Pro/Pro+）→ 字段名映射归一化 + 正则兜底提取 → EasyOCR 降级 + PDF 文本直接提取（pypdf） |
 | 📚 **RAG 政策检索** | TF-IDF 向量检索 + LLM 生成，6 个 AI 端点 |
 | 🎯 **意图识别** | 自然语言描述 → 自动推荐文档类型 + 预填字段 |
 | ⚖️ **合规性分析** | 自动检索相关政策条文，逐条核对申请合规性 |
@@ -159,7 +160,7 @@ sito/
 ### 🔐 安全 & 运维
 | 模块 | 功能 |
 |------|------|
-| 🔑 **API Key 池** | 多 Key 加密存储、轮询、故障自动转移、用量追踪 |
+| 🔑 **API Key 池** | 多 Key 加密存储、轮询、故障自动转移、Redis 原子计数 |
 | 🛡️ **数据安全** | JWT + bcrypt + Fernet 加密 + 文件魔数校验 |
 | 🗑️ **软删除** | 用户标记删除 → 管理员恢复/彻底删除 |
 | 📋 **系统监控** | 概览/日志/错误 三面板 + 审计日志 |
@@ -174,10 +175,11 @@ sito/
 | 层 | 技术 |
 |----|------|
 | **前端** | React 18 + TypeScript + Vite + 玻璃拟态 UI |
-| **后端** | FastAPI + SQLAlchemy + SQLite + LangGraph |
-| **AI/OCR** | EasyOCR + 多模态 LLM API（MiMo/DeepSeek/Qwen-VL）+ llama.cpp 本地推理 + 字段名映射归一化 + 正则兜底提取 |
-| **RAG** | TF-IDF (scikit-learn) + 自定义 JSON 知识库 |
+| **后端** | FastAPI + SQLAlchemy + SQLite + LangGraph + Redis |
+| **AI/OCR** | EasyOCR + 多模态 LLM API（MiMo/DeepSeek/Qwen-VL）+ llama.cpp 本地推理 + 字段名映射归一化 + 正则兜底提取 + pypdf 文本提取 |
+| **RAG** | TF-IDF (scikit-learn) + 自定义 JSON 知识库（policy_kb.json） |
 | **LoRA** | PEFT + Transformers + PyTorch（Apple MPS / CUDA / CPU） |
+| **缓存/限流** | Redis（OCR 缓存、Key 池原子计数、速率限制） |
 | **安全** | JWT + bcrypt + Fernet + MIME 魔数校验 |
 | **GPU 加速** | Metal (Apple Silicon) / CUDA (NVIDIA) / ROCm (AMD) / CPU 自动检测 |
 

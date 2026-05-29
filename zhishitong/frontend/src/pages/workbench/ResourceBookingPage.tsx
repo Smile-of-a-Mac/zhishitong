@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import axios from 'axios'
 import { useAuth } from '../../hooks/useAuth'
 import GlassCard from '../../components/GlassCard'
 
@@ -19,7 +20,6 @@ type TabType = 'meeting_room' | 'vehicle'
 
 export default function ResourceBookingPage() {
   const { user } = useAuth()
-  const token = localStorage.getItem('token')
   const [tab, setTab] = useState<TabType>('meeting_room')
   const [rooms, setRooms] = useState<Resource[]>([])
   const [vehicles, setVehicles] = useState<Resource[]>([])
@@ -43,13 +43,13 @@ export default function ResourceBookingPage() {
     setErrorMsg('')
     try {
       const [r, v, b] = await Promise.all([
-        fetch('/api/resources/rooms', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-        fetch('/api/resources/vehicles', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-        fetch(`/api/resources/bookings?resource_type=${tab}`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+        axios.get('/api/resources/rooms'),
+        axios.get('/api/resources/vehicles'),
+        axios.get('/api/resources/bookings', { params: { resource_type: tab } }),
       ])
-      setRooms(r)
-      setVehicles(v)
-      setBookings(b)
+      setRooms(r.data)
+      setVehicles(v.data)
+      setBookings(b.data)
     } catch (e) {
       setErrorMsg('加载资源数据失败')
     } finally {
@@ -68,44 +68,29 @@ export default function ResourceBookingPage() {
       return
     }
     try {
-      const res = await fetch('/api/resources/bookings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          resource_type: tab,
-          resource_id: formResId,
-          title: formTitle,
-          start_time: formStart,
-          end_time: formEnd,
-          participants: formParticipants,
-        }),
+      await axios.post('/api/resources/bookings', {
+        resource_type: tab,
+        resource_id: formResId,
+        title: formTitle,
+        start_time: formStart,
+        end_time: formEnd,
+        participants: formParticipants,
       })
-      if (!res.ok) {
-        const err = await res.json()
-        setFormError(err.detail || '预约失败')
-        return
-      }
       setShowForm(false)
       setFormTitle(''); setFormStart(''); setFormEnd(''); setFormParticipants('')
       fetchData()
-    } catch (e) {
-      setFormError('网络错误')
+    } catch (e: any) {
+      setFormError(e?.response?.data?.detail || '网络错误')
     }
   }
 
   const handleCancel = async (id: number) => {
-    await fetch(`/api/resources/bookings/${id}`, {
-      method: 'DELETE', headers: { Authorization: `Bearer ${token}` },
-    })
+    await axios.delete(`/api/resources/bookings/${id}`)
     fetchData()
   }
 
   const handleApprove = async (id: number, status: string) => {
-    await fetch(`/api/resources/bookings/${id}/approve`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ status, reject_reason: '' }),
-    })
+    await axios.post(`/api/resources/bookings/${id}/approve`, { status, reject_reason: '' })
     fetchData()
   }
 

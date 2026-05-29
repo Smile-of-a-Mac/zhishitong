@@ -2,15 +2,16 @@
 import time
 from collections import defaultdict
 from threading import Lock
+from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from database import get_db
 from models import User, TierEnum
 from schemas import UserCreate, UserOut, Token, LoginRequest
-from auth import hash_password, verify_password, create_token, get_current_user
+from auth import hash_password, verify_password, create_token, create_access_token, create_refresh_token, get_current_user
 from auth import clear_test_override
 from services.logging_service import LogCategory, log
 
@@ -34,7 +35,7 @@ def _check_login_rate(ip: str) -> None:
 
 
 @router.post("/register", response_model=Token)
-def register(body: UserCreate, db: Session = Depends(get_db)):
+def register(body: UserCreate, response: Response, db: Session = Depends(get_db)):
     if db.query(User).filter(User.username == body.username).first():
         raise HTTPException(400, "用户名已存在")
 
@@ -50,11 +51,27 @@ def register(body: UserCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(user)
     log(LogCategory.AUTH, "info", f"新用户注册: {user.username}", user_id=user.id)
-    return Token(access_token=create_token(user), user=UserOut.model_validate(user))
+
+    access_token = create_access_token(user)
+    refresh_token = create_refresh_token(user)
+    response.set_cookie(
+        key="auth_token",
+        value=access_token,
+        httponly=True, secure=True, samesite="strict",
+        max_age=30 * 60,
+    )
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True, secure=True, samesite="strict",
+        max_age=7 * 24 * 3600,
+        path="/api/auth/refresh",
+    )
+    return Token(access_token=access_token, refresh_token=refresh_token, user=UserOut.model_validate(user))
 
 
 @router.post("/login", response_model=Token)
-def login(body: LoginRequest, request: Request, db: Session = Depends(get_db)):
+def login(body: LoginRequest, request: Request, response: Response, db: Session = Depends(get_db)):
     # 频率限制
     client_ip = request.client.host if request.client else "unknown"
     _check_login_rate(client_ip)
@@ -79,7 +96,28 @@ def login(body: LoginRequest, request: Request, db: Session = Depends(get_db)):
     # 管理员登录时自动清除测试模拟覆盖
     if user.is_admin:
         clear_test_override(user.id)
-    return Token(access_token=create_token(user), user=UserOut.model_validate(user))
+
+    access_token = create_access_token(user)
+    refresh_token = create_refresh_token(user)
+    # 设置 HttpOnly; Secure; SameSite=Strict Cookie
+    response.set_cookie(
+        key="auth_token",
+        value=access_token,
+        httponly=True,
+        secure=True,
+        samesite="strict",
+        max_age=30 * 60,  # 30 分钟
+    )
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        secure=True,
+        samesite="strict",
+        max_age=7 * 24 * 3600,
+        path="/api/auth/refresh",  # 仅 refresh 端点可见
+    )
+    return Token(access_token=access_token, refresh_token=refresh_token, user=UserOut.model_validate(user))
 
 
 @router.get("/me", response_model=UserOut)
@@ -107,3 +145,48 @@ def change_password(
     db.commit()
     log(LogCategory.AUTH, "info", f"用户修改密码: {user.username}", user_id=user.id)
     return {"detail": "密码修改成功"}
+
+
+# ---- Token 刷新 ----
+
+from auth import verify_refresh_token, create_access_token
+
+class RefreshRequest(BaseModel):
+    refresh_token: Optional[str] = None  # 可传入或从 Cookie 读取
+
+
+@router.post("/auth/refresh", response_model=Token)
+def refresh_token(
+    request: Request,
+    response: Response,
+    body: RefreshRequest = RefreshRequest(),
+    db: Session = Depends(get_db),
+):
+    """使用 Refresh Token 换取新的 Access Token"""
+    refresh_token_str = body.refresh_token or request.cookies.get("refresh_token")
+    if not refresh_token_str:
+        raise HTTPException(401, "缺少 Refresh Token")
+
+    user_id = verify_refresh_token(refresh_token_str)
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user or not user.is_active:
+        raise HTTPException(401, "用户不存在或未激活")
+
+    access_token = create_access_token(user)
+    response.set_cookie(
+        key="auth_token",
+        value=access_token,
+        httponly=True, secure=True, samesite="strict",
+        max_age=30 * 60,
+    )
+    return Token(access_token=access_token, user=UserOut.model_validate(user))
+
+
+# ---- 登出 ----
+
+@router.post("/auth/logout")
+def logout(response: Response):
+    """清除认证 Cookie"""
+    response.delete_cookie(key="auth_token")
+    response.delete_cookie(key="refresh_token", path="/api/auth/refresh")
+    return {"detail": "已登出"}

@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 class OCRProvider(str, Enum):
     LOCAL = "local_easyocr"
     LLM = "llm_multimodal"
+    PDF_TEXT = "pdf_text"
 
 
 # ========== EasyOCR（懒加载，ARM/x86 通用） ==========
@@ -44,6 +45,49 @@ def local_easyocr(image_bytes: bytes) -> str:
     results = reader.readtext(img_array, paragraph=True)
     text = "\n".join([res[1] for res in results])
     return text.strip() or "[EasyOCR] 未识别到文字"
+
+
+def extract_pdf_text(pdf_bytes: bytes, max_pages: int = 20) -> str:
+    """从文字型 PDF 直接提取文本；扫描件通常会返回空文本。"""
+    try:
+        from pypdf import PdfReader
+    except ImportError as exc:
+        raise RuntimeError("缺少 pypdf 依赖，无法提取 PDF 文本") from exc
+
+    reader = PdfReader(io.BytesIO(pdf_bytes))
+    texts: list[str] = []
+    for page in reader.pages[:max_pages]:
+        page_text = page.extract_text() or ""
+        if page_text.strip():
+            texts.append(page_text.strip())
+
+    text = "\n\n".join(texts)
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
+async def pdf_text_ocr(
+    pdf_bytes: bytes,
+    fill_api_key: str = "",
+    fill_api_base: str = "",
+    fill_model: str = "",
+) -> tuple[str, Optional[dict]]:
+    """文字型 PDF：直接提取文本，再复用现有字段填充链路。"""
+    raw = extract_pdf_text(pdf_bytes)
+    if len(raw.strip()) < 20:
+        raise ValueError("PDF 未提取到足够文本，可能是扫描件")
+    doc_type = detect_document_type(raw)
+    try:
+        filled = await _fill_with_best(raw, fill_api_key, fill_api_base, fill_model, document_type=doc_type)
+    except Exception as exc:
+        logger.warning(f"PDF 文本字段填充失败，仅返回原文: {exc}")
+        filled = {}
+    if filled and "error" not in str(filled):
+        filled = _normalize_json_keys(filled)
+        if doc_type == "leave":
+            filled = _postprocess_leave_fields(filled, raw)
+    return raw, filled or {}
 
 
 # ========== 本地小模型 JSON 填充 ==========
@@ -82,7 +126,7 @@ _FIELD_KEY_MAP: dict[str, str] = {
     # 多模态 LLM 常见输出（兜底映射）
     "name": "applicant", "姓名": "applicant",
     "class": "class_name",
-    "contact_info": "phone", "联系电话": "phone",
+    "contact_info": "phone", "联系电话": "phone", "contact": "phone",
     "counselor_name": "advisor", "辅导员": "advisor",
     "counselor_contact": "advisor_phone",
     "reason_for_leave": "reason", "请假原因": "reason",
@@ -260,47 +304,136 @@ def _extract_reimbursement_fields_from_text(text: str) -> dict:
 
 
 def _postprocess_leave_fields(data: dict, raw_text: str) -> dict:
-    """请假单字段兜底：从 OCR 原文补齐关键字段"""
+    """请假单字段兜底：从 OCR 原文补齐关键字段（包括 MiMo 推理文本）"""
     fixed = dict(data or {})
 
-    # 两个联系方式：优先填充 phone / advisor_phone
+    # ── 两个联系方式：从 raw_text 中提取所有手机号 ──
     phones = re.findall(r"1\d{10}", raw_text or "")
     if phones:
+        # 去重
+        seen = set()
+        uniq_phones = []
+        for p in phones:
+            if p not in seen:
+                seen.add(p)
+                uniq_phones.append(p)
         if not fixed.get("phone"):
-            fixed["phone"] = phones[0]
-        if len(phones) > 1 and not fixed.get("advisor_phone"):
-            fixed["advisor_phone"] = phones[1]
+            fixed["phone"] = uniq_phones[0]
+        if len(uniq_phones) > 1 and not fixed.get("advisor_phone"):
+            fixed["advisor_phone"] = uniq_phones[1]
+        # 如果 advisor_phone 还是空但有第3个号码，也尝试
+        if len(uniq_phones) > 2 and not fixed.get("advisor_phone"):
+            fixed["advisor_phone"] = uniq_phones[1]
+        if len(uniq_phones) > 2 and not fixed.get("parent_phone"):
+            fixed["parent_phone"] = uniq_phones[2] if len(uniq_phones) > 2 else uniq_phones[1]
 
-    # 学院（示例：安全与环境工程学院）
+    # ── 学院 ──
     if not fixed.get("college"):
         m = re.search(r"([\u4e00-\u9fa5]{2,20}学院)", raw_text or "")
         if m:
             fixed["college"] = m.group(1)
 
-    # 班级（示例：硕研25级2班）
+    # ── 班级 ──
     if not fixed.get("class_name"):
         m = re.search(r"([\u4e00-\u9fa50-9]{2,20}班)", raw_text or "")
         if m:
             fixed["class_name"] = m.group(1)
 
-    # 时间区间（请假时间 自 X 至 Y）
-    if not fixed.get("start_date") or not fixed.get("end_date"):
-        m = re.search(r"请假时间[^\n]{0,80}?自\s*([^\s]+)\s*至\s*([^\s]+)", raw_text or "")
+    # ── 姓名（从 raw_text 提取 "姓名：XXX" 模式） ──
+    if not fixed.get("applicant"):
+        m = re.search(r"姓名[：:]\s*([\u4e00-\u9fa5]{2,4})", raw_text or "")
         if m:
-            fixed.setdefault("start_date", m.group(1))
-            fixed.setdefault("end_date", m.group(2))
+            fixed["applicant"] = m.group(1)
 
-    # 去向
+    # ── 学号 ──
+    if not fixed.get("student_id"):
+        m = re.search(r"学号[：:]\s*(\d{6,15})", raw_text or "")
+        if m:
+            fixed["student_id"] = m.group(1)
+
+    # ── 辅导员姓名 ──
+    if not fixed.get("advisor"):
+        m = re.search(r"辅导员[：:]\s*([\u4e00-\u9fa5]{2,4})", raw_text or "")
+        if m:
+            fixed["advisor"] = m.group(1)
+
+    # ── 请假类型 ──
+    if not fixed.get("leave_type"):
+        for lt in ["事假", "病假", "公假"]:
+            if lt in (raw_text or ""):
+                fixed["leave_type"] = lt
+                break
+
+    # ── duration 拆分 ──
+    duration_val = fixed.pop("duration", None) or fixed.pop("leave_period", None)
+    if duration_val and isinstance(duration_val, str):
+        m = re.search(r'自\s*(.+?)\s*至\s*(.+?)$', duration_val)
+        if m:
+            if not fixed.get("start_date"):
+                fixed["start_date"] = m.group(1).strip()
+            if not fixed.get("end_date"):
+                fixed["end_date"] = m.group(2).strip()
+        elif not fixed.get("start_date"):
+            fixed["start_date"] = duration_val
+
+    # ── 时间区间：多种模式从 raw_text 提取 ──
+    if not fixed.get("start_date") or not fixed.get("end_date"):
+        patterns = [
+            r"请假时间[^\n]{0,80}?自\s*([^\s]+)\s*至\s*([^\s]+)",
+            r"自\s*(\d{1,2}月\d{1,2}日\d{1,2}时\d{1,2}分)\s*至\s*(\d{1,2}月\d{1,2}日\d{1,2}时\d{1,2}分)",
+            r"(\d{1,2}月\d{1,2}日\d{1,2}时\d{1,2}分)\s*[至到\-]\s*(\d{1,2}月\d{1,2}日\d{1,2}时\d{1,2}分)",
+            r"自\s*(\d{4}-\d{2}-\d{2})\s*至\s*(\d{4}-\d{2}-\d{2})",
+        ]
+        for pat in patterns:
+            m = re.search(pat, raw_text or "")
+            if m:
+                if not fixed.get("start_date"):
+                    fixed["start_date"] = m.group(1).strip()
+                if not fixed.get("end_date"):
+                    fixed["end_date"] = m.group(2).strip()
+                break
+
+    # ── 日期标准化：将中文日期转为 ISO 格式 (YYYY-MM-DDTHH:MM) ──
+    def _normalize_date(val: str) -> str:
+        """将各种日期格式转为 ISO datetime-local 兼容格式"""
+        if not val:
+            return val
+        # 已是 ISO 格式：2026-05-26 或 2026-05-26T00:00
+        if re.match(r'^\d{4}-\d{2}-\d{2}', val):
+            if 'T' not in val:
+                val += 'T00:00'
+            return val
+        # 中文格式：5月26日0时00分 / 5月26日 0时00分
+        m = re.match(r'(\d{1,2})月(\d{1,2})日\s*(\d{1,2})时(\d{1,2})分', val)
+        if m:
+            from datetime import datetime
+            now = datetime.now()
+            mon, day, hour, minu = int(m.group(1)), int(m.group(2)), int(m.group(3)), int(m.group(4))
+            return f"{now.year:04d}-{mon:02d}-{day:02d}T{hour:02d}:{minu:02d}"
+        # 其他格式原样返回
+        return val
+
+    for key in ("start_date", "end_date", "date"):
+        if fixed.get(key):
+            fixed[key] = _normalize_date(str(fixed[key]))
+
+    # ── 去向 ──
     if not fixed.get("destination"):
-        m = re.search(r"去向\s*([\u4e00-\u9fa5A-Za-z0-9-]{2,30})", raw_text or "")
+        m = re.search(r"去向[：:]\s*([\u4e00-\u9fa5A-Za-z0-9]{2,30})", raw_text or "")
         if m:
             fixed["destination"] = m.group(1)
 
-    # 交通工具
+    # ── 交通工具 ──
     if not fixed.get("transportation"):
-        m = re.search(r"交通工具\s*([\u4e00-\u9fa5A-Za-z0-9-]{1,20})", raw_text or "")
+        m = re.search(r"交通工具[：:]\s*([\u4e00-\u9fa5A-Za-z0-9]{1,20})", raw_text or "")
         if m:
             fixed["transportation"] = m.group(1)
+
+    # ── 请假事由 ──
+    if not fixed.get("reason"):
+        m = re.search(r"(?:请假事由|事由)[：:]\s*([^\n]{2,60})", raw_text or "")
+        if m:
+            fixed["reason"] = m.group(1).strip()
 
     return fixed
 
@@ -414,6 +547,35 @@ OCR 文本:
         return {"error": "填充失败", "raw_text": raw_text}
 
 
+# ========== PII 遮蔽检测 ==========
+
+def _is_masked_output(text: str, filled: dict | None = None) -> bool:
+    """
+    检测 LLM 输出是否被隐私遮蔽（MiMo 等模型会将中文 PII 替换为 X）。
+    判断标准：
+      1. text 中连续 X 超过 6 个
+      2. filled dict 中字符串类型的值超过 50% 是纯 X 串
+    """
+    if not text:
+        return False
+    # 去掉 JSON 语法字符后检查
+    stripped = re.sub(r'[{}\[\]",:\s]', '', text)
+    if len(stripped) < 10:
+        return False
+    # 连续 X 占比
+    x_ratio = len(re.findall(r'X+', stripped)) / max(len(stripped), 1)
+    if x_ratio > 0.4:
+        return True
+    # 检查 filled dict 的值
+    if isinstance(filled, dict) and filled:
+        str_values = [v for v in filled.values() if isinstance(v, str) and len(v) > 0]
+        if str_values:
+            x_count = sum(1 for v in str_values if re.fullmatch(r'X{3,}', v))
+            if x_count / len(str_values) > 0.5:
+                return True
+    return False
+
+
 # ========== 外部 LLM API ==========
 async def llm_multimodal_ocr(
     image_bytes: bytes, api_base: str, api_key: str, model: str,
@@ -476,7 +638,7 @@ async def llm_multimodal_ocr(
                     ],
                 }],
                 "temperature": 0.05,
-                "max_tokens": 4096,
+                "max_tokens": 32768,
             },
         )
         resp.raise_for_status()
@@ -491,24 +653,86 @@ async def llm_multimodal_ocr(
         )
         # 推理模型（MiMo/DeepSeek-R1 等）可能把真实答案放在 reasoning_content 中，
         # content 只放了推理过程。优先取 reasoning_content 中能解析成 JSON 的部分
-        raw_text = content  # 默认
+        raw_text = content if content else reasoning  # 默认
         filled: dict = {}
         candidates_texts = [content, reasoning]  # 两个都试
 
+        # 辅助函数：修复 MiMo 常见的 JSON 语法错误
+        def _repair_json(text: str) -> str:
+            """修复 LLM 输出中常见的 JSON 格式错误。"""
+            # 1. 移除尾随逗号（在 } 或 ] 之前）
+            text = re.sub(r',\s*}', '}', text)
+            text = re.sub(r',\s*]', ']', text)
+            # 2. 修复 "key": , → "key": null
+            text = re.sub(r':\s*,', ': null,', text)
+            text = re.sub(r':\s*}', ': null}', text)
+            # 3. 修复 "key": ] → "key": []
+            text = re.sub(r':\s*]', ': []', text)
+            # 4. 修复连续逗号
+            text = re.sub(r',\s*,', ', null,', text)
+            # 5. 修复缺少引号的 key（简单情况）
+            # 6. 修复截断的字符串：如果最后一个 " 后面没有闭合
+            return text
+
+        # 辅助函数：从文本中提取最后一个完整 JSON 对象（支持嵌套）
+        def _extract_last_json(text: str) -> dict | None:
+            if not text:
+                return None
+            # 优先：查找 ```json ... ``` 代码块（取最后一个）
+            json_blocks = list(re.finditer(r'```(?:json)?\s*\n?(.*?)\n?```', text, re.DOTALL))
+            for m in reversed(json_blocks):
+                try:
+                    parsed = json.loads(m.group(1).strip())
+                    if isinstance(parsed, dict) and len(parsed) >= 1:
+                        return parsed
+                except json.JSONDecodeError:
+                    continue
+            # 兜底：平衡括号匹配，从最后一个 { 开始找配对的 }
+            # 从后往前扫，找到第一个有效 JSON 对象
+            braces = [(i, c) for i, c in enumerate(text) if c in '{}']
+            # 从最后一个 { 开始尝试
+            open_positions = [i for i, c in braces if c == '{']
+            for start_pos in reversed(open_positions):
+                depth = 0
+                end_pos = -1
+                for i, c in braces:
+                    if i < start_pos:
+                        continue
+                    if c == '{':
+                        depth += 1
+                    elif c == '}':
+                        depth -= 1
+                        if depth == 0:
+                            end_pos = i
+                            break
+                if end_pos > start_pos:
+                    candidate = text[start_pos:end_pos + 1]
+                    # 先尝试原始解析，失败则修复后重试
+                    for cand in [candidate, _repair_json(candidate)]:
+                        try:
+                            parsed = json.loads(cand)
+                            if isinstance(parsed, dict) and len(parsed) >= 1:
+                                return parsed
+                        except json.JSONDecodeError:
+                            continue
+            return None
+
+        # 尝试从两个候选文本中提取
         for ct in candidates_texts:
             if not ct:
                 continue
-            # Step 1: 去掉 markdown 代码块标记
+            # Step 1: 去掉 markdown 代码块标记后直接解析
             cleaned = ct.strip()
             if "```json" in cleaned:
                 cleaned = cleaned.split("```json")[1].split("```")[0]
             elif "```" in cleaned:
                 cleaned = cleaned.split("```")[1].split("```")[0]
 
-            # Step 2: 尝试直接解析
+            # Step 2: 尝试直接解析完整文本（含 JSON 修复）
             for attempt in [cleaned.strip(), ct.strip()]:
                 if not attempt:
                     continue
+                # 先尝试原始解析
                 try:
                     parsed = json.loads(attempt)
                     if isinstance(parsed, dict):
@@ -517,30 +741,35 @@ async def llm_multimodal_ocr(
                         break
                 except json.JSONDecodeError:
                     pass
+                # 修复后再试
+                repaired = _repair_json(attempt)
+                try:
+                    parsed = json.loads(repaired)
+                    if isinstance(parsed, dict):
+                        logger.info(f"JSON 修复成功: 原始错误已自动修正")
+                        filled = parsed
+                        raw_text = ct
+                        break
+                except json.JSONDecodeError:
+                    pass
             if filled:
                 break
 
-        # Step 3: 正则找 JSON 对象（兜底）
-        if not filled:
-            for ct in candidates_texts:
-                if not ct:
-                    continue
-                import re as _re
-                candidates = list(_re.finditer(r'\{[^{}]*\}', ct))
-                for m in reversed(candidates):
-                    try:
-                        parsed = json.loads(m.group(0))
-                        if isinstance(parsed, dict) and len(parsed) >= 1:
-                            filled = parsed
-                            raw_text = ct
-                            break
-                    except json.JSONDecodeError:
-                        continue
-                if filled:
-                    break
+            # Step 3: 使用平衡括号提取最后一个 JSON（兜底）
+            parsed = _extract_last_json(ct)
+            if parsed and len(parsed) >= 1:
+                filled = parsed
+                raw_text = ct
+                break
 
     # 归一化字段名
     filled = _normalize_json_keys(filled)
+
+    # ★★★ 将 content + reasoning 合并为 raw_text，供后续正则兜底提取 ★★★
+    # MiMo 等推理模型的 JSON 在 content 中，但原始 OCR 文字在 reasoning 中
+    combined_text = "\n".join([t for t in [content, reasoning] if t and t.strip()])
+    if combined_text and len(combined_text) > len(raw_text):
+        raw_text = combined_text
 
     # 发票/报销场景兜底：即使模型未按 schema 返回，也尽量抽取关键字段
     if not filled or not any(v not in (None, "") for v in filled.values()):
@@ -548,6 +777,14 @@ async def llm_multimodal_ocr(
         if reimburse_fallback:
             filled.update(reimburse_fallback)
             raw_text = "\n".join([content, reasoning]).strip() or raw_text
+
+    # ★ 检测 PII 遮蔽输出（MiMo 等模型的隐私过滤）
+    if _is_masked_output(raw_text, filled):
+        logger.warning(
+            f"检测到 LLM 返回遮蔽内容 (model={model})，"
+            f"text_preview={str(raw_text)[:120]}，触发降级"
+        )
+        raise ValueError(f"LLM 返回了隐私遮蔽内容，可能是 MiMo 模型的 PII masking 导致")
 
     return raw_text, filled
 
@@ -610,8 +847,26 @@ OCR 文本:
         content = content.strip()
         if not content:
             raise ValueError("LLM 返回内容为空")
-        result = json.loads(content)
+        try:
+            result = json.loads(content)
+        except json.JSONDecodeError as je:
+            logger.warning(f"外部 LLM JSON 填充解析失败: {je}，content={content[:200]}")
+            # 尝试从 content 中提取 JSON 片段
+            m = re.search(r'\{[^{}]*\}', content)
+            if m:
+                try:
+                    result = json.loads(m.group(0))
+                except json.JSONDecodeError:
+                    raise ValueError(f"LLM 返回了无效 JSON: {je}")
+            else:
+                raise ValueError(f"LLM 返回了无效 JSON: {je}")
         result = _normalize_json_keys(result)
+        
+        # 检测遮蔽输出
+        if _is_masked_output(raw_text, result):
+            logger.warning(f"检测到 LLM 填充返回遮蔽内容 (model={model})，触发降级")
+            raise ValueError("LLM 填充返回了隐私遮蔽内容")
+        
         if document_type == "leave":
             result = _postprocess_leave_fields(result, raw_text)
         return result
@@ -622,6 +877,7 @@ async def ocr_with_tier(
     image_bytes: bytes,
     tier: str,
     llm_quota_remaining: int,
+    mime_type: str = "",
     api_base: str = "",
     api_key: str = "",
     model: str = "",
@@ -629,6 +885,10 @@ async def ocr_with_tier(
     fill_api_key: str = "",
     fill_model: str = "",
 ) -> tuple[str, str, Optional[dict]]:
+    if mime_type == "application/pdf":
+        raw, filled = await pdf_text_ocr(image_bytes, fill_api_key, fill_api_base, fill_model)
+        return raw, OCRProvider.PDF_TEXT, filled
+
     if tier == "free":
         raw = local_easyocr(image_bytes)
         try:

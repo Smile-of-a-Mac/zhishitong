@@ -160,21 +160,19 @@ export default function LoginPage() {
             <div>
               <div className={`login-collapse-content${showDemo ? ' login-collapse-content-open' : ''}`} style={{ marginTop: 8, background: 'rgba(0,0,0,0.04)', borderRadius: 8, padding: '10px 12px' }}>
                 <strong>系统管理员：</strong><br />
-                admin / (由服务端环境变量 ADMIN_INIT_PASSWORD 设定，默认 Admin@Sito2026!)<br /><br />
+                admin — 信息管理员（密码由部署方提供）<br /><br />
                 <strong>山东科技大学 (Pro)：</strong><br />
-                sdu_school_admin / admin123 — 学校管理员<br />
-                sdu_dept_cs / 123456 — 部门管理员（计算机学院）<br />
-                sdu_dept_fin / 123456 — 部门管理员（财务处）<br />
-                sdu_finance_admin / admin123 — 财务管理员<br />
-                sdu_student_a / 123456 — 学生<br />
-                sdu_student_b / 123456 — 学生<br /><br />
+                sdu_school_admin — 学校管理员<br />
+                sdu_dept_cs — 部门管理员（计算机学院）<br />
+                sdu_dept_fin — 部门管理员（财务处）<br />
+                sdu_finance_admin — 财务管理员<br />
+                sdu_student_a / sdu_student_b — 学生<br /><br />
                 <strong>山东科技大学（济南校区）(Free)：</strong><br />
-                sdujn_school_admin / admin123 — 学校管理员<br />
-                sdujn_dept_cs / 123456 — 部门管理员<br />
-                sdujn_dept_fin / 123456 — 部门管理员<br />
-                sdujn_finance_admin / admin123 — 财务管理员<br />
-                sdujn_student_a / 123456 — 学生<br />
-                sdujn_student_b / 123456 — 学生
+                sdujn_school_admin — 学校管理员<br />
+                sdujn_dept_cs — 部门管理员<br />
+                sdujn_dept_fin — 部门管理员<br />
+                sdujn_finance_admin — 财务管理员<br />
+                sdujn_student_a / sdujn_student_b — 学生
               </div>
             </div>
           </div>

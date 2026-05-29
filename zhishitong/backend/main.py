@@ -19,8 +19,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
 )
 
 # ---- 全局未捕获异常处理器（确保监控系统能看到所有错误） ----
@@ -38,7 +38,7 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
     return JSONResponse(
         status_code=500,
-        content={"detail": f"服务器内部错误: {exc}"},
+        content={"detail": "服务器内部错误，请联系管理员"},
     )
 
 # ---- 请求日志中间件 ----
@@ -111,6 +111,7 @@ from config import UPLOAD_DIR
 from models import ApprovalRecord, User
 from database import SessionLocal
 from auth import get_current_user
+from services.file_service import resolve_storage_path
 
 @app.get("/api/files/{record_id}")
 def serve_file(record_id: int, user: User = Depends(get_current_user)):
@@ -128,7 +129,7 @@ def serve_file(record_id: int, user: User = Depends(get_current_user)):
             record_owner = db.query(User).filter(User.id == record.user_id).first()
             if record_owner and record_owner.school != user.school:
                 raise HTTPException(403, "无权访问其他学校的文件")
-        full_path = UPLOAD_DIR.parent / record.storage_path
+        full_path = resolve_storage_path(record.storage_path)
         if not full_path.exists():
             raise HTTPException(404, "文件已物理删除")
         mime = record.mime_type or "image/jpeg"

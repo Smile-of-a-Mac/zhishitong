@@ -6,6 +6,7 @@ RAG + LLM 增强服务 v2.0
   2. TF-IDF 语义向量检索替代简单关键词匹配
   3. 所有 LLM 调用统一走本地推理服务（llama.cpp + Qwen2.5-0.5B）
   4. 仅保留规则兜底用于 LLM 完全不可用时的容错
+  5. TF-IDF 矩阵磁盘缓存，避免每次重启重新构建
 
 GPU 加速：由 inference_server/server.py 自动检测并启用（Metal/CUDA/ROCm/CPU）
 """
@@ -41,7 +42,7 @@ _chunk_texts: list[str] = []
 
 
 def _load_knowledge_base() -> None:
-    """加载 JSON 知识库并构建 TF-IDF 索引"""
+    """加载 JSON 知识库并构建 TF-IDF 索引（带磁盘缓存）"""
     global _kb_documents, _kb_chunks, _tfidf_vectorizer, _tfidf_matrix, _chunk_texts
 
     if _kb_chunks and _tfidf_vectorizer is not None:

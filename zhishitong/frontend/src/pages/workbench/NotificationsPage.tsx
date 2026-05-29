@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import axios from 'axios'
 import GlassCard from '../../components/GlassCard'
 
 interface Notification {
@@ -60,21 +61,18 @@ export default function NotificationsPage() {
   const nav = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
 
-  const token = localStorage.getItem('token')
-
   const fetchNotifications = async () => {
     setLoading(true)
     setErrorMsg('')
     try {
-      const res = await fetch('/api/notifications?page_size=50', {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (!res.ok) { setErrorMsg(`请求失败 (${res.status})`); setNotifications([]); return }
-      const data = await res.json()
+      const res = await axios.get('/api/notifications', { params: { page_size: 50 } })
+      const data = res.data
       setNotifications(data.items || [])
       setUnreadCount(data.unread_count || 0)
-    } catch (e) {
-      setErrorMsg('网络错误，无法获取通知')
+    } catch (e: any) {
+      const status = e?.response?.status
+      if (status) setErrorMsg(`请求失败 (${status})`)
+      else setErrorMsg('网络错误，无法获取通知')
       setNotifications([])
     } finally {
       setLoading(false)
@@ -84,9 +82,7 @@ export default function NotificationsPage() {
   useEffect(() => { fetchNotifications() }, [])
 
   const markRead = async (id: number) => {
-    await fetch(`/api/notifications/${id}/read`, {
-      method: 'POST', headers: { Authorization: `Bearer ${token}` },
-    })
+    await axios.post(`/api/notifications/${id}/read`)
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n))
     setUnreadCount(prev => Math.max(0, prev - 1))
     // 同步更新详情弹窗中的已读状态
@@ -118,9 +114,7 @@ export default function NotificationsPage() {
   }, [searchParams, nav])
 
   const markAllRead = async () => {
-    await fetch('/api/notifications/read-all', {
-      method: 'POST', headers: { Authorization: `Bearer ${token}` },
-    })
+    await axios.post('/api/notifications/read-all')
     setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
     setUnreadCount(0)
   }

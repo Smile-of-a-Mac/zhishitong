@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import axios from 'axios'
 import GlassCard from '../../components/GlassCard'
 
 interface Announcement {
@@ -15,7 +16,6 @@ const categoryLabels: Record<string, string> = {
 }
 
 export default function AnnouncementsPage() {
-  const token = localStorage.getItem('token')
   const [items, setItems] = useState<Announcement[]>([])
   const [category, setCategory] = useState('')
   const [loading, setLoading] = useState(true)
@@ -24,11 +24,10 @@ export default function AnnouncementsPage() {
   const fetchList = async () => {
     setLoading(true)
     try {
-      const params = category ? `?category=${category}` : ''
-      const res = await fetch(`/api/announcements${params}`, {
-        headers: { Authorization: `Bearer ${token}` },
+      const res = await axios.get('/api/announcements', {
+        params: category ? { category } : undefined,
       })
-      setItems(await res.json())
+      setItems(res.data)
     } catch (e) {
       console.error(e)
     } finally {
@@ -40,10 +39,8 @@ export default function AnnouncementsPage() {
 
   const viewDetail = async (id: number) => {
     try {
-      const res = await fetch(`/api/announcements/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      setSelected(await res.json())
+      const res = await axios.get(`/api/announcements/${id}`)
+      setSelected(res.data)
     } catch (e) { console.error(e) }
   }
 

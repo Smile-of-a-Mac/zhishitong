@@ -71,8 +71,21 @@ def resolve_key(
     返回 ResolvedKey(key_id, api_base, api_key, model)。
     key_id 为 None 表示使用的是环境变量（无数据库记录，无法追踪用量）。
     """
-    best = select_best(db, key_type)
-    if best:
+    candidates = (
+        db.query(ApiKey)
+        .filter(
+            ApiKey.key_type == key_type,
+            ApiKey.is_active == True,
+            ApiKey.fail_count < FAIL_THRESHOLD,
+        )
+        .order_by(
+            ApiKey.fail_count.asc(),
+            ApiKey.usage_count.asc(),
+            ApiKey.last_used_at.asc().nullsfirst(),
+        )
+        .all()
+    )
+    for best in candidates:
         try:
             decrypted = decrypt(best.api_key_encrypted)
             return ResolvedKey(
@@ -85,8 +98,7 @@ def resolve_key(
             logger.warning(f"Key 池 #{best.id} 解密失败: {e}")
             # 解密失败也算一次失败
             record_failure(db, best.id)
-            # 尝试下一个
-            return resolve_key(db, key_type, fallback_base, fallback_key, fallback_model)
+            continue
 
     # 回退到环境变量
     return ResolvedKey(key_id=None, api_base=fallback_base, api_key=fallback_key, model=fallback_model)

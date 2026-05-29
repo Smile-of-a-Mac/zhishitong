@@ -1,7 +1,7 @@
 # 智审通 — 产品设计文档
 
 > 状态：**迭代中**
-> 最后更新：2026-05-28
+> 最后更新：2026-05-29
 
 ## 📐 设计图集
 
@@ -14,9 +14,9 @@
 | 🔄 审批状态机 | `state_approval.puml` → `diagrams/state_approval.svg` | pending/approved/rejected/needs_revision/cancelled/withdrawn 六态流转 |
 | 📝 审批时序图 | `sequence_approval.puml` → `diagrams/sequence_approval.svg` | 以报销为例的多阶段审批完整时序（部门→财务→学校） |
 | 📷 OCR 时序图 | `sequence_ocr.puml` → `diagrams/sequence_ocr.svg` | Free/Pro 多级降级 OCR 处理流程 |
-| 🗃️ 数据模型类图 | `class_diagram.puml` → `diagrams/class_diagram.svg` | 15 张数据表 + 枚举 + 关系 |
+| 🗃️ 数据模型类图 | `class_diagram.puml` → `diagrams/class_diagram.svg` | 16 张数据表 + 枚举 + 关系 |
 | 🧪 LoRA 管线 | `activity_lora.puml` → `diagrams/activity_lora.svg` | 数据制备→训练→合并→GGUF 转换→推理部署 |
-| 🚀 部署架构图 | `deployment.puml` → `diagrams/deployment.svg` | 多容器 Docker Compose 部署方案 |
+| 🚀 部署架构图 | `deployment.puml` → `diagrams/deployment.svg` | 本地开发 + Docker 部署方案 |
 
 ---
 
@@ -62,8 +62,8 @@ LLM 辅助引擎输出：
 
 |          |      Free 免费版              |     Pro 专业版           |    Pro+ 企业版       |
 |----------|-----------------------------|-------------------------|---------------------|
-| **文字提取** | EasyOCR（本地，ARM/x86通用）  | 多模态 LLM API（看图）   | 同 Pro              |
-| **JSON 填充** | 本地小模型（Qwen3-0.5B）     | 同一 LLM 完成（一步到位）| 同 Pro              |
+| **文字提取** | EasyOCR（本地，ARM/x86通用）+ PDF 文本提取 | 多模态 LLM API（看图）   | 同 Pro              |
+| **JSON 填充** | 本地小模型（Qwen2.5-0.5B）   | 同一 LLM 完成（一步到位）| 同 Pro              |
 | **调用次数**  | 无限制（纯本地，无外部依赖）   | 管理员设定月度配额      | 无限制              |
 | **用户编辑**  | ✅ 前端可编辑 JSON            | ✅ 同 Free              | ✅ 同 Free          |
 | **适用场景**  | 日常轻度使用 / 个人           | 高频审批部门            | 校级管理/大部门     |
@@ -84,8 +84,8 @@ LLM 辅助引擎输出：
           │ 纯文本（不是图片）
           ▼
 ┌──────────────────────────┐
-│ Step 2: 本地小模型推理    │  ← Qwen3-0.5B / Qwen2.5-0.5B
-│ 输入: EasyOCR 提取的文本  │    通过 llama.cpp 运行
+│ Step 2: 本地小模型推理    │  ← Qwen2.5-0.5B
+│ 输入: EasyOCR 提取的文本  │    通过 llama.cpp (llama-cpp-python) 运行
 │ 输出: 结构化 JSON          │    纯文本填充，0.5B 参数绰绰有余
 │                          │
 │ {                        │
@@ -161,10 +161,9 @@ LLM 辅助引擎输出：
 
 | 模型 | 参数量 | 内存 | 中文 | 用途 | GGUF 文件名 |
 |------|--------|------|:----:|------|------------|
-| **Qwen3-0.5B-Instruct** | 0.5B | ~450MB | ⭐⭐⭐ | JSON 填充 | `qwen3-0.5b-instruct-q4_k_m.gguf` |
-| Qwen2.5-0.5B-Instruct | 0.5B | ~450MB | ⭐⭐⭐ | JSON 填充 | `qwen2.5-0.5b-instruct-q4_k_m.gguf` |
+| **Qwen2.5-0.5B-Instruct** | 0.5B | ~450MB | ⭐⭐⭐ | JSON 填充 | `qwen2.5-0.5b.gguf` |
 
-**推荐 Qwen3-0.5B-Instruct**（2026 最新），Q4_K_M 量化版仅 ~400MB。
+**当前使用 Qwen2.5-0.5B-Instruct**，Q4_K_M 量化版约 400MB。后续可升级至 Qwen3-0.5B。
 
 ### 2.3 推理引擎选择
 
@@ -174,25 +173,29 @@ LLM 辅助引擎输出：
 | Ollama | ✅ | ✅ | ~1GB runtime | ⚠️ 首次调用冷启动 |
 | vLLM | ❌ | ✅ | 太重 | ❌ GPU only |
 
-**选 llama.cpp 的 llama-server**（不是命令行版），启动后暴露 HTTP API，可常驻后台。
+**选 llama-cpp-python**（Python 绑定），通过 uvicorn 暴露 OpenAI 兼容 HTTP API，自动检测 GPU 加速，可常驻后台。
 
-### 2.4 llama-server 预加载与架构兼容
+### 2.4 推理服务启动与 GPU 自动检测
+
+推理服务通过 `inference_server/server.py` 启动，自动检测 GPU 加速：
+
+- Apple Silicon → Metal (MPS) 加速
+- NVIDIA GPU → CUDA (cuBLAS) 加速
+- AMD GPU → ROCm (hipBLAS) 加速
+- 无可用 GPU → CPU (AVX2 多线程)
 
 ```bash
-# ARM (Apple Silicon / AWS Graviton) 和 x86 通用启动命令
-./llama-server \
-  --model /models/qwen3-0.5b-instruct-q4_k_m.gguf \
-  --host 0.0.0.0 \
-  --port 18080 \
-  --n-gpu-layers 0 \              # 纯 CPU，arm64/amd64 通用
-  --ctx-size 4096 \               # 上下文长度
-  --threads 4 \                   # CPU 线程数
-  --mlock \                       # ★ 锁定内存，启动时预加载，避免运行时 SWAP
-  --cont-batching \               # ★ 连续批处理，支持并发请求排队
-  --metrics                       # 暴露 /metrics 端点监控
+# 推理服务通过 uvicorn 启动（OpenAI 兼容 API）
+PYTHONPATH="$INFER_DIR" uvicorn server:app --host 0.0.0.0 --port 18080
+
+# 环境变量配置
+MODEL_PATH=models/qwen2.5-0.5b.gguf  # 模型路径
+PORT=18080                             # 服务端口
+N_CTX=2048                             # 上下文长度
+N_THREADS=4                            # CPU 线程数
 ```
 
-### 2.5 llama-server API 格式（OpenAI 兼容）
+### 2.5 推理服务 API 格式（OpenAI 兼容）
 
 ```bash
 # 发送文本，返回 JSON
@@ -205,21 +208,39 @@ curl http://localhost:18080/v1/chat/completions \
   }'
 ```
 
-与外部 LLM API 完全一致的接口！同一个调用层，只需切换 URL——极大简化后端代码。
+与外部 LLM API 完全一致的接口！同一个调用层，只需切换 URL——简化后端代码。
 
-### 2.6 Docker 镜像体积估算
+### 2.6 Redis 缓存层（v5.0 新增）
+
+```
+OCR 请求 → SHA256(图片) → Redis 查询
+  ├─ 命中 → 直接返回缓存结果（不扣配额，< 1ms）
+  └─ 未命中 → 执行 OCR → 写入 Redis（TTL 24h）
+
+API Key 调用计数 → Redis HINCRBY 原子操作
+  └─ 失败 ≥ 5 次 → 自动标记 disabled
+
+速率限制 → Redis INCR + EXPIRE
+  ├─ Free:  10 次/分钟
+  ├─ Pro:   30 次/分钟
+  └─ Pro+:  不限
+```
+
+无 Redis 时全静默降级（缓存/计数功能跳过，不影响主流程）。
+
+### 2.7 应用体积估算
 
 ```
 Free 版本:
-  Python 基础层:      ~150 MB
-  业务代码 + FastAPI:  ~50 MB
-  EasyOCR + 模型:     ~120 MB  (轻量版，纯 CPU wheels)
-  llama.cpp 二进制:    ~50 MB
-  本地小模型文件:      ~400 MB  (qwen3-0.5b q4_k_m)
+  Python 虚拟环境:      ~300 MB
+  业务代码 + FastAPI:   ~50 MB
+  EasyOCR + 模型:       ~120 MB  (轻量版，纯 CPU wheels)
+  llama-cpp-python:     ~50 MB
+  本地小模型文件:        ~400 MB  (qwen2.5-0.5b q4_k_m)
   ─────────────────────────
-  合计:               ~770 MB
+  合计:                 ~920 MB
 
-Pro/Pro+ 用户如需本地降级，镜像 ~200 MB（不含模型）
+Pro/Pro+ 用户如需本地降级，安装 ~200 MB（不含模型）
 ```
 
 ---
@@ -556,7 +577,7 @@ def build_approval_graph():
 
 ```
 ┌─────────────────────────────────────────┐
-│  ChromaDB / 向量数据库                    │
+│  TF-IDF 字符级 n-gram 索引               │
 ├─────────────────────────────────────────┤
 │  chunk_1: 《山东科技大学财务报销管理办法》 │
 │           第三章第十二条：单笔报销...      │
@@ -926,291 +947,80 @@ def add_api_key(key_type, ...):
 
 ---
 
-## 十一、Docker 部署架构（二选一）
+## 十一、部署架构（二选一）
 
-> **核心原则：** 部署无论几个容器，都只用 `docker compose up -d` 一个命令。
+> **核心原则：** 项目支持本地开发（start.sh 一键启动）和 Docker 容器化两种部署方式。
+> 当前以本地开发模式为主（`zhishitong/start.sh`），Docker 部署方案作为未来规划。
 
-### Docker 模型预加载策略（⚠️ 关键）
+### 模型预加载策略（⚠️ 关键）
 
 **问题：** 模型加载到内存需 3-5 秒，如果等到第一次请求再加载会卡住用户。
 
-**解决方案：** 容器的 `entrypoint.sh` 在 FastAPI 启动前，先通过 HTTP 轮询等待 llama-server 的 `/health` 端点就绪，确保模型已经在内存中。
+**解决方案：** `start.sh` 在 FastAPI 启动前，先通过 HTTP 轮询等待推理服务（llama-cpp-python uvicorn）的 `/health` 端点就绪，确保模型已经在内存中。
 
 ```bash
-# ===== Dockerfile 中的 entrypoint.sh =====
-#!/bin/bash
-set -e
-
-echo "[entrypoint] 等待 llama-server 就绪（模型加载中...）"
-
-# 最大等待 120 秒
-for i in $(seq 1 120); do
-    if curl -sf http://127.0.0.1:18080/health > /dev/null 2>&1; then
-        echo "[entrypoint] ✅ llama-server 已就绪 (耗时 ${i}s)"
-        break
-    fi
-    sleep 1
+# ===== start.sh 中的模型预加载等待逻辑 =====
+INFER_READY=0
+for i in $(seq 1 60); do
+  if curl -sf http://127.0.0.1:18080/health >/dev/null 2>&1; then
+    INFER_READY=1
+    break
+  fi
+  sleep 2
 done
 
-# 检查是否超时
-if ! curl -sf http://127.0.0.1:18080/health > /dev/null 2>&1; then
-    echo "[entrypoint] ❌ llama-server 启动超时！"
-    exit 1
-fi
-
-echo "[entrypoint] 启动 FastAPI..."
-exec uvicorn backend.main:app --host 0.0.0.0 --port 8080
-```
-
-```dockerfile
-# Dockerfile 末尾
-COPY entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh
-CMD ["/app/entrypoint.sh"]
+# 推理服务就绪后再启动后端
+PYTHONPATH="$BACKEND_DIR" uvicorn main:app --host 0.0.0.0 --port 8080 --reload &
 ```
 
 **时间预估：**
 | 阶段 | 耗时 | 说明 |
 |------|------|------|
-| llama-server 进程启动 | ~1s | 二进制加载 |
-| 模型加载到内存 (`--mlock`) | ~2-5s | 0.5B q4_k_m 约 400MB |
-| 首次推理（热身） | ~0.5s | CPU 执行一次空推理 |
-| **总计** | **~3-7s** | 用户第一次请求即热状态 |
+| llama-cpp-python 模型加载 | ~2-5s | 0.5B q4_k_m 约 400MB |
+| GPU 加速初始化（如有） | ~1-2s | Metal/CUDA/ROCm |
+| 首次推理（热身） | ~0.5s | CPU/GPU 执行一次空推理 |
+| **总计** | **~3-8s** | 用户第一次请求即热状态 |
 
 ---
 
-### 方案 A：单容器（最简，推荐比赛演示用）
+### 方案 A：本地开发（推荐，当前主力）
 
-适合：演示、功能验证、本地测试
-镜像大小：~770MB（含模型）
-
-```
-docker compose -f docker-compose.single.yml up -d
-```
+适合：演示、功能验证、本地开发、比赛演示
+启动方式：`cd zhishitong && bash start.sh`
 
 ```
 ┌────────────────────────────────────────────────────────────┐
-│                     Docker 单容器                            │
-│                     entrypoint.sh 启动流程:                  │
+│                    本地开发环境                              │
+│                    start.sh 启动流程:                       │
 │                                                             │
-│  1. supervisord 启动                                       │
-│     ├─ llama-server --mlock (预加载 0.5B 模型)             │
-│     └─ 轮询 /health 直到就绪                                │
+│  1. 虚拟环境检测 + 依赖安装                                  │
 │                                                             │
-│  2. 入口脚本等待后启动 FastAPI                               │
-│     ├─ 用户管理 / OCR路由 / API Key池                       │
-│     ├─ 本地模型调用层（HTTP 调用 127.0.0.1:18080）          │
-│     ├─ LangGraph 审批流程引擎                               │
-│     └─ Serve 前端静态文件                                    │
+│  2. 推理服务启动（llama-cpp-python + uvicorn :18080）       │
+│     ├─ 自动 GPU 检测（Metal/CUDA/ROCm/CPU）                 │
+│     ├─ Qwen2.5-0.5B GGUF 模型加载                           │
+│     └─ 暴露 OpenAI 兼容 API                                 │
 │                                                             │
-│  3. EasyOCR 作为 Python 库直接调用（无需额外进程）           │
+│  3. 后端启动（uvicorn :8080）                                │
+│     ├─ 用户管理 / OCR 路由 / API Key 池                     │
+│     ├─ Redis 缓存 & 限流（可选）                             │
+│     ├─ RAG TF-IDF 政策检索                                  │
+│     └─ 审批流程引擎                                         │
 │                                                             │
-│  卷挂载:                                                     │
-│    ./data/uploads → /app/uploads        (上传文件)          │
-│    ./data/db → /app/data                (数据库)           │
+│  4. 前端启动（Vite :5173）                                   │
+│                                                             │
+│  存储:                                                       │
+│    ./zhishitong/data → SQLite 数据库                        │
+│    ./uploads → 用户上传文件                                  │
 └────────────────────────────────────────────────────────────┘
 ```
 
-#### `docker-compose.single.yml`
+### 方案 B：Docker 容器化（未来规划）
 
-```yaml
-version: "3.9"
-services:
-  zhishitong:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    ports:
-      - "8080:8080"
-    volumes:
-      - uploads:/app/uploads
-      - db_data:/app/data
-    environment:
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
-      - LLM_API_BASE=${LLM_API_BASE:-https://dashscope.aliyuncs.com/compatible-mode}
-      - LLM_API_KEY=${LLM_API_KEY:-}
-      - LLM_MODEL=${LLM_MODEL:-qwen-vl-plus}
-      - LOCAL_MODEL_PATH=/app/models/qwen3-0.5b-instruct-q4_k_m.gguf
-    restart: unless-stopped
+适合：生产部署、团队协作、CI/CD
+部署命令：`docker compose up -d`
 
-volumes:
-  uploads:
-  db_data:
-```
-
----
-
-### 方案 B：多容器（推荐，解耦、好维护）
-
-适合：生产部署、多人协作、需要精细控制
-部署命令同样只有一个：
-
-```
-docker compose -f docker-compose.multi.yml up -d
-```
-
-```
-                     链式启动顺序（depends_on 控制）
-                     ┌──────────────────────────────┐
-                     │  step 1: PostgreSQL           │
-                     │  数据库容器                    │
-                     │  pg_isready ✅               │
-                     └──────────┬───────────────────┘
-                                │  depends_on: db
-                                ▼
-                     ┌──────────────────────────────┐
-                     │  step 2: llama-server         │
-                     │  本地小模型推理服务            │
-                     │  /health ✅ (模型已预加载)    │
-                     └──────────┬───────────────────┘
-                                │  depends_on:
-                                │    db + llama (both healthy)
-                                ▼
-                     ┌──────────────────────────────┐
-                     │  step 3: backend (FastAPI)    │
-                     │  OCR路由 → LangGraph审批      │
-                     │  → 用户管理 → Key池           │
-                     └──────────┬───────────────────┘
-                                │  depends_on: backend
-                                ▼
-                     ┌──────────────────────────────┐
-                     │  step 4: nginx                │
-                     │  反向代理 + 前端静态文件       │
-                     │  对外暴露 :80                 │
-                     └──────────────────────────────┘
-
-┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐
-│  nginx (:80)     │◀─│  backend (:8080) │◀─│  llama-server    │
-│  反向代理        │  │  FastAPI         │  │  (:18080)        │
-│  前端静态文件    │  │  ┌────────────┐  │  │  本地小模型推理  │
-│                  │  │  │ LangGraph  │  │  │  + EasyOCR 进程  │
-│                  │  │  │ 审批引擎   │  │  │                  │
-│                  │  │  └────────────┘  │  └──────────────────┘
-│                  │  │  ┌────────────┐  │
-│                  │  │  │ API Key池  │  │  ┌──────────────────┐
-│                  │  │  └────────────┘  │  │  PostgreSQL       │
-│                  │  │  ┌────────────┐  │  │  (:5432)         │
-│                  │  │  │ 数据管理   │  │  └──────────────────┘
-│                  │  │  │ (软删除)   │  │
-│                  │  │  └────────────┘  │
-└──────────────────┘  └──────────────────┘
-```
-
-#### `docker-compose.multi.yml`
-
-```yaml
-version: "3.9"
-
-volumes:
-  postgres_data:
-  uploads:
-
-services:
-  # 1. 数据库
-  db:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_DB: zhishitong
-      POSTGRES_USER: zhishitong
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-change_me}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD", "pg_isready", "-U", "zhishitong"]
-      interval: 5s
-      retries: 5
-    restart: unless-stopped
-
-  # 2. 本地模型推理服务
-  llama-server:
-    build:
-      dockerfile: Dockerfile.llama
-      context: .
-    ports:
-      - "18080:18080"
-    volumes:
-      - ./models:/models:ro
-    command: >
-      --model /models/qwen3-0.5b-instruct-q4_k_m.gguf
-      --host 0.0.0.0 --port 18080
-      --n-gpu-layers 0 --mlock --cont-batching
-      --ctx-size 4096 --threads 4
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:18080/health"]
-      interval: 10s
-      retries: 20          # 多等几次，模型加载可能慢
-      start_period: 15s    # 首次给 15s 缓冲
-    restart: unless-stopped
-
-  # 3. 后端
-  backend:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    ports:
-      - "8080:8080"
-    volumes:
-      - uploads:/app/uploads
-    environment:
-      DATABASE_URL: postgresql://zhishitong:${DB_PASSWORD}@db:5432/zhishitong
-      LLAMA_SERVER_URL: http://llama-server:18080
-      LLM_API_BASE: ${LLM_API_BASE}
-      LLM_API_KEY: ${LLM_API_KEY}
-      LLM_MODEL: ${LLM_MODEL:-qwen-vl-plus}
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
-    depends_on:
-      db:
-        condition: service_healthy
-      llama-server:
-        condition: service_healthy
-    restart: unless-stopped
-
-  # 4. Nginx
-  nginx:
-    image: nginx:alpine
-    ports:
-      - "80:80"
-    volumes:
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
-    depends_on:
-      - backend
-    restart: unless-stopped
-```
-
-### 两种方案对比
-
-| 对比项 | 方案 A：单容器 | 方案 B：多容器 |
-|--------|:-------------:|:-------------:|
-| 部署命令 | `docker compose up -d` | `docker compose up -d` |
-| 容器数量 | 1 | 4（db / llama / backend / nginx） |
-| 镜像大小 | ~770MB | 各容器独立，总和 ~1.2GB |
-| 模型预加载方式 | entrypoint.sh 轮询 | healthcheck 等待 |
-| 启动时间 | 5-10s | 30-60s（下载 + 链式等待） |
-| 推荐场景 | **比赛演示 / 快速原型** | **产品化 / 团队使用** |
-
----
-
-### Dockerfile 清单
-
-| 文件 | 用途 | 架构 |
-|------|------|------|
-| `Dockerfile` | 后端 + 前端静态文件（单容器用这个即可） | amd64 + arm64 |
-| `Dockerfile.llama` | 仅编译 llama.cpp + 推理服务（< 100MB） | 每个架构单独构建 |
-| `Dockerfile.nginx` | Nginx 反向代理配置（极简） | 架构无关 |
-
-### 构建命令
-
-```bash
-# 单容器（比赛演示）
-docker buildx build --platform linux/amd64,linux/arm64 -t zhishitong:latest .
-docker compose -f docker-compose.single.yml up -d
-
-# 多容器（产品化）
-docker compose -f docker-compose.multi.yml build
-docker compose -f docker-compose.multi.yml up -d
-```
-
----
+包含：PostgreSQL 数据库 + 推理服务容器 + FastAPI 后端 + Nginx 反向代理。
+Dockerfile 和 docker-compose.yml 待后续补充。
 
 ## 十二、学校租户模型（Tenant Model）
 
@@ -1249,7 +1059,7 @@ docker compose -f docker-compose.multi.yml up -d
 
 | 层级 | 文字提取 | JSON 填充 | 调用限制 |
 |------|---------|-----------|---------|
-| **Free** | EasyOCR（本地） | 本地小模型（Qwen3-0.5B） | 不限制（纯本地） |
+| **Free** | EasyOCR（本地）+ PDF 文本提取 | 本地小模型（Qwen2.5-0.5B） | 不限制（纯本地） |
 | **Pro** | 多模态 LLM API | 同一 LLM | 学校管理员设定月度配额 |
 | **Pro+** | 多模态 LLM API | 同一 LLM | 不限制 |
 
@@ -1873,15 +1683,27 @@ fi
 |---|:---:|------|------|
 | 1 | ✅ | Free 层 OCR 方案 | EasyOCR 文字提取 + 本地小模型 JSON 填充（两阶段） |
 | 2 | ✅ | 审批流程设计 | LangGraph 编排（见第五章） |
-| 3 | ✅ | 模型预加载策略 | entrypoint.sh 轮询 + llama-server `--mlock` |
+| 3 | ✅ | 模型预加载策略 | start.sh 轮询 + llama-cpp-python 进程启动即加载 |
 | 4 | ✅ | API Key 加密 | Fernet 对称加密，密钥通过环境变量注入 |
 | 5 | ✅ | JSON 动态模板渲染 | 后端 JSON Schema 定义，前端按 type 渲染 |
 | 6 | ✅ | 文件上传安全 | MIME 白名单 + 魔数校验 + 文件名 UUID 化 + noexec 卷 |
-| 7 | ✅ | 部署方式 | **多容器**，Docker Compose 一键启动 |
-| 8 | ✅ | 本地模型 GGUF 安装 | 提前下载 Qwen3-0.5B q4_k_m，打包进 Docker 镜像；后续版本通过卷挂载替换 |
+| 7 | ✅ | 部署方式 | **本地开发**（start.sh 一键启动）+ Docker（未来规划） |
+| 8 | ✅ | 本地模型 GGUF | 使用 Qwen2.5-0.5B GGUF，放在 models/ 目录，start.sh 自动检测 |
 | 9 | ⬜ | EasyOCR 在 ARM 上的中文识别精度 | 后续需在 ARM Mac 上实际测试确认 |
-| 10 | ✅ | llama-server 并发上限 | Demo 阶段限制 2 个请求排队，产品化后扩容 |
+| 10 | ✅ | 推理服务并发 | llama-cpp-python 支持并发请求排队（cont-batching），默认上下文 2048 tokens |
 | 11 | ⬜ | 学校级套餐迁移 | 从用户级 tier 过渡到 school_config 表，见第十二章 |
 | 12 | ⬜ | 日志链式防篡改 | SHA-256 链式校验，见第十四章 |
 | 13 | ⬜ | 灰度发布机制 | 按学校灰度新模板/规则，见第十三章 |
 | 14 | ⬜ | 文件扫描（AV/CDR） | 上传文件过沙箱/杀毒，见第八章待补充 |
+
+---
+
+## 二十七、变更摘要
+
+| 版本 | 变更内容 |
+|------|---------|
+| v1.0 → v2.0 | 三级分层体系；API Key 池；软删除；4 面板管理后台 |
+| **v2.0 → v3.0** | Free 层改为 EasyOCR 提取 + 本地小模型 JSON 填充（两阶段）；LangGraph 审批流程；AES Fernet 密钥存储；JSON 动态模板渲染；文件上传安全；单/多容器架构 |
+| **v3.0 → v4.0** | 新增学校管理员角色；审批引擎改为「AI 辅助，不自动结论」；文档类型前端汉化；请假单固定字段；学校字段 tenant 化 |
+| **v4.0 → v4.1** | 角色体系：去掉「超级管理员」，改为「信息管理员」（API Key/数据/监控，不参与审批和用户管理）；新增第十二章「学校租户模型」：学校级套餐、租户隔离、学校管理员边界；新增第十三章「流程版本治理」：版本号规范、实例迁移策略、回滚与灰度；新增第十四章「审计合规与日志治理」：审计分层、日志防篡改、留存期限、数据脱敏、取证流程 |
+| **v4.1 → v5.0** | 🆕 **重大更新** — 对接山科大真实审批流程（扩展至 19 类模板）；多阶段审批流（部门→财务→学校，金额阈值跳过）；新增 RAG + TF-IDF 政策知识库（6 个 AI 端点）；智能预审规则引擎（field_required / field_range / duplicate_check）；站内信通知系统（8 种通知类型 + 红点角标）；资源预约系统（会议室 + 公车）；数据看板 Dashboard（按角色展示 + 30天趋势）；公告 & 制度文库（公告/政策/办事指南 + 置顶 + 阅读量）；AI 政策问答 ChatBot（右下角悬浮 + localStorage 持久化）；LoRA 微调管线（山科大语料 → Qwen2.5-0.5B → GGUF）；管理员模拟测试面板（临时切换身份 + 安全隔离）；推理服务 GPU 自动检测（Metal/CUDA/ROCm/CPU）；审批意见模板 + 审批代理；start.sh 自动检测微调模型并切换；Redis 缓存 + 限流 + Key 池原子计数；PDF 文本直接提取（pypdf）；前端极光背景性能优化 |

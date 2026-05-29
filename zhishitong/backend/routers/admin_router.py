@@ -23,6 +23,7 @@ from services.crypto_service import encrypt, decrypt
 from config import MAX_OCR_KEYS, MAX_FILL_KEYS, MAX_LLM_KEYS
 from services.logging_service import LogCategory, log
 from services.key_pool import get_pool_stats
+from services.file_service import delete_physical
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -791,15 +792,13 @@ def hard_delete_record(
     if not record:
         raise HTTPException(404, "记录不存在")
 
-    import os
-    from config import UPLOAD_DIR
     if record.storage_path:
-        full_path = UPLOAD_DIR.parent / record.storage_path
         try:
-            if full_path.exists():
-                os.remove(full_path)
-        except Exception:
-            pass
+            delete_physical(record.storage_path)
+        except HTTPException:
+            raise
+        except Exception as exc:
+            log(LogCategory.ADMIN, "warning", "物理文件删除失败", user_id=admin.id, record_id=record.id, error=str(exc))
 
     record.hard_deleted = True
     record.is_deleted = True

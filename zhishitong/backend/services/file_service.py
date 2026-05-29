@@ -46,8 +46,19 @@ def store_file(content: bytes, mime_type: str, user_id: int) -> str:
     return str(file_path.relative_to(UPLOAD_DIR.parent))
 
 
+def resolve_storage_path(storage_path: str) -> Path:
+    """Resolve a stored upload path and ensure it cannot escape UPLOAD_DIR."""
+    base = UPLOAD_DIR.resolve()
+    full = (UPLOAD_DIR.parent / storage_path).resolve()
+    try:
+        full.relative_to(base)
+    except ValueError:
+        raise HTTPException(403, "非法文件路径")
+    return full
+
+
 def delete_physical(storage_path: str) -> None:
     """物理删除文件"""
-    full = UPLOAD_DIR.parent / storage_path
+    full = resolve_storage_path(storage_path)
     if full.exists():
         full.unlink()
