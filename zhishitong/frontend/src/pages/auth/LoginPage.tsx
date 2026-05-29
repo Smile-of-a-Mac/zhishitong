@@ -141,10 +141,10 @@ export default function LoginPage() {
         <button
           onClick={handleSubmit}
           disabled={loading}
-          className="glass-btn"
-          style={{ width: '100%', padding: '12px 0', fontSize: 15, fontWeight: 600 }}
+          className="glass-btn glass-btn-lg"
+          style={{ width: '100%' }}
         >
-          {loading ? '处理中...' : mode === 'login' ? '登 录' : '注 册'}
+          {loading ? '处理中…' : mode === 'login' ? '登  录' : '注  册'}
         </button>
 
         <hr className="glass-divider" />

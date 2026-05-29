@@ -3,6 +3,7 @@ import axios from 'axios'
 import { getDocTypeLabel } from '../../constants/docTypes'
 import { getFieldLabel } from '../../constants/fieldLabels'
 import GlassCard from '../../components/GlassCard'
+import AuthImage from '../../components/AuthImage'
 import AIDecisionPanel from '../../components/AIDecisionPanel'
 import ApprovalProgressBar from '../../components/ApprovalProgressBar'
 import { STATUS_LABELS } from '../../utils/constants'
@@ -176,6 +177,12 @@ export default function DeptAdminPage() {
   }
 
   const showDetail = async (id: number) => {
+    // 优先从已加载列表找
+    const existing = records.find(r => r.id === id)
+    if (existing) {
+      setSelectedRecord(existing)
+      return
+    }
     try {
       const res = await axios.get(`/api/dept/records/${id}`)
       setSelectedRecord(res.data)
@@ -302,7 +309,7 @@ export default function DeptAdminPage() {
           <option value="completed">已完成</option>
         </select>
         <button onClick={() => { setFilterStatus(''); setFilterStage(''); fetchRecords(); fetchStats() }}
-          className="glass-btn glass-btn-outline glass-btn-sm">🔄 刷新</button>
+          className="glass-btn glass-btn-outline glass-btn-sm">刷新</button>
         <span style={{ marginLeft: 'auto', fontSize: 13, color: 'var(--text-secondary)' }}>共 {total} 条</span>
       </GlassCard>
 
@@ -343,7 +350,7 @@ export default function DeptAdminPage() {
                     </td>
                     <td style={{ whiteSpace: 'nowrap' }}>
                       <button onClick={() => showDetail(r.id)}
-                        className="glass-btn glass-btn-outline glass-btn-sm">📋 查看详情</button>
+                        className="glass-btn glass-btn-outline glass-btn-sm">查看详情</button>
                     </td>
                   </tr>
                 ))}
@@ -353,21 +360,24 @@ export default function DeptAdminPage() {
         )}
 
       {/* 分页 */}
-      <div style={{ marginTop: 12, display: 'flex', justifyContent: 'center', gap: 8, alignItems: 'center' }}>
+      <div style={{ marginTop: 16, display: 'flex', justifyContent: 'center', gap: 8, alignItems: 'center' }}>
         <button disabled={page <= 1} onClick={() => setPage(p => p - 1)}
           className="glass-btn glass-btn-outline glass-btn-sm">上一页</button>
-        <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{page}</span>
+        <span style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 500 }}>第 {page} 页</span>
         <button disabled={page * 20 >= total} onClick={() => setPage(p => p + 1)}
           className="glass-btn glass-btn-outline glass-btn-sm">下一页</button>
       </div>
 
       {/* 统一详情 + 审批弹窗 */}
       {selectedRecord && (
-        <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
-        }} onClick={() => { setSelectedRecord(null); setReviewId(null) }}>
-          <GlassCard strong style={{ width: 560, maxWidth: '90vw', maxHeight: '90vh', overflow: 'auto' }}
+        <div
+          className="modal-overlay"
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+          }}
+          onClick={() => { setSelectedRecord(null); setReviewId(null) }}>
+          <GlassCard strong className="modal-card" style={{ width: 560, maxWidth: '90vw', maxHeight: '90vh', overflow: 'auto' }}
             onClick={e => e.stopPropagation()}>
             <h3 style={{ margin: '0 0 16px', fontSize: 17 }}>
               📋 事务详情 #{selectedRecord.id}
@@ -391,9 +401,9 @@ export default function DeptAdminPage() {
             {/* ---- 图片 ---- */}
             {selectedRecord.image_url && (
               <div style={{ marginBottom: 12, textAlign: 'center' }}>
-                <img src={selectedRecord.image_url} alt="文件" style={{
+                <AuthImage src={selectedRecord.image_url} alt="文件" style={{
                   maxWidth: '100%', maxHeight: 240, borderRadius: 'var(--radius-xs)',
-                  border: '1px solid var(--glass-border)', cursor: 'pointer',
+                  border: '1px solid var(--glass-border)', cursor: 'pointer', objectFit: 'contain',
                 }} onClick={() => window.open(selectedRecord.image_url, '_blank')} />
               </div>
             )}
@@ -455,20 +465,21 @@ export default function DeptAdminPage() {
                 {/* 操作按钮 */}
                 <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
                   {[
-                    { action: 'approved' as const, label: '✓ 通过', color: 'var(--green)' },
-                    { action: 'needs_revision' as const, label: '📝 需修改', color: 'var(--orange)' },
-                    { action: 'rejected' as const, label: '✗ 不通过', color: 'var(--red)' },
+                    { action: 'approved' as const, label: '通过', color: 'var(--green)' },
+                    { action: 'needs_revision' as const, label: '需修改', color: 'var(--orange)' },
+                    { action: 'rejected' as const, label: '不通过', color: 'var(--red)' },
                   ].map(btn => (
                     <button key={btn.action} onClick={() => {
                       setReviewId(selectedRecord.id)
                       setReviewAction(btn.action)
                       setReviewReason(reviewId === selectedRecord.id && reviewAction === btn.action ? reviewReason : '')
                     }} style={{
-                      flex: 1, padding: '8px 0', border: `1px solid ${btn.color}`,
+                      flex: 1, padding: '10px 0', border: `1.5px solid ${btn.color}`,
                       background: reviewId === selectedRecord.id && reviewAction === btn.action ? btn.color : 'transparent',
                       color: reviewId === selectedRecord.id && reviewAction === btn.action ? '#fff' : btn.color,
-                      borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 500,
-                      transition: 'all 0.2s ease',
+                      borderRadius: 10, cursor: 'pointer', fontSize: 14, fontWeight: 550,
+                      fontFamily: 'var(--font-stack)',
+                      transition: 'all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1)',
                     }}>{btn.label}</button>
                   ))}
                 </div>
@@ -488,12 +499,12 @@ export default function DeptAdminPage() {
                     <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                       <button onClick={getAiSuggestion} disabled={suggesting}
                         className="glass-btn glass-btn-outline glass-btn-sm" style={{ borderColor: 'var(--purple)', color: 'var(--purple)' }}>
-                        {suggesting ? '生成中...' : '💡 获取智能建议'}
+                        {suggesting ? '生成中…' : 'AI 智能填写意见'}
                       </button>
-                      <button onClick={submitReview} disabled={submitting} className="glass-btn" style={{
+                      <span style={{ flex: 1 }} />
+                      <button onClick={submitReview} disabled={submitting} className="glass-btn glass-btn-lg" style={{
                         background: reviewAction === 'approved' ? 'var(--green)' : reviewAction === 'needs_revision' ? 'var(--orange)' : 'var(--red)',
-                        marginLeft: 'auto',
-                      }}>{submitting ? '提交中...' : '确认提交'}</button>
+                      }}>{submitting ? '提交中…' : '确认提交'}</button>
                     </div>
                   </>
                 )}

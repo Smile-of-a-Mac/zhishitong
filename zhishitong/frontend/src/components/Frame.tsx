@@ -61,17 +61,17 @@ function NavLink({ to, label, currentPath, onClick }: { to: string; label: strin
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: 2,
+        gap: 6,
         textDecoration: 'none',
-        fontSize: 13,
+        fontSize: 14,
         fontWeight: isActive ? 600 : 400,
         color: isActive ? 'var(--accent)' : 'var(--text-primary)',
-        padding: '7px 12px 7px 10px',
-        borderRadius: 8,
-        borderLeft: `2.5px solid ${isActive ? 'var(--accent)' : 'transparent'}`,
+        padding: '10px 14px 10px 12px',
+        borderRadius: 10,
+        borderLeft: `3px solid ${isActive ? 'var(--accent)' : 'transparent'}`,
         background: isActive ? 'rgba(0,122,255,0.08)' : 'transparent',
         transition: 'background 0.15s ease, color 0.15s ease',
-        marginBottom: 1,
+        marginBottom: 2,
         WebkitUserSelect: 'none',
         userSelect: 'none',
       } as React.CSSProperties}
@@ -271,21 +271,21 @@ export default function Frame({ children }: { children: React.ReactNode }) {
         {/* 导航 */}
         <nav style={{
           flex: 1,
-          padding: '8px 10px 12px',
+          padding: '12px 12px 16px',
           overflowY: 'auto',
         }}>
           {sections.map((section, si) => (
-            <div key={si} style={{ marginBottom: 2 }}>
+            <div key={si} style={{ marginBottom: 4 }}>
               {section.header ? (
                 <div style={{
-                  fontSize: 10, fontWeight: 600, letterSpacing: '0.07em',
+                  fontSize: 11, fontWeight: 650, letterSpacing: '0.05em',
                   textTransform: 'uppercase', color: 'var(--text-tertiary)',
-                  padding: si === 0 ? '6px 10px 3px' : '12px 10px 3px',
+                  padding: si === 0 ? '4px 12px 4px' : '14px 12px 4px',
                 }}>
                   {section.header}
                 </div>
               ) : (
-                si > 0 && <div style={{ height: 1, background: 'var(--divider)', margin: '6px 10px 8px' }} />
+                si > 0 && <div style={{ height: 1, background: 'var(--divider)', margin: '8px 12px 10px' }} />
               )}
               {section.items.map(item => (
                 <NavLink
@@ -302,12 +302,12 @@ export default function Frame({ children }: { children: React.ReactNode }) {
 
         {/* 底部用户信息 */}
         <div style={{
-          padding: '12px 14px',
+          padding: '14px 16px',
           borderTop: '1px solid var(--divider)',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
             <div style={{
-              width: 34, height: 34, borderRadius: 10, flexShrink: 0,
+              width: 36, height: 36, borderRadius: 12, flexShrink: 0,
               background: 'linear-gradient(135deg, var(--accent) 0%, var(--purple) 100%)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 14, fontWeight: 700, color: '#fff',
@@ -334,8 +334,8 @@ export default function Frame({ children }: { children: React.ReactNode }) {
           </div>
           <button
             onClick={() => { logout(); nav('/login') }}
-            className="glass-btn glass-btn-outline glass-btn-sm"
-            style={{ width: '100%' }}
+            className="glass-btn glass-btn-outline"
+            style={{ width: '100%', padding: '8px 0', fontSize: 14 }}
           >
             退出登录
           </button>

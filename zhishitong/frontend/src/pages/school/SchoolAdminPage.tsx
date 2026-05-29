@@ -62,7 +62,7 @@ export default function SchoolAdminPage() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <h1 className="page-title" style={{ margin: 0 }}>🏫 部门管理员管理</h1>
         <button onClick={() => { setShowAdd(!showAdd); setEditId(null) }}
-          className="glass-btn">+ 新建管理员</button>
+          className="glass-btn">新建管理员</button>
       </div>
 
       <GlassCard size="xs" style={{ marginBottom: 16, background: 'rgba(0,122,255,0.08)', border: '1px solid rgba(0,122,255,0.2)' }}>
@@ -89,8 +89,8 @@ export default function SchoolAdminPage() {
               <input value={newDept} onChange={e => setNewDept(e.target.value)} placeholder="如: 计算机学院"
                 className="glass-input" />
             </div>
-            <div>
-              <button onClick={create} className="glass-btn glass-btn-success" style={{ marginRight: 6 }}>创建</button>
+            <div className="btn-group">
+              <button onClick={create} className="glass-btn glass-btn-success">创建</button>
               <button onClick={() => setShowAdd(false)} className="glass-btn glass-btn-outline">取消</button>
             </div>
           </div>
@@ -138,17 +138,17 @@ export default function SchoolAdminPage() {
                   </td>
                   <td style={{ whiteSpace: 'nowrap' }}>
                     {editId === d.id ? (
-                      <>
-                        <button onClick={() => saveEdit(d.id)} className="glass-btn glass-btn-sm" style={{ marginRight: 4 }}>保存</button>
+                      <div className="btn-group" style={{ gap: 4 }}>
+                        <button onClick={() => saveEdit(d.id)} className="glass-btn glass-btn-sm">保存</button>
                         <button onClick={() => setEditId(null)} className="glass-btn glass-btn-outline glass-btn-sm">取消</button>
-                      </>
+                      </div>
                     ) : (
-                      <>
+                      <div className="btn-group" style={{ gap: 4 }}>
                         <button onClick={() => { setEditId(d.id); setEditDept(d.department || ''); setEditActive(d.is_active) }}
-                          className="glass-btn glass-btn-outline glass-btn-sm" style={{ marginRight: 4 }}>编辑</button>
+                          className="glass-btn glass-btn-outline glass-btn-sm">编辑</button>
                         <button onClick={() => remove(d.id, d.username)}
                           className="glass-btn glass-btn-danger glass-btn-sm">删除</button>
-                      </>
+                      </div>
                     )}
                   </td>
                 </tr>

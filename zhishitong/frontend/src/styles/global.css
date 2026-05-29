@@ -24,13 +24,13 @@
   --radius-sm: 12px;
   --radius-xs: 8px;
   --font-stack: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', sans-serif;
-  --sidebar-width: 220px;
+  --sidebar-width: 240px;
   --floating-chat-safe: 92px;
 }
 
 @media (max-width: 768px) {
   :root {
-    --sidebar-width: 200px;
+    --sidebar-width: 220px;
   }
 }
 
@@ -369,30 +369,49 @@ textarea.glass-input {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 7px 18px;
+  gap: 5px;
+  padding: 8px 20px;
   border: none;
-  border-radius: var(--radius-xs);
-  font-size: 13px;
-  font-weight: 500;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 510;
   font-family: var(--font-stack);
   cursor: pointer;
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
   background: var(--accent);
   color: #fff;
+  letter-spacing: 0.01em;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  outline: none;
 }
 
 .glass-btn:hover {
-  opacity: 0.85;
-  transform: scale(0.98);
+  opacity: 0.88;
+  transform: scale(0.975);
+  box-shadow: 0 4px 14px rgba(0, 122, 255, 0.25);
+}
+
+.glass-btn:active {
+  transform: scale(0.95);
+  opacity: 0.75;
+  transition: all 0.08s ease;
+}
+
+.glass-btn:focus-visible {
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.35);
 }
 
 .glass-btn:disabled {
-  opacity: 0.5;
+  opacity: 0.40;
   cursor: not-allowed;
   transform: none;
+  box-shadow: none;
+  filter: saturate(0.3);
 }
 
+/* 次要按钮 */
 .glass-btn-outline {
   background: transparent;
   border: 1px solid var(--glass-border);
@@ -401,8 +420,21 @@ textarea.glass-input {
 
 .glass-btn-outline:hover {
   background: var(--glass-bg);
+  border-color: var(--accent);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+  color: var(--accent);
 }
 
+.glass-btn-outline:active {
+  background: rgba(0, 122, 255, 0.08);
+}
+
+.glass-btn-outline:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.2);
+}
+
+/* 危险按钮 */
 .glass-btn-danger {
   background: transparent;
   border: 1px solid var(--red);
@@ -410,17 +442,61 @@ textarea.glass-input {
 }
 
 .glass-btn-danger:hover {
-  background: rgba(255, 59, 48, 0.1);
+  background: rgba(255, 59, 48, 0.08);
+  box-shadow: 0 2px 10px rgba(255, 59, 48, 0.15);
 }
 
+.glass-btn-danger:active {
+  background: rgba(255, 59, 48, 0.15);
+  transform: scale(0.95);
+}
+
+.glass-btn-danger:focus-visible {
+  box-shadow: 0 0 0 3px rgba(255, 59, 48, 0.25);
+}
+
+/* 成功按钮 */
 .glass-btn-success {
   background: var(--green);
   color: #fff;
 }
 
+.glass-btn-success:hover {
+  box-shadow: 0 4px 14px rgba(52, 199, 89, 0.3);
+}
+
+.glass-btn-success:focus-visible {
+  box-shadow: 0 0 0 3px rgba(52, 199, 89, 0.3);
+}
+
+/* 小尺寸按钮 */
 .glass-btn-sm {
-  padding: 4px 12px;
-  font-size: 12px;
+  padding: 5px 14px;
+  font-size: 13px;
+  border-radius: 8px;
+  gap: 4px;
+}
+
+/* 大尺寸按钮（用于主要操作） */
+.glass-btn-lg {
+  padding: 10px 28px;
+  font-size: 15px;
+  border-radius: 12px;
+  gap: 6px;
+  font-weight: 550;
+}
+
+/* 占满宽度 */
+.glass-btn-block {
+  width: 100%;
+}
+
+/* 按钮组（自动间距） */
+.btn-group {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
 /* --- 10. 分割线 --- */
@@ -555,13 +631,7 @@ textarea.glass-input {
   animation: fadeInDown 0.5s 0.08s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 
-/* -- 按钮过渡增强 -- */
-.glass-btn {
-  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-.glass-btn-outline {
-  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
+/* -- 按钮过渡增强（统一由 .glass-btn 基类处理，此处不再覆盖） -- */
 
 /* -- 输入框过渡增强 -- */
 .glass-input {
@@ -778,6 +848,117 @@ nav a, nav button {
   100% {
     transform: scaleY(1) translateY(0);
     opacity: 1;
+  }
+}
+
+/* 通用可折叠区块 — grid 高度过渡（与 login 动画一致） */
+.collapsible-section {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.58s cubic-bezier(0.2, 0.85, 0.2, 1);
+}
+
+.collapsible-section > div {
+  overflow: hidden;
+}
+
+.collapsible-section.open {
+  grid-template-rows: 1fr;
+}
+
+.collapsible-inner {
+  transform-origin: top center;
+}
+
+.collapsible-section.open .collapsible-inner {
+  animation: loginSectionSpringIn 0.56s cubic-bezier(0.2, 0.85, 0.2, 1) both;
+}
+
+/* 原生 details 动画增强 */
+details.collapsible-details > .collapsible-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.58s cubic-bezier(0.2, 0.85, 0.2, 1);
+}
+
+details.collapsible-details > .collapsible-body > div {
+  overflow: hidden;
+}
+
+details.collapsible-details[open] > .collapsible-body {
+  grid-template-rows: 1fr;
+}
+
+details.collapsible-details .collapsible-inner {
+  transform-origin: top center;
+}
+
+details.collapsible-details[open] .collapsible-inner {
+  animation: loginSectionSpringIn 0.56s cubic-bezier(0.2, 0.85, 0.2, 1) both;
+}
+
+/* summary 交互增强 */
+details.collapsible-details > summary {
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: color 0.2s ease;
+}
+
+details.collapsible-details > summary:hover {
+  color: var(--accent);
+}
+
+/* 弹窗动画 */
+.modal-overlay {
+  animation: modalFadeIn 0.25s ease both;
+}
+
+.modal-overlay.modal-closing {
+  animation: modalFadeOut 0.2s ease both;
+}
+
+@keyframes modalFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes modalFadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+.modal-card {
+  animation: modalCardIn 0.45s cubic-bezier(0.2, 0.85, 0.2, 1) both;
+}
+
+.modal-card.modal-closing {
+  animation: modalCardOut 0.25s cubic-bezier(0.4, 0, 0.6, 1) both;
+}
+
+@keyframes modalCardIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.88) translateY(16px);
+  }
+  65% {
+    opacity: 1;
+    transform: scale(1.02) translateY(0);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes modalCardOut {
+  from {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.92) translateY(8px);
   }
 }
 

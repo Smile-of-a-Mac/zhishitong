@@ -152,8 +152,8 @@ export default function ManualFormPage() {
             )
           })()}
 
-          <button onClick={handleSubmit} disabled={submitting} className="glass-btn" style={{ marginTop: 16, padding: '8px 32px', fontSize: 14, width: '100%' }}>
-            {submitting ? '提交中...' : '📤 提交申报'}
+          <button onClick={handleSubmit} disabled={submitting} className="glass-btn glass-btn-success glass-btn-lg" style={{ width: '100%' }}>
+            {submitting ? '提交中…' : '提交申报'}
           </button>
 
           {result && (

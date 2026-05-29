@@ -123,13 +123,13 @@ export default function ResourceBookingPage() {
         {/* Tab 切换 */}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button
-            className={`glass-btn ${tab === 'meeting_room' ? 'glass-btn-primary' : 'glass-btn-outline'} glass-btn-sm`}
+            className={`glass-btn glass-btn-sm ${tab === 'meeting_room' ? '' : 'glass-btn-outline'}`}
             onClick={() => setTab('meeting_room')}
           >
             🏢 会议室
           </button>
           <button
-            className={`glass-btn ${tab === 'vehicle' ? 'glass-btn-primary' : 'glass-btn-outline'} glass-btn-sm`}
+            className={`glass-btn glass-btn-sm ${tab === 'vehicle' ? '' : 'glass-btn-outline'}`}
             onClick={() => setTab('vehicle')}
           >
             🚗 车辆
@@ -191,15 +191,15 @@ export default function ResourceBookingPage() {
                 <div style={{ marginTop: 6, display: 'flex', gap: 6 }}>
                   {b.status === 'pending' && isAdmin && (
                     <>
-                      <button className="glass-btn glass-btn-sm" style={{ color: '#34C759', fontSize: 12 }}
+                      <button className="glass-btn glass-btn-success glass-btn-sm"
                         onClick={() => handleApprove(b.id, 'approved')}>通过</button>
-                      <button className="glass-btn glass-btn-sm" style={{ color: '#FF3B30', fontSize: 12 }}
+                      <button className="glass-btn glass-btn-danger glass-btn-sm"
                         onClick={() => handleApprove(b.id, 'rejected')}>驳回</button>
                     </>
                   )}
                   {b.status !== 'cancelled' && (b.user_id === user?.id || isAdmin) && (
-                    <button className="glass-btn glass-btn-sm glass-btn-outline" style={{ fontSize: 12 }}
-                      onClick={() => handleCancel(b.id)}>取消</button>
+                    <button className="glass-btn glass-btn-outline glass-btn-sm"
+                      onClick={() => handleCancel(b.id)}>取消预约</button>
                   )}
                 </div>
               </GlassCard>
@@ -233,9 +233,9 @@ export default function ResourceBookingPage() {
               <input className="glass-input" placeholder="参与人员（逗号分隔）" value={formParticipants}
                 onChange={e => setFormParticipants(e.target.value)} />
               {formError && <div style={{ color: '#FF3B30', fontSize: 12 }}>{formError}</div>}
-              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <div className="btn-group" style={{ justifyContent: 'flex-end' }}>
                 <button className="glass-btn glass-btn-outline glass-btn-sm" onClick={() => setShowForm(false)}>取消</button>
-                <button className="glass-btn glass-btn-primary glass-btn-sm" onClick={handleBook}>确认预约</button>
+                <button className="glass-btn glass-btn-sm" onClick={handleBook}>确认预约</button>
               </div>
             </div>
           </GlassCard>

@@ -57,7 +57,7 @@ export default function AIDecisionPanel({ recordId, decision, onFillOpinion }: P
   const [cases, setCases] = useState<SimilarCase[]>([])
   const [casesLoading, setCasesLoading] = useState(false)
   const [opinionLoading, setOpinionLoading] = useState(false)
-  const [expanded, setExpanded] = useState(true)
+  const [policyOpen, setPolicyOpen] = useState(false)
 
   // 自动加载合规分析
   useEffect(() => {
@@ -116,16 +116,14 @@ export default function AIDecisionPanel({ recordId, decision, onFillOpinion }: P
         overflow: 'hidden',
       }}
     >
-      {/* 标题栏 */}
+      {/* 标题栏 — 始终展开 */}
       <div
-        onClick={() => setExpanded(v => !v)}
         style={{
           padding: '8px 14px',
           display: 'flex',
           alignItems: 'center',
           gap: 8,
-          cursor: 'pointer',
-          borderBottom: expanded ? '1px solid rgba(90,200,250,0.2)' : 'none',
+          borderBottom: '1px solid rgba(90,200,250,0.2)',
           background: 'rgba(0,122,255,0.06)',
         }}
       >
@@ -146,13 +144,9 @@ export default function AIDecisionPanel({ recordId, decision, onFillOpinion }: P
             {RISK_LABEL[compliance.risk_level]}
           </span>
         )}
-        <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-secondary)' }}>
-          {expanded ? '▲' : '▼'}
-        </span>
       </div>
 
-      {expanded && (
-        <div style={{ padding: '10px 14px 14px' }}>
+      <div style={{ padding: '10px 14px 14px' }}>
           {/* Tabs */}
           <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
             {(['compliance', 'similar'] as const).map(t => (
@@ -241,11 +235,16 @@ export default function AIDecisionPanel({ recordId, decision, onFillOpinion }: P
 
                   {/* 政策依据 */}
                   {compliance.policy_hits?.length > 0 && (
-                    <details style={{ marginTop: 4 }}>
-                      <summary style={{ fontSize: 12, cursor: 'pointer', color: 'var(--accent-color, #007aff)' }}>
-                        📄 查看引用政策（{compliance.policy_hits.length} 条）
-                      </summary>
-                      <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <div style={{ marginTop: 4 }}>
+                      <div
+                        onClick={() => setPolicyOpen(o => !o)}
+                        style={{ fontSize: 12, cursor: 'pointer', color: 'var(--accent-color, #007aff)', fontWeight: 500, userSelect: 'none' }}
+                      >
+                        {policyOpen ? '▾' : '▸'} 查看引用政策（{compliance.policy_hits.length} 条）
+                      </div>
+                      <div className={`collapsible-section${policyOpen ? ' open' : ''}`}>
+                        <div>
+                          <div className="collapsible-inner" style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
                         {compliance.policy_hits.map((h, i) => (
                           <div
                             key={i}
@@ -264,7 +263,9 @@ export default function AIDecisionPanel({ recordId, decision, onFillOpinion }: P
                           </div>
                         ))}
                       </div>
-                    </details>
+                    </div>
+                  </div>
+                    </div>
                   )}
                 </>
               )}
@@ -321,34 +322,7 @@ export default function AIDecisionPanel({ recordId, decision, onFillOpinion }: P
             </>
           )}
 
-          {/* 生成意见草稿按钮 */}
-          {decision && onFillOpinion && (
-            <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--divider)' }}>
-              <button
-                onClick={generateOpinion}
-                disabled={opinionLoading}
-                style={{
-                  width: '100%',
-                  padding: '8px',
-                  borderRadius: 10,
-                  border: '1px solid rgba(175,82,222,0.3)',
-                  background: opinionLoading ? 'rgba(120,120,128,0.1)' : 'rgba(175,82,222,0.08)',
-                  color: opinionLoading ? 'var(--text-secondary)' : '#AF52DE',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: opinionLoading ? 'not-allowed' : 'pointer',
-                  transition: 'all 0.2s',
-                }}
-              >
-                {opinionLoading ? '✍️ 生成中...' : '✍️ AI 生成审批意见草稿'}
-              </button>
-              <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4, textAlign: 'center' }}>
-                草稿将自动填入意见框，可修改后提交
-              </div>
-            </div>
-          )}
         </div>
-      )}
     </div>
   )
 }

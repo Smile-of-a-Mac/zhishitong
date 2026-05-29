@@ -110,12 +110,13 @@ export default function AdminMonitorPage() {
       <GlassCard size="sm" style={{ marginBottom: 16, display: 'flex', gap: 8, alignItems: 'center', padding: '12px 16px' }}>
         {(['overview', 'logs', 'errors'] as const).map(t => (
           <button key={t} onClick={() => setTab(t)}
-            className={`glass-btn ${tab === t ? '' : 'glass-btn-outline'}`}
-            style={{ fontSize: 13 }}>
+            className={`glass-btn glass-btn-sm ${tab === t ? '' : 'glass-btn-outline'}`}
+            style={{ fontWeight: tab === t ? 550 : 400 }}>
             {t === 'overview' ? '📊 概览' : t === 'logs' ? '📋 日志' : '❌ 错误'}
           </button>
         ))}
-        <button onClick={fetchAll} className="glass-btn glass-btn-outline glass-btn-sm" style={{ marginLeft: 'auto' }}>🔄 刷新</button>
+        <span style={{ flex: 1 }} />
+        <button onClick={fetchAll} className="glass-btn glass-btn-outline glass-btn-sm">刷新</button>
       </GlassCard>
 
       {/* ===== 概览 ===== */}

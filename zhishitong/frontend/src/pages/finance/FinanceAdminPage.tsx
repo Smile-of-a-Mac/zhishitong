@@ -3,6 +3,7 @@ import axios from 'axios'
 import { getDocTypeLabel } from '../../constants/docTypes'
 import { getFieldLabel } from '../../constants/fieldLabels'
 import GlassCard from '../../components/GlassCard'
+import AuthImage from '../../components/AuthImage'
 import ApprovalProgressBar from '../../components/ApprovalProgressBar'
 import { STATUS_LABELS, STAGE_LABELS } from '../../utils/constants'
 
@@ -114,7 +115,7 @@ export default function FinanceAdminPage() {
           <option value="rejected">不通过</option>
         </select>
         <button onClick={() => { setFilterStatus(''); fetchRecords(); fetchStats() }}
-          className="glass-btn glass-btn-outline glass-btn-sm">🔄 刷新</button>
+          className="glass-btn glass-btn-outline glass-btn-sm">刷新</button>
         <span style={{ marginLeft: 'auto', fontSize: 13, color: 'var(--text-secondary)' }}>共 {total} 条报销待审</span>
       </GlassCard>
 
@@ -160,10 +161,10 @@ export default function FinanceAdminPage() {
         )}
 
       {/* 分页 */}
-      <div style={{ marginTop: 12, display: 'flex', justifyContent: 'center', gap: 8, alignItems: 'center' }}>
+      <div style={{ marginTop: 16, display: 'flex', justifyContent: 'center', gap: 8, alignItems: 'center' }}>
         <button disabled={page <= 1} onClick={() => setPage(p => p - 1)}
           className="glass-btn glass-btn-outline glass-btn-sm">上一页</button>
-        <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{page}</span>
+        <span style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 500, minWidth: 40, textAlign: 'center' }}>第 {page} 页</span>
         <button disabled={page * 20 >= total} onClick={() => setPage(p => p + 1)}
           className="glass-btn glass-btn-outline glass-btn-sm">下一页</button>
       </div>
@@ -194,7 +195,7 @@ export default function FinanceAdminPage() {
 
             {selectedRecord.image_url && (
               <div style={{ marginBottom: 12, textAlign: 'center' }}>
-                <img src={selectedRecord.image_url} alt="文件" style={{ maxWidth: '100%', maxHeight: 240, borderRadius: 6, border: '1px solid #e8e8e8', cursor: 'pointer' }}
+                <AuthImage src={selectedRecord.image_url} alt="文件" style={{ maxWidth: '100%', maxHeight: 240, borderRadius: 6, border: '1px solid #e8e8e8', cursor: 'pointer', objectFit: 'contain' }}
                   onClick={() => window.open(selectedRecord.image_url, '_blank')} />
               </div>
             )}
@@ -247,18 +248,19 @@ export default function FinanceAdminPage() {
                 <h4 style={{ margin: '0 0 8px', fontSize: 14 }}>✍️ 财务审批</h4>
                 <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
                   {[
-                    { action: 'approved' as const, label: '✓ 通过', color: 'var(--green)' },
-                    { action: 'rejected' as const, label: '✗ 驳回', color: 'var(--red)' },
+                    { action: 'approved' as const, label: '通过', color: 'var(--green)' },
+                    { action: 'rejected' as const, label: '驳回', color: 'var(--red)' },
                   ].map(btn => (
                     <button key={btn.action} onClick={() => {
                       setReviewId(selectedRecord.id); setReviewAction(btn.action)
                       if (reviewId !== selectedRecord.id || reviewAction !== btn.action) setReviewReason('')
                     }} style={{
-                      flex: 1, padding: '8px 0', border: `1px solid ${btn.color}`,
+                      flex: 1, padding: '10px 0', border: `1.5px solid ${btn.color}`,
                       background: reviewId === selectedRecord.id && reviewAction === btn.action ? btn.color : 'transparent',
                       color: reviewId === selectedRecord.id && reviewAction === btn.action ? '#fff' : btn.color,
-                      borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 500,
-                      transition: 'all 0.2s ease',
+                      borderRadius: 10, cursor: 'pointer', fontSize: 14, fontWeight: 550,
+                      fontFamily: 'var(--font-stack)',
+                      transition: 'all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1)',
                     }}>{btn.label}</button>
                   ))}
                 </div>
@@ -269,11 +271,13 @@ export default function FinanceAdminPage() {
                     <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                       <button onClick={getAiSuggestion} disabled={suggesting}
                         className="glass-btn glass-btn-outline glass-btn-sm" style={{ borderColor: 'var(--purple)', color: 'var(--purple)' }}>
-                        {suggesting ? '生成中...' : '💡 获取智能建议'}
+                        {suggesting ? '生成中…' : 'AI 智能填写意见'}
                       </button>
+                      <span style={{ flex: 1 }} />
                       <button onClick={submitReview} disabled={submitting}
-                        className="glass-btn" style={{ marginLeft: 'auto', background: reviewAction === 'approved' ? 'var(--green)' : 'var(--red)' }}>
-                        {submitting ? '提交中...' : '确认审批'}
+                        className="glass-btn glass-btn-lg"
+                        style={{ background: reviewAction === 'approved' ? 'var(--green)' : 'var(--red)' }}>
+                        {submitting ? '提交中…' : '确认审批'}
                       </button>
                     </div>
                   </>

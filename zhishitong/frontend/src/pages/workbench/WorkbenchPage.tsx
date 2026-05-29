@@ -96,6 +96,7 @@ export default function WorkbenchPage() {
   const [nlLoading, setNlLoading] = useState(false)
   const [nlResult, setNlResult] = useState<IntentResult | null>(null)
   const [showNlForm, setShowNlForm] = useState(false)
+  const [ocrTextOpen, setOcrTextOpen] = useState(false)
 
   // ── 加载模板 ──
   useEffect(() => {
@@ -259,6 +260,7 @@ export default function WorkbenchPage() {
     setShowNlForm(false)
     setNlResult(null)
     setNlInput('')
+    setOcrTextOpen(false)
     clearState()
   }
 
@@ -478,11 +480,12 @@ export default function WorkbenchPage() {
                 <p style={{ margin: '0 0 16px', color: 'var(--text-secondary)', fontSize: 14 }}>
                   选择图片或 PDF 文件，自动识别文档内容并填写表单
                 </p>
-                <label className="glass-btn" style={{ cursor: 'pointer', padding: '10px 36px', fontSize: 15 }}>
-                  📁 选择文件
+                <label className="glass-btn glass-btn-lg" style={{ cursor: 'pointer' }}>
+                  选择文件上传
                   <input type="file" accept="image/*,.pdf" style={{ display: 'none' }}
                     onChange={e => handleFileSelected(e.target.files?.[0] || null)} />
                 </label>
+                <p style={{ margin: '12px 0 0', fontSize: 12, color: 'var(--text-tertiary)' }}>支持 JPG、PNG、PDF，最大 20MB</p>
               </div>
             )}
 
@@ -510,9 +513,9 @@ export default function WorkbenchPage() {
                     </div>
                   </div>
                   {/* 操作按钮 */}
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+                  <div className="btn-group" style={{ justifyContent: 'center' }}>
                     <label className="glass-btn glass-btn-outline" style={{ cursor: 'pointer' }}>
-                      🔄 重新选择
+                      重新选择
                       <input type="file" accept="image/*,.pdf" style={{ display: 'none' }}
                         onChange={e => handleFileSelected(e.target.files?.[0] || null)} />
                     </label>
@@ -520,9 +523,8 @@ export default function WorkbenchPage() {
                       onClick={handleRecognize}
                       disabled={recognizing}
                       className="glass-btn"
-                      style={{ fontSize: 14, padding: '8px 24px' }}
                     >
-                      {recognizing ? '⏳ 识别中...' : '🤖 开始识别'}
+                      {recognizing ? '识别中…' : '开始识别'}
                     </button>
                   </div>
                 </div>
@@ -550,7 +552,7 @@ export default function WorkbenchPage() {
                   </span>
                 </div>
                 <label className="glass-btn glass-btn-outline glass-btn-sm" style={{ cursor: 'pointer', flexShrink: 0 }}>
-                  🔄 重新上传
+                  换文件
                   <input type="file" accept="image/*,.pdf" style={{ display: 'none' }}
                     onChange={e => handleFileSelected(e.target.files?.[0] || null)} />
                 </label>
@@ -559,10 +561,14 @@ export default function WorkbenchPage() {
 
             {/* ── fail：错误提示 ── */}
             {phase === 'fail' && (
-              <div style={{ fontSize: 13, color: 'var(--red)', display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
-                ❌ {ocrError}
-                <button onClick={() => setPhase('selected')} className="glass-btn glass-btn-outline glass-btn-sm">重试</button>
-                <button onClick={resetAll} className="glass-btn glass-btn-outline glass-btn-sm">重新选择文件</button>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+                <div style={{ fontSize: 14, color: 'var(--red)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {ocrError}
+                </div>
+                <div className="btn-group">
+                  <button onClick={() => setPhase('selected')} className="glass-btn glass-btn-sm">重试识别</button>
+                  <button onClick={resetAll} className="glass-btn glass-btn-outline glass-btn-sm">重新选文件</button>
+                </div>
               </div>
             )}
 
@@ -674,40 +680,50 @@ export default function WorkbenchPage() {
             })()}
 
             {/* 操作按钮行 */}
-            <div style={{ marginTop: 16, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <div className="btn-group" style={{ marginTop: 20, justifyContent: 'flex-end' }}>
+              <button onClick={() => {
+                if (confirm('确定要清除所有已填写的内容吗？')) resetAll()
+              }} className="glass-btn glass-btn-outline glass-btn-sm">
+                清空重填
+              </button>
               {!isAdminUser && (
                 <button
                   onClick={handleSubmit}
                   disabled={formSubmitting || !!(submitResult && !submitResult.error)}
-                  className="glass-btn"
-                  style={{ fontSize: 14, padding: '8px 24px', background: 'var(--green)', color: '#fff' }}
+                  className="glass-btn glass-btn-success glass-btn-lg"
                 >
-                  {formSubmitting ? '提交中...' : '✅ 提交审批'}
+                  {formSubmitting ? '提交中…' : '提交审批'}
                 </button>
               )}
               {isAdminUser && (
-                <div className="glass-card glass-card-xs" style={{ background: 'rgba(255,149,0,0.1)', border: 'none', color: 'var(--orange)', fontSize: 13 }}>
-                  ⚠️ 管理员不能提交事务
+                <div style={{ background: 'rgba(255,149,0,0.1)', border: '1px solid rgba(255,149,0,0.2)', borderRadius: 8, padding: '6px 14px', color: 'var(--orange)', fontSize: 13, fontWeight: 500 }}>
+                  管理员不能提交事务
                 </div>
               )}
-              <button onClick={() => {
-                if (confirm('清除当前所有填写内容？')) resetAll()
-              }} className="glass-btn glass-btn-outline">
-                🗑️ 清除
-              </button>
-              {/* 查看 OCR 原文 */}
-              {ocrResult?.text && (
-                <details style={{ display: 'inline-block', fontSize: 12 }}>
-                  <summary style={{ cursor: 'pointer', color: 'var(--text-secondary)' }}>查看原文</summary>
-                  <div style={{
-                    position: 'absolute', background: 'var(--glass-bg)', backdropFilter: 'blur(10px)',
-                    border: '1px solid var(--glass-border)', padding: 12, borderRadius: 6,
-                    maxWidth: 500, maxHeight: 200, overflow: 'auto',
-                    fontFamily: 'monospace', fontSize: 11, whiteSpace: 'pre-wrap', zIndex: 100,
-                  }}>{ocrResult.text}</div>
-                </details>
-              )}
             </div>
+
+            {/* 查看 OCR 原文 */}
+            {ocrResult?.text && (
+              <div style={{ display: 'inline-block', fontSize: 12, marginTop: 4 }}>
+                <div
+                  onClick={() => setOcrTextOpen(o => !o)}
+                  style={{ cursor: 'pointer', color: 'var(--text-secondary)', fontWeight: 500, userSelect: 'none' }}
+                >
+                  {ocrTextOpen ? '▾' : '▸'} 查看原文
+                </div>
+                <div className={`collapsible-section${ocrTextOpen ? ' open' : ''}`}>
+                  <div>
+                    <div className="collapsible-inner" style={{
+                      background: 'var(--glass-bg)', backdropFilter: 'blur(10px)',
+                      border: '1px solid var(--glass-border)', padding: 12, borderRadius: 6,
+                      maxWidth: 500, maxHeight: 200, overflow: 'auto',
+                      fontFamily: 'monospace', fontSize: 11, whiteSpace: 'pre-wrap',
+                      marginTop: 4,
+                    }}>{ocrResult.text}</div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* 表单级错误 */}
             {formError && (

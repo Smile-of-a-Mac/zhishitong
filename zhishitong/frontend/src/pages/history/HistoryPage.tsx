@@ -1,8 +1,10 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import axios from 'axios'
 import { getDocTypeLabel } from '../../constants/docTypes'
+import { getFieldLabel } from '../../constants/fieldLabels'
 import GlassCard from '../../components/GlassCard'
+import AuthImage from '../../components/AuthImage'
 import ApprovalProgressBar from '../../components/ApprovalProgressBar'
 import { STAGE_LABELS, STATUS_LABELS } from '../../utils/constants'
 import { parseApiError } from '../../utils/api'
@@ -20,6 +22,8 @@ export default function HistoryPage() {
   const [records, setRecords] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [detail, setDetail] = useState<any>(null)
+  const [detailClosing, setDetailClosing] = useState(false)
+  const [fieldsOpen, setFieldsOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<TabKey>('all')
   const [errorMsg, setErrorMsg] = useState('')
   const nav = useNavigate()
@@ -89,9 +93,19 @@ export default function HistoryPage() {
     try {
       const res = await axios.get(`/api/approvals/${id}`)
       setDetail(res.data)
+      setDetailClosing(false)
+      setFieldsOpen(false)
     } catch (e: any) {
       alert(parseApiError(e, '加载详情失败'))
     }
+  }
+
+  const closeDetail = () => {
+    setDetailClosing(true)
+    setTimeout(() => {
+      setDetail(null)
+      setDetailClosing(false)
+    }, 250)
   }
 
   if (loading) return <GlassCard style={{ color: 'var(--text-secondary)', padding: 40, textAlign: 'center' }}>加载中...</GlassCard>
@@ -116,20 +130,45 @@ export default function HistoryPage() {
     <div>
       <h1 className="page-title">历史记录</h1>
 
-      {/* Tab 导航 */}
-      <GlassCard size="sm" style={{ marginBottom: 16 }}>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        {TAB_CONFIG.map(tab => (
-          <button
-            key={tab.key}
-            className={`glass-btn glass-btn-sm ${activeTab === tab.key ? 'glass-btn-primary' : 'glass-btn-outline'}`}
-            onClick={() => setActiveTab(tab.key)}
-          >
-            {tab.icon} {tab.label} ({countByStatus(tab.key)})
-          </button>
-        ))}
+      {/* Tab 导航 — iOS 风格分段控件 */}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+        {TAB_CONFIG.map(tab => {
+          const count = countByStatus(tab.key)
+          const isActive = activeTab === tab.key
+          return (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+                padding: '8px 18px',
+                border: 'none',
+                borderRadius: 22,
+                fontSize: 14,
+                fontWeight: isActive ? 550 : 400,
+                fontFamily: 'var(--font-stack)',
+                cursor: 'pointer',
+                background: isActive ? 'var(--accent)' : 'var(--glass-bg)',
+                color: isActive ? '#fff' : 'var(--text-secondary)',
+                boxShadow: isActive ? '0 2px 12px rgba(0,122,255,0.3)' : 'none',
+                transition: 'all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                outline: 'none',
+                WebkitUserSelect: 'none',
+                userSelect: 'none',
+              } as React.CSSProperties}
+            >
+              <span>{tab.icon}</span>
+              <span>{tab.label}</span>
+              <span style={{
+                background: isActive ? 'rgba(255,255,255,0.25)' : 'rgba(128,128,128,0.12)',
+                color: isActive ? '#fff' : 'var(--text-secondary)',
+                borderRadius: 10, padding: '1px 8px', fontSize: 12, fontWeight: 600,
+                minWidth: 22, textAlign: 'center',
+              }}>{count}</span>
+            </button>
+          )
+        })}
       </div>
-      </GlassCard>
 
       {errorMsg && (
         <GlassCard size="xs" style={{ marginBottom: 12, background: 'rgba(255,59,48,0.08)', border: '1px solid rgba(255,59,48,0.2)' }}>
@@ -175,33 +214,36 @@ export default function HistoryPage() {
                   <td style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
                     {new Date(r.created_at).toLocaleDateString('zh-CN')}</td>
                   <td style={{ whiteSpace: 'nowrap' }}>
-                    {r.status === 'pending' && (
-                      <button onClick={e => { e.stopPropagation(); handleUrge(r.id) }}
-                        className="glass-btn glass-btn-sm" style={{ marginRight: 4, color: '#FF9500' }}>催办</button>
-                    )}
-                    {isConcluded(r.status) ? (
-                      <button onClick={e => { e.stopPropagation(); handleDelete(r.id) }}
-                        className="glass-btn glass-btn-danger glass-btn-sm">删除</button>
-                    ) : r.status === 'withdrawn' ? (
-                      <>
-                        <button onClick={e => { e.stopPropagation(); handleResubmit(r.id) }}
-                          className="glass-btn glass-btn-sm" style={{ marginRight: 4 }}>重新提交</button>
+                    <div className="btn-group" style={{ gap: 6 }}>
+                      {r.status === 'pending' && (
+                        <button onClick={e => { e.stopPropagation(); handleUrge(r.id) }}
+                          className="glass-btn glass-btn-sm"
+                          style={{ color: '#FF9500' }}>催办</button>
+                      )}
+                      {isConcluded(r.status) ? (
                         <button onClick={e => { e.stopPropagation(); handleDelete(r.id) }}
                           className="glass-btn glass-btn-danger glass-btn-sm">删除</button>
-                      </>
-                    ) : canCancel(r.status) ? (
-                      <>
-                        <button onClick={e => { e.stopPropagation(); handleResubmit(r.id) }}
-                          className="glass-btn glass-btn-sm" style={{ marginRight: 4 }}>修改</button>
-                        <button onClick={e => { e.stopPropagation(); handleDelete(r.id) }}
-                          className="glass-btn glass-btn-danger glass-btn-sm">取消</button>
-                      </>
-                    ) : (
-                      r.status === 'pending' ? null : (
-                        <button onClick={e => { e.stopPropagation(); handleWithdraw(r.id) }}
-                          className="glass-btn glass-btn-outline glass-btn-sm">撤回</button>
-                      )
-                    )}
+                      ) : r.status === 'withdrawn' ? (
+                        <>
+                          <button onClick={e => { e.stopPropagation(); handleResubmit(r.id) }}
+                            className="glass-btn glass-btn-sm">重新提交</button>
+                          <button onClick={e => { e.stopPropagation(); handleDelete(r.id) }}
+                            className="glass-btn glass-btn-danger glass-btn-sm">删除</button>
+                        </>
+                      ) : canCancel(r.status) ? (
+                        <>
+                          <button onClick={e => { e.stopPropagation(); handleResubmit(r.id) }}
+                            className="glass-btn glass-btn-sm">修改</button>
+                          <button onClick={e => { e.stopPropagation(); handleDelete(r.id) }}
+                            className="glass-btn glass-btn-danger glass-btn-sm">取消</button>
+                        </>
+                      ) : (
+                        r.status === 'pending' ? null : (
+                          <button onClick={e => { e.stopPropagation(); handleWithdraw(r.id) }}
+                            className="glass-btn glass-btn-outline glass-btn-sm">撤回</button>
+                        )
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -212,12 +254,20 @@ export default function HistoryPage() {
 
       {/* 详情弹窗 */}
       {detail && (
-        <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
-        }} onClick={() => setDetail(null)}>
-          <GlassCard strong style={{ width: 520, maxWidth: '90vw', maxHeight: '85vh', overflow: 'auto' }}
-            onClick={e => e.stopPropagation()}>
+        <div
+          className={`modal-overlay${detailClosing ? ' modal-closing' : ''}`}
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+          }}
+          onClick={closeDetail}
+        >
+          <GlassCard
+            strong
+            className={`modal-card${detailClosing ? ' modal-closing' : ''}`}
+            style={{ width: 520, maxWidth: '90vw', maxHeight: '85vh', overflow: 'auto' }}
+            onClick={e => e.stopPropagation()}
+          >
             <h3 style={{ margin: '0 0 16px', fontSize: 18 }}>
               审批详情 #{detail.id}
               <span style={{ marginLeft: 12, fontSize: 14, fontWeight: 400 }}>
@@ -226,25 +276,30 @@ export default function HistoryPage() {
             </h3>
 
             <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-              <div style={{ marginBottom: 4 }}>📄 类型：{getDocTypeLabel(detail.document_type)}</div>
-              <div style={{ marginBottom: 4 }}>📁 文件：{detail.original_filename || '手动申报'}</div>
+              <div style={{ marginBottom: 4 }}>类型：{getDocTypeLabel(detail.document_type)}</div>
+              <div style={{ marginBottom: 4 }}>文件：{detail.original_filename || '手动申报'}</div>
               <div style={{ marginBottom: 4 }}>
-                📅 时间：{new Date(detail.created_at).toLocaleString('zh-CN')}
+                时间：{new Date(detail.created_at).toLocaleString('zh-CN')}
               </div>
 
-              {/* 图片预览 */}
+              {/* 图片预览 — 使用 AuthImage 携带认证 */}
               {detail.image_url && (
                 <div style={{ marginBottom: 12 }}>
-                  <img src={detail.image_url} alt="上传文件" style={{
-                    maxWidth: '100%', maxHeight: 300, borderRadius: 'var(--radius-xs)',
-                    border: '1px solid var(--glass-border)', cursor: 'pointer',
-                  }} onClick={() => window.open(detail.image_url, '_blank')} />
+                  <AuthImage
+                    src={detail.image_url}
+                    alt="上传文件"
+                    style={{
+                      maxWidth: '100%', maxHeight: 300, borderRadius: 'var(--radius-xs)',
+                      border: '1px solid var(--glass-border)', cursor: 'pointer', objectFit: 'contain',
+                    }}
+                    onClick={() => window.open(detail.image_url, '_blank')}
+                  />
                   <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>点击放大</div>
                 </div>
               )}
               {detail.decision_reason && (
                 <GlassCard size="xs" style={{ marginBottom: 8 }}>
-                  <strong>📋 分析/决策理由：</strong>
+                  <strong>分析/决策理由：</strong>
                   <div style={{ marginTop: 4, color: 'var(--text-primary)' }}>{detail.decision_reason}</div>
                 </GlassCard>
               )}
@@ -256,7 +311,7 @@ export default function HistoryPage() {
                   if (Array.isArray(sug) && sug.length > 0) {
                     return (
                       <GlassCard size="xs" style={{ background: 'rgba(255,149,0,0.08)', border: '1px solid rgba(255,149,0,0.2)', marginBottom: 8 }}>
-                        <div style={{ fontWeight: 600, fontSize: 12, color: 'var(--orange)', marginBottom: 4 }}>💡 智能建议</div>
+                        <div style={{ fontWeight: 600, fontSize: 12, color: 'var(--orange)', marginBottom: 4 }}>智能建议</div>
                         {sug.map((s: string, i: number) => (
                           <div key={i} style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 2 }}>• {s}</div>
                         ))}
@@ -274,7 +329,7 @@ export default function HistoryPage() {
                   if (Array.isArray(miss) && miss.length > 0) {
                     return (
                       <GlassCard size="xs" style={{ background: 'rgba(255,59,48,0.08)', border: '1px solid rgba(255,59,48,0.2)', marginBottom: 8 }}>
-                        <div style={{ fontWeight: 600, fontSize: 12, color: 'var(--red)', marginBottom: 4 }}>⚠️ 缺失信息</div>
+                        <div style={{ fontWeight: 600, fontSize: 12, color: 'var(--red)', marginBottom: 4 }}>缺失信息</div>
                         {miss.map((m: string, i: number) => (
                           <div key={i} style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 2 }}>• 缺少「{m}」</div>
                         ))}
@@ -285,29 +340,40 @@ export default function HistoryPage() {
                 return null;
               })()}
 
-              {/* 表单数据 */}
+              {/* 表单数据 — 用 React 状态控制展开/收起，双向动画 */}
               {detail.filled_json && (
-                <details style={{ marginTop: 8 }}>
-                  <summary style={{ cursor: 'pointer', color: 'var(--accent)', fontSize: 13 }}>📋 查看提交的字段数据</summary>
-                  <GlassCard size="xs" style={{ marginTop: 8 }}>
-                    {(() => {
-                      try {
-                        const data = typeof detail.filled_json === 'string' ? JSON.parse(detail.filled_json) : detail.filled_json;
-                        return Object.entries(data).map(([k, v]) => (
-                          <div key={k} style={{ padding: '4px 0', borderBottom: '1px solid var(--divider)', display: 'flex' }}>
-                            <span style={{ color: 'var(--text-secondary)', minWidth: 80 }}>{k}:</span>
-                            <span style={{ color: 'var(--text-primary)' }}>{String(v ?? '')}</span>
-                          </div>
-                        ));
-                      } catch { return <div>无法解析</div>; }
-                    })()}
-                  </GlassCard>
-                </details>
+                <div style={{ marginTop: 8 }}>
+                  <div
+                    onClick={() => setFieldsOpen(o => !o)}
+                    style={{ cursor: 'pointer', color: 'var(--accent)', fontSize: 13, fontWeight: 500, userSelect: 'none' }}
+                  >
+                    {fieldsOpen ? '▾' : '▸'} 查看提交的字段数据
+                  </div>
+                  <div className={`collapsible-section${fieldsOpen ? ' open' : ''}`}>
+                    <div>
+                      <div className="collapsible-inner">
+                        <GlassCard size="xs" style={{ marginTop: 8 }}>
+                          {(() => {
+                            try {
+                              const data = typeof detail.filled_json === 'string' ? JSON.parse(detail.filled_json) : detail.filled_json;
+                              return Object.entries(data).map(([k, v]) => (
+                                <div key={k} style={{ padding: '4px 0', borderBottom: '1px solid var(--divider)', display: 'flex' }}>
+                                  <span style={{ color: 'var(--text-secondary)', minWidth: 100 }}>{getFieldLabel(k)}</span>
+                                  <span style={{ color: 'var(--text-primary)' }}>{String(v ?? '')}</span>
+                                </div>
+                              ));
+                            } catch { return <div>无法解析</div>; }
+                          })()}
+                        </GlassCard>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
 
             <div style={{ marginTop: 16, textAlign: 'right' }}>
-              <button onClick={() => setDetail(null)} className="glass-btn glass-btn-outline">关闭</button>
+              <button onClick={closeDetail} className="glass-btn glass-btn-outline">关闭</button>
             </div>
           </GlassCard>
         </div>

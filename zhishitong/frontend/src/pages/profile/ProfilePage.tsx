@@ -207,7 +207,7 @@ export default function ProfilePage() {
                 } finally { setPwdLoading(false) }
               }}
             >
-              {pwdLoading ? '提交中...' : '确认修改'}
+              {pwdLoading ? '提交中…' : '确认修改'}
             </button>
           </div>
         )}

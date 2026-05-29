@@ -95,8 +95,11 @@ export default function AdminUsersPage() {
           <option value="">全部学校</option>
           {schools.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
-        <button onClick={() => fetch()} className="glass-btn glass-btn-outline glass-btn-sm">🔄 刷新</button>
-        <button onClick={() => setShowAdd(true)} className="glass-btn glass-btn-sm" style={{ marginLeft: 'auto' }}>➕ 添加成员</button>
+        <button onClick={() => fetch()} className="glass-btn glass-btn-outline glass-btn-sm">刷新</button>
+        <span style={{ flex: 1 }} />
+        <button onClick={() => setShowAdd(true)} className="glass-btn glass-btn-sm">
+          添加成员
+        </button>
       </GlassCard>
 
       {/* 添加成员表单 */}
@@ -124,7 +127,7 @@ export default function AdminUsersPage() {
             <label><input type="checkbox" checked={addForm.is_finance_admin} onChange={e => setAddForm(f => ({ ...f, is_finance_admin: e.target.checked }))} /> 财务管理员</label>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={handleAdd} disabled={adding} className="glass-btn glass-btn-sm">{adding ? '添加中...' : '确认添加'}</button>
+            <button onClick={handleAdd} disabled={adding} className="glass-btn glass-btn-sm">{adding ? '添加中…' : '确认添加'}</button>
             <button onClick={() => setShowAdd(false)} className="glass-btn glass-btn-outline glass-btn-sm">取消</button>
           </div>
         </GlassCard>
@@ -168,15 +171,17 @@ export default function AdminUsersPage() {
                     </span>
                   </td>
                   <td style={{ whiteSpace: 'nowrap' }}>
-                    <button onClick={() => resetPassword(u.id, u.username)}
-                      className="glass-btn glass-btn-outline glass-btn-sm" style={{ marginRight: 4 }}>重置密码</button>
-                    {u.is_active ? (
-                      <button onClick={() => deleteMember(u.id, u.username)}
-                        className="glass-btn glass-btn-danger glass-btn-sm">禁用</button>
-                    ) : (
-                      <button onClick={() => restoreMember(u.id)}
-                        className="glass-btn glass-btn-sm">恢复</button>
-                    )}
+                    <div className="btn-group" style={{ gap: 6 }}>
+                      <button onClick={() => resetPassword(u.id, u.username)}
+                        className="glass-btn glass-btn-outline glass-btn-sm">重置密码</button>
+                      {u.is_active ? (
+                        <button onClick={() => deleteMember(u.id, u.username)}
+                          className="glass-btn glass-btn-danger glass-btn-sm">禁用</button>
+                      ) : (
+                        <button onClick={() => restoreMember(u.id)}
+                          className="glass-btn glass-btn-success glass-btn-sm">恢复</button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
