@@ -8,7 +8,7 @@ from database import get_db
 from models import User, QuotaLog, ApprovalRecord, TierEnum
 from schemas import OCRResult
 from auth import get_current_user
-from config import LLM_API_BASE, LLM_API_KEY, LLM_MODEL, LLM_FILL_MODEL, RATE_LIMIT_WINDOW
+from config import LLM_API_BASE, LLM_API_KEY, LLM_MODEL, LLM_FILL_MODEL
 from services.file_service import validate_file, store_file
 from services.ocr_service import ocr_with_tier, OCRProvider
 from services.template_service import detect_document_type
@@ -16,6 +16,7 @@ from services.crypto_service import decrypt
 from services.logging_service import LogCategory, log, log_error
 from services.key_pool import resolve_key, record_success, record_failure, ResolvedKey
 from services.redis_service import ocr_cache_get, ocr_cache_set, rate_limit_check
+from services.redis_service import RATE_LIMIT_WINDOW as _RL_WINDOW
 from models import ApiKeyType
 
 logger = logging.getLogger(__name__)
@@ -77,7 +78,7 @@ async def ocr_upload(
     # 1.5 速率限制
     allowed, remaining_rl = await rate_limit_check(user.id, user.tier.value)
     if not allowed:
-        raise HTTPException(429, f"请求过于频繁，请 {RATE_LIMIT_WINDOW}s 后重试")
+        raise HTTPException(429, f"请求过于频繁，请 {_RL_WINDOW}s 后重试")
 
     # 1.6 OCR 缓存查询
     cached = await ocr_cache_get(content)

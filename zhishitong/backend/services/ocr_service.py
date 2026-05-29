@@ -351,10 +351,10 @@ OCR 文本:
             msg = data["choices"][0]["message"]
             content = (msg.get("content") or "").strip()
             reasoning = (msg.get("reasoning_content") or "").strip()
+            stop_reason = data["choices"][0].get("finish_reason", "")
             # 推理模型：content 可能是思考过程，reasoning_content 含 JSON，优先用后者
             if reasoning:
                 content = reasoning
-                stop_reason = data["choices"][0].get("finish_reason", "")
             # 如果模型输出被截断，尝试恢复
             if stop_reason == "length":
                 logger.warning("本地模型输出可能被截断 (finish_reason=length)，尝试恢复 JSON")
