@@ -15,7 +15,7 @@ sito/
 │   │   ├── database.py                 # SQLAlchemy 引擎 & Session
 │   │   ├── seed.py                     # 种子数据（8 校 × 全角色）
 │   │   ├── auth.py                     # JWT 认证 + 模拟身份覆盖
-│   │   ├── models.py                   # SQLAlchemy 数据模型（16 张表）
+│   │   ├── models.py                   # SQLAlchemy 数据模型（15 张表）
 │   │   ├── schemas.py                  # Pydantic 请求/响应模型
 │   │   ├── templates.json              # 审批模板 Schema（19 类）
 │   │   ├── data/policy_kb.json         # RAG 政策知识库
