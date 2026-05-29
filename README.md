@@ -1,6 +1,6 @@
 # 智审通 — 高校行政审批自动化 Agent
 
-高校行政审批自动化平台，支持多学校、多角色协同审批，集成智能 OCR、LLM 驱动的表单填写、RAG 政策检索、LoRA 微调问答与可视化数据看板。
+高校行政审批自动化平台，支持多学校、多角色协同审批，集成智能 OCR（多模态 LLM 一步到位 + EasyOCR 降级）、LLM 驱动的表单填写与字段映射归一化、RAG 政策检索、LoRA 微调问答与可视化数据看板。
 
 ---
 
@@ -90,7 +90,8 @@ sito/
 │   │   ├── server.py                   #   自动 GPU 检测 + OpenAI 兼容 API
 │   │   └── requirements.txt
 │   ├── uploads/                        # 上传文件存储（按 user_id 隔离）
-│   └── start.sh                        # 一键启动（自动检测微调模型）
+│   ├── start.sh                        # 一键启动（自动检测微调模型）
+│   └── shutdown.sh                     # 一键停止所有服务
 ├── training/                           # LoRA 微调管线
 │   ├── train_lora.py                   #   训练脚本（Qwen2.5-0.5B）
 │   ├── merge_lora.py                   #   合并 adapter → 完整模型
@@ -131,7 +132,7 @@ sito/
 ### 🧠 AI 能力
 | 模块 | 功能 |
 |------|------|
-| 📷 **智能 OCR** | EasyOCR 文字提取 → LLM JSON 填充，多级降级（Local → API） |
+| 📷 **智能 OCR** | 多模态 LLM 一步到位（Pro/Pro+）→ 字段名映射归一化 + 正则兜底提取 → EasyOCR 降级 |
 | 📚 **RAG 政策检索** | TF-IDF 向量检索 + LLM 生成，6 个 AI 端点 |
 | 🎯 **意图识别** | 自然语言描述 → 自动推荐文档类型 + 预填字段 |
 | ⚖️ **合规性分析** | 自动检索相关政策条文，逐条核对申请合规性 |
@@ -162,7 +163,8 @@ sito/
 | 🛡️ **数据安全** | JWT + bcrypt + Fernet 加密 + 文件魔数校验 |
 | 🗑️ **软删除** | 用户标记删除 → 管理员恢复/彻底删除 |
 | 📋 **系统监控** | 概览/日志/错误 三面板 + 审计日志 |
-| 🔍 **OCR 工具链追踪** | 监控日志显示 provider/model/tier 完整调用链 |
+| 🔍 **OCR 工具链追踪** | 监控日志显示 provider/model/tier/doc_type 完整调用链 |
+| 🔗 **英文字段映射** | 多模态模型输出字段自动归一化为模板英文 key（invoice_number→invoice_no 等） |
 | 🧪 **LoRA 微调** | 山科大实际流程数据 → 微调 Qwen2.5-0.5B → GGUF 推理 |
 
 ---
@@ -173,7 +175,7 @@ sito/
 |----|------|
 | **前端** | React 18 + TypeScript + Vite + 玻璃拟态 UI |
 | **后端** | FastAPI + SQLAlchemy + SQLite + LangGraph |
-| **AI/OCR** | EasyOCR + 外部 LLM API（MiMo/DeepSeek/Qwen-VL）+ llama.cpp 本地推理 |
+| **AI/OCR** | EasyOCR + 多模态 LLM API（MiMo/DeepSeek/Qwen-VL）+ llama.cpp 本地推理 + 字段名映射归一化 + 正则兜底提取 |
 | **RAG** | TF-IDF (scikit-learn) + 自定义 JSON 知识库 |
 | **LoRA** | PEFT + Transformers + PyTorch（Apple MPS / CUDA / CPU） |
 | **安全** | JWT + bcrypt + Fernet + MIME 魔数校验 |
@@ -194,7 +196,15 @@ sito/
 cd zhishitong && bash start.sh
 ```
 
-start.sh 自动完成：虚拟环境检测 → 依赖安装 → 推理服务启动（含 GPU 检测） → 微调模型检测与 GGUF 转换 → 后端启动 → 前端启动。
+`start.sh` 自动完成：虚拟环境检测 → 依赖安装 → 推理服务启动（含 GPU 检测） → 微调模型检测与 GGUF 转换 → 后端启动 → 前端启动。
+
+### 一键停止
+
+```bash
+cd zhishitong && bash shutdown.sh
+```
+
+`shutdown.sh` 按端口精确停止：推理服务 (18080) → 后端 (8080) → 前端 (5173)，并按进程名兜底清理。
 
 ### 手动启动
 
@@ -239,12 +249,12 @@ python merge_lora.py       # 合并
 | `admin` | `admin123` | 信息管理员（超级管理员） | — |
 | `sdu_school_admin` | `admin123` | 学校管理员 | 山东科技大学 |
 | `sdu_dept_cs` | `123456` | 部门管理员（计算机学院） | 山东科技大学 |
-| `sdu_dept_ee` | `123456` | 部门管理员（电气学院） | 山东科技大学 |
 | `sdu_finance_admin` | `admin123` | 财务管理员 | 山东科技大学 |
-| `sdu_student_a` | `123456` | 学生 | 山东科技大学 |
-| `sdu_student_b` | `123456` | 学生 | 山东科技大学 |
+| `sdu_student_a` / `sdu_student_b` | `123456` | 学生 | 山东科技大学 |
 | `sdujn_school_admin` | `admin123` | 学校管理员 | 山东科技大学（济南校区） |
-| `sdujn_student_a` | `123456` | 学生 | 山东科技大学（济南校区） |
+| `sdujn_dept_cs` | `123456` | 部门管理员 | 山东科技大学（济南校区） |
+| `sdujn_finance_admin` | `admin123` | 财务管理员 | 山东科技大学（济南校区） |
+| `sdujn_student_a` / `sdujn_student_b` | `123456` | 学生 | 山东科技大学（济南校区） |
 
 > 山东科技大学是 Pro 版（LLM OCR 30次/月），济南校区是 Free 版（仅本地 OCR）。
 > 每校均有完整角色，格式 `{前缀}_{角色}`。
@@ -273,6 +283,7 @@ python merge_lora.py       # 合并
 | `MODEL_PATH` | 推理模型路径 | `models/qwen2.5-0.5b.gguf`（微调后自动切换） |
 | `LLM_API_BASE` | 外部 LLM API 地址 | DashScope |
 | `LLM_API_KEY` | 外部 LLM Key | 空（使用 Key 池） |
+| `LLM_MODEL` | 多模态 OCR 模型 | `qwen-vl-max` |
 | `LLM_FILL_MODEL` | JSON 填充默认模型 | `qwen-turbo` |
 | `UPLOAD_DIR` | 上传目录 | `./uploads` |
 | `MAX_FILE_SIZE_MB` | 文件大小上限 | `10` |
