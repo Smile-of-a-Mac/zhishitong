@@ -10,9 +10,9 @@ ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BACKEND_DIR="$ROOT_DIR/backend"
 FRONTEND_DIR="$ROOT_DIR/frontend"
 INFER_DIR="$ROOT_DIR/inference_server"
-VENV_PYTHON="$ROOT_DIR/.venv/bin/python"
-VENV_UVICORN="$ROOT_DIR/.venv/bin/uvicorn"
-VENV_PIP="$ROOT_DIR/.venv/bin/pip"
+VENV_PYTHON="$ROOT_DIR/../.venv/bin/python"
+VENV_UVICORN="$ROOT_DIR/../.venv/bin/uvicorn"
+VENV_PIP="$ROOT_DIR/../.venv/bin/pip"
 
 # ---------- 颜色 ----------
 RED='\033[0;31m'
@@ -34,11 +34,16 @@ if ! command -v node &>/dev/null; then err "未检测到 Node.js，请先安装"
 
 # ---------- 1. 后端依赖 ----------
 log "安装后端 Python 依赖…"
-"$VENV_PIP" install -q -r "$BACKEND_DIR/requirements.txt" 2>&1 | tail -1
+"$VENV_PIP" install -q -r "$ROOT_DIR/../requirements.txt" 2>&1 | tail -1
 
 # ---------- 2. 推理服务依赖 ----------
 log "安装推理服务 Python 依赖…"
 "$VENV_PIP" install -q -r "$INFER_DIR/requirements.txt" 2>&1 | tail -1
+
+# ---------- 2.5 训练可选依赖 ----------
+if [ -f "$ROOT_DIR/../training/train_requirements.txt" ]; then
+  "$VENV_PIP" install -q -r "$ROOT_DIR/../training/train_requirements.txt" 2>&1 | tail -1
+fi
 
 # ---------- 3. 数据库初始化 ----------
 log "初始化数据库 & 种子数据…"
@@ -64,6 +69,7 @@ trap cleanup SIGINT SIGTERM
 # ---------- 5. 切换微调模型（如有） ----------
 MERGED_DIR="$ROOT_DIR/../lora_output_merged"
 LORA_GGUF="$ROOT_DIR/../models/qwen2.5-0.5b-lora.gguf"
+MODELS_DIR="$ROOT_DIR/../models"
 
 if [ -d "$MERGED_DIR" ]; then
   if [ ! -f "$LORA_GGUF" ]; then
@@ -94,6 +100,7 @@ fi
 
 # ---------- 6. 启动推理服务 ----------
 log "启动本地推理服务 (llama.cpp)…"
+export MODEL_PATH="${MODEL_PATH:-$MODELS_DIR/qwen2.5-0.5b.gguf}"
 PYTHONPATH="$INFER_DIR" "$VENV_UVICORN" server:app \
   --host 0.0.0.0 --port 18080 &
 INFER_PID=$!

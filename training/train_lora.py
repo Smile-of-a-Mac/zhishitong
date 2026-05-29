@@ -42,7 +42,7 @@ LORA_TARGETS = ["q_proj", "k_proj", "v_proj", "o_proj",
                  "gate_proj", "up_proj", "down_proj"]
 
 # 训练
-NUM_EPOCHS = 50          # 9条数据，多跑几轮
+NUM_EPOCHS = 5            # 9条数据，少跑几轮避免过拟合
 BATCH_SIZE = 1
 GRAD_ACCUM = 8           # 等效 batch=8
 LEARNING_RATE = 2e-4

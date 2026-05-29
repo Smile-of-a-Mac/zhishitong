@@ -20,6 +20,26 @@ from models import ApiKeyType
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["ocr"])
 
+def _infer_doc_type_from_filled(filled_json: dict | None) -> str | None:
+    """当原文检测失败时，根据已提取字段反推文档类型。"""
+    if not isinstance(filled_json, dict):
+        return None
+
+    keys = {k for k, v in filled_json.items() if v not in (None, "", [], {})}
+    if not keys:
+        return None
+
+    if (
+        {"invoice_no", "amount"}.issubset(keys)
+        or "invoice_no" in keys
+        or "invoice_number" in keys
+        or "total_amount" in keys
+    ):
+        return "reimbursement"
+    if {"leave_type", "start_date", "end_date"}.intersection(keys):
+        return "leave"
+    return None
+
 
 def _resolve_llm_config(db: Session) -> tuple:
     """从 Key 池智能选取最优 Key，返回 (ocr_resolved, fill_resolved)"""
@@ -84,20 +104,12 @@ async def ocr_upload(
 
     duration_ms = round((time.time() - t_start) * 1000)
 
-    # 4. 扣减配额（Pro 层 LLM OCR）
-    if provider == OCRProvider.LLM and user.tier == TierEnum.pro:
-        # 以行锁重新读取，防止并发竞态造成超额
-        locked_user = db.query(User).filter(User.id == user.id).with_for_update().first()
-        locked_user.llm_ocr_used += 1
-        db.add(QuotaLog(
-            user_id=user.id, action="llm_ocr",
-            detail=f"第 {locked_user.llm_ocr_used} 次 LLM OCR",
-        ))
-
-    # 5. 检测文档类型
+    # 4. 检测文档类型
     doc_type = detect_document_type(text)
+    if not doc_type:
+        doc_type = _infer_doc_type_from_filled(filled_json)
 
-    # 6. 扣减配额（Pro 层 LLM OCR）
+    # 5. 扣减配额（Pro 层 LLM OCR）
     if provider == OCRProvider.LLM and user.tier == TierEnum.pro:
         locked_user = db.query(User).filter(User.id == user.id).with_for_update().first()
         locked_user.llm_ocr_used += 1

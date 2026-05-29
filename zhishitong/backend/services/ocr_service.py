@@ -90,6 +90,18 @@ _FIELD_KEY_MAP: dict[str, str] = {
     "supervisor_signature": "advisor_signature",
     "counselor_signature": "counselor_signature",
     "official_seal": "official_seal",
+    # 发票常见英文字段（多模态模型常输出）
+    "invoice_number": "invoice_no",
+    "invoice_no": "invoice_no",
+    "invoice_date": "date",
+    "date_issued": "date",
+    "total_amount": "amount",
+    "amount_total": "amount",
+    "tax_amount": "tax",
+    "buyer_name": "applicant",
+    "seller_name": "department",
+    "item_name": "reason",
+    "project_name": "reason",
 }
 
 
@@ -208,6 +220,45 @@ def _fallback_extract(raw_text: str, document_type: Optional[str] = None) -> dic
     return result if result else {"raw": text[:200]}
 
 
+def _extract_reimbursement_fields_from_text(text: str) -> dict:
+    """发票/报销场景兜底提取，避免多模态返回空字段。"""
+    if not text:
+        return {}
+
+    result: dict[str, str] = {}
+
+    m = re.search(r"发票号码\s*[：:]?\s*([0-9A-Za-z]{8,30})", text)
+    if m:
+        result["invoice_no"] = m.group(1)
+
+    # 小写金额优先（如：小写 ¥228060.00）
+    amount_patterns = [
+        r"小写\s*[)）]?\s*[¥￥]?\s*([0-9]+(?:\.[0-9]{1,2})?)",
+        r"价税合计[^\n]{0,20}[¥￥]\s*([0-9]+(?:\.[0-9]{1,2})?)",
+        r"合\s*计[^\n]{0,20}[¥￥]\s*([0-9]+(?:\.[0-9]{1,2})?)",
+    ]
+    for p in amount_patterns:
+        m = re.search(p, text)
+        if m:
+            result["amount"] = m.group(1)
+            break
+
+    m = re.search(r"开票日期\s*[：:]?\s*(\d{4})[年/-]?(\d{1,2})[月/-]?(\d{1,2})", text)
+    if m:
+        y, mon, day = m.groups()
+        result["date"] = f"{y}-{mon.zfill(2)}-{day.zfill(2)}"
+
+    m = re.search(r"项目名称\s*[：:]?\s*([^\n]{2,80})", text)
+    if m:
+        result["reason"] = m.group(1).strip()
+
+    # 发票场景给一个默认类别，避免前端全空提示
+    if result and "category" not in result:
+        result["category"] = "其他"
+
+    return result
+
+
 def _postprocess_leave_fields(data: dict, raw_text: str) -> dict:
     """请假单字段兜底：从 OCR 原文补齐关键字段"""
     fixed = dict(data or {})
@@ -266,21 +317,23 @@ async def local_model_fill_json(raw_text: str, document_type: Optional[str] = No
             for f in tpl.get("fields", [])
         ])
 
-    prompt = f"""你是一个审批表单自动填写助手。请根据以下 OCR 识别文本，提取关键信息并返回 JSON。
+    prompt = f"""你是一个审批表单自动填写助手。根据 OCR 文本提取信息。
 
 文档类型: {document_type or '未知'}
-需要的字段（请使用双引号内的英文名称作为 JSON key）:
-{fields_desc if fields_desc else '请根据文本内容自行判断需要哪些字段，使用英文作为 key'}
+字段定义（用英文 key）:
+{fields_desc if fields_desc else '按文本内容判断'}
 
-OCR 识别文本:
+OCR 文本:
 {raw_text}
 
-要求:
-1. 只返回 JSON，不要任何额外说明
-2. 日期格式统一为 YYYY-MM-DD
-3. 如果某个字段无法确定，填 null
-4. 数字字段去掉单位，只保留数值
-5. **必须使用指定的英文 field 名称作为 JSON key**，不要使用中文"""
+严格要求：
+1. 你的整个回复必须是一个合法 JSON，以 {{ 开头、}} 结尾
+2. 不要在 JSON 前后加任何解释、推理、代码块标记
+3. 日期统一 YYYY-MM-DD，数字只保留数值不要单位
+4. 无法确定的字段填 null
+5. JSON key 必须用上面字段定义中的英文名
+
+立即输出纯 JSON："""
 
     try:
         async with httpx.AsyncClient(timeout=90) as client:
@@ -297,12 +350,14 @@ OCR 识别文本:
             data = resp.json()
             msg = data["choices"][0]["message"]
             content = (msg.get("content") or "").strip()
-            stop_reason = data["choices"][0].get("finish_reason", "")
+            reasoning = (msg.get("reasoning_content") or "").strip()
+            # 推理模型：content 可能是思考过程，reasoning_content 含 JSON，优先用后者
+            if reasoning:
+                content = reasoning
+                stop_reason = data["choices"][0].get("finish_reason", "")
             # 如果模型输出被截断，尝试恢复
             if stop_reason == "length":
                 logger.warning("本地模型输出可能被截断 (finish_reason=length)，尝试恢复 JSON")
-            if not content and msg.get("reasoning_content"):
-                content = msg["reasoning_content"].strip()
             if "```json" in content:
                 content = content.split("```json")[1].split("```")[0].strip()
             elif "```" in content:
@@ -387,24 +442,25 @@ async def llm_multimodal_ocr(
             example_items.append(f'    "{f["key"]}": "示例值"')
         example_json = "{\n" + ",\n".join(example_items) + "\n  }"
 
-    prompt = f"""你是一个审批表单处理助手。从图片中提取表单字段，只输出 JSON。
+    prompt = f"""你是一个审批表单处理助手。从图片中提取表单字段。
 
 图片内容是：{document_type or '一张审批表单'}
 
 需要的字段（用英文 key，值从图片中提取）：
 {fields_desc if fields_desc else '从图片中识别'}
 
-要求：
-1. 只输出 JSON，不要任何其他文字
-2. 日期格式 YYYY-MM-DD（如 2026-05-26）
-3. 数字只保留数值，不要单位
-4. 找不到的字段填 null
-5. 值从图片中提取，不要编造
+严格要求：
+1. 你的整个回复必须是一个合法的 JSON 对象，以 {{ 开头、以 }} 结尾
+2. 不要在 JSON 前后添加任何解释、推理过程、代码块标记
+3. 日期格式 YYYY-MM-DD（如 2026-05-26）
+4. 数字只保留数值，不要单位（如 500 而不是 500元）
+5. 找不到的字段填 null，不要编造
+6. 值必须从图片中真实提取
 
 输出示例：
 {example_json}
 
-现在输出 JSON："""
+立即输出纯 JSON："""
 
     async with httpx.AsyncClient(timeout=60) as client:
         resp = await client.post(
@@ -424,53 +480,76 @@ async def llm_multimodal_ocr(
             },
         )
         resp.raise_for_status()
-        msg = resp.json()["choices"][0]["message"]
+        data = resp.json()
+        msg = data["choices"][0]["message"]
         content = (msg.get("content") or "").strip()
-        # 推理模型（如 MiMo）可能把内容放在 reasoning_content 中
-        if not content and msg.get("reasoning_content"):
-            content = msg["reasoning_content"].strip()
+        reasoning = (msg.get("reasoning_content") or "").strip()
+        # 诊断日志：记录 MiMo 返回了什么
+        logger.info(
+            f"MiMo 响应: content_len={len(content)}, reasoning_len={len(reasoning)}, "
+            f"content_preview={content[:150]}, reasoning_preview={reasoning[:150]}"
+        )
+        # 推理模型（MiMo/DeepSeek-R1 等）可能把真实答案放在 reasoning_content 中，
+        # content 只放了推理过程。优先取 reasoning_content 中能解析成 JSON 的部分
+        raw_text = content  # 默认
+        filled: dict = {}
+        candidates_texts = [content, reasoning]  # 两个都试
 
-    # 从响应中提取 JSON——多步容错
-    filled: dict = {}
-    raw_text = content  # 默认
-
-    # Step 1: 去掉 markdown 代码块标记
-    cleaned = content.strip()
-    if "```json" in cleaned:
-        cleaned = cleaned.split("```json")[1].split("```")[0]
-    elif "```" in cleaned:
-        cleaned = cleaned.split("```")[1].split("```")[0]
-
-    # Step 2: 尝试直接解析整个内容为 JSON
-    for attempt in [cleaned.strip(), content.strip()]:
-        if not attempt:
-            continue
-        try:
-            parsed = json.loads(attempt)
-            if isinstance(parsed, dict):
-                filled = parsed
-                break
-        except json.JSONDecodeError:
-            pass
-
-    # Step 3: 如果上一步失败，用正则找 JSON 对象
-    if not filled:
-        import re as _re
-        # 从右向左找最完整的 JSON 对象（避免截断）
-        candidates = list(_re.finditer(r'\{[^{}]*\}', content))
-        for m in reversed(candidates):
-            try:
-                parsed = json.loads(m.group(0))
-                if isinstance(parsed, dict) and len(parsed) >= 1:
-                    filled = parsed
-                    break
-            except json.JSONDecodeError:
+        for ct in candidates_texts:
+            if not ct:
                 continue
+            # Step 1: 去掉 markdown 代码块标记
+            cleaned = ct.strip()
+            if "```json" in cleaned:
+                cleaned = cleaned.split("```json")[1].split("```")[0]
+            elif "```" in cleaned:
+                cleaned = cleaned.split("```")[1].split("```")[0]
+
+            # Step 2: 尝试直接解析
+            for attempt in [cleaned.strip(), ct.strip()]:
+                if not attempt:
+                    continue
+                try:
+                    parsed = json.loads(attempt)
+                    if isinstance(parsed, dict):
+                        filled = parsed
+                        raw_text = ct
+                        break
+                except json.JSONDecodeError:
+                    pass
+            if filled:
+                break
+
+        # Step 3: 正则找 JSON 对象（兜底）
+        if not filled:
+            for ct in candidates_texts:
+                if not ct:
+                    continue
+                import re as _re
+                candidates = list(_re.finditer(r'\{[^{}]*\}', ct))
+                for m in reversed(candidates):
+                    try:
+                        parsed = json.loads(m.group(0))
+                        if isinstance(parsed, dict) and len(parsed) >= 1:
+                            filled = parsed
+                            raw_text = ct
+                            break
+                    except json.JSONDecodeError:
+                        continue
+                if filled:
+                    break
 
     # 归一化字段名
     filled = _normalize_json_keys(filled)
 
-    return content, filled
+    # 发票/报销场景兜底：即使模型未按 schema 返回，也尽量抽取关键字段
+    if not filled or not any(v not in (None, "") for v in filled.values()):
+        reimburse_fallback = _extract_reimbursement_fields_from_text("\n".join([content, reasoning]))
+        if reimburse_fallback:
+            filled.update(reimburse_fallback)
+            raw_text = "\n".join([content, reasoning]).strip() or raw_text
+
+    return raw_text, filled
 
 
 async def llm_api_fill_json(raw_text: str, api_base: str, api_key: str, model: str,
@@ -486,21 +565,23 @@ async def llm_api_fill_json(raw_text: str, api_base: str, api_key: str, model: s
             for f in tpl.get("fields", [])
         ])
 
-    prompt = f"""你是一个审批表单自动填写助手。请根据以下 OCR 识别文本，提取关键信息并返回 JSON。
+    prompt = f"""你是一个审批表单自动填写助手。根据 OCR 文本提取信息。
 
 文档类型: {document_type or '未知'}
-需要的字段（请使用双引号内的英文名称作为 JSON key）:
-{fields_desc if fields_desc else '请根据文本内容自行判断需要哪些字段，使用英文作为 key'}
+字段定义（用英文 key）:
+{fields_desc if fields_desc else '按文本内容判断'}
 
-OCR 识别文本:
+OCR 文本:
 {raw_text}
 
-要求:
-1. 只返回 JSON，不要任何额外说明
-2. 日期格式统一为 YYYY-MM-DD
-3. 如果某个字段无法确定，填 null
-4. 数字字段去掉单位，只保留数值
-5. **必须使用指定的英文 field 名称作为 JSON key**，不要使用中文"""
+严格要求：
+1. 你的整个回复必须是一个合法 JSON，以 {{ 开头、}} 结尾
+2. 不要在 JSON 前后加任何解释、推理、代码块标记
+3. 日期统一 YYYY-MM-DD，数字只保留数值不要单位
+4. 无法确定的字段填 null
+5. JSON key 必须用上面字段定义中的英文名
+
+立即输出纯 JSON："""
 
     async with httpx.AsyncClient(timeout=60) as client:
         resp = await client.post(
@@ -517,9 +598,10 @@ OCR 识别文本:
         data = resp.json()
         msg = data["choices"][0]["message"]
         content = (msg.get("content") or "").strip()
-        # 推理模型可能把内容放在 reasoning_content 中
-        if not content and msg.get("reasoning_content"):
-            content = msg["reasoning_content"].strip()
+        reasoning = (msg.get("reasoning_content") or "").strip()
+        # 推理模型 JSON 通常在 reasoning_content，优先用它
+        if reasoning:
+            content = reasoning
         # 清理代码块标记
         if "```json" in content:
             content = content.split("```json")[1].split("```")[0]
@@ -568,28 +650,29 @@ async def ocr_with_tier(
         have_multimodal = bool(api_key)  # 有多模态 Key 才走一步到位
 
         if have_multimodal:
-            # 先用 EasyOCR 快速提取文本以检测文档类型
-            pre_raw = local_easyocr(image_bytes)
-            pre_type = detect_document_type(pre_raw)
+            # 直接交给多模态 LLM，无需 EasyOCR 预扫（多模态模型自己能识别文档类型）
             try:
-                # 让多模态 LLM 做 OCR+字段提取，传入已检测的文档类型
                 raw, filled = await llm_multimodal_ocr(
-                    image_bytes, api_base, api_key, model, document_type=pre_type,
+                    image_bytes, api_base, api_key, model, document_type=None,
                 )
-                doc_type = pre_type or detect_document_type(raw)
+                doc_type = detect_document_type(raw)
+                if not doc_type:
+                    # raw 可能是 JSON 文本，补做发票字段级兜底提取
+                    fallback_fields = _extract_reimbursement_fields_from_text(raw)
+                    if fallback_fields:
+                        filled = {**fallback_fields, **(filled or {})}
                 # 如果多模态返回了空 JSON，降级走文本填充
-                if not filled or all(v is None for v in filled.values()):
+                if not filled or all(v in (None, "") for v in filled.values()):
                     logger.warning("多模态返回空 JSON，降级 EasyOCR + 外部填充")
                     raise ValueError("多模态返回空")
                 # leave 后处理辅助
                 if doc_type == "leave" and filled:
-                    filled = _postprocess_leave_fields(filled, pre_raw if pre_raw else raw)
+                    filled = _postprocess_leave_fields(filled, raw)
                 return raw, OCRProvider.LLM, filled
             except Exception as e:
                 logger.warning(f"多模态 LLM OCR 失败: {e}，降级 EasyOCR + 外部填充")
-                # 降级：用已有 EasyOCR 结果 + 外部 LLM 填充
-                raw = pre_raw
-                filled = await _fill_with_best(raw, fill_api_key, fill_api_base, fill_model, document_type=pre_type)
+                raw = local_easyocr(image_bytes)
+                filled = await _fill_with_best(raw, fill_api_key, fill_api_base, fill_model, document_type=detect_document_type(raw))
                 return raw, OCRProvider.LOCAL, filled
 
         # 无多模态 Key：EasyOCR + 外部 LLM 填充

@@ -340,6 +340,7 @@ export default function WorkbenchPage() {
       <div style={{
         transition: 'all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)',
         animation: 'fadeInUp 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both',
+        marginBottom: 14,
       }}>
         <GlassCard strong style={{
           padding: result && !result.error ? '12px 16px' : '40px 20px',
@@ -469,6 +470,7 @@ export default function WorkbenchPage() {
       {((result && !result.error && result.filled_json && typeof result.filled_json === 'object' && Object.keys(result.filled_json).length > 0 && Object.values(result.filled_json).some((v: any) => v !== null && v !== '' && v !== undefined)) || (showManualEntry && formType)) && (
         <div style={{
           overflow: 'hidden',
+          marginTop: 2,
           animation: 'slideDown 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards',
         }}>
           <GlassCard strong>
