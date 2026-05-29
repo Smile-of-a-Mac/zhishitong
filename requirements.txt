@@ -33,6 +33,9 @@ python-magic==0.4.27
 Pillow==10.4.0
 easyocr==1.7.2
 
+# Redis (缓存 + 限流 + Key 池计数)
+redis[hiredis]>=5.0.0
+
 # Workflow / RAG
 langgraph==0.2.0
 langchain==0.3.0

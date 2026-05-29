@@ -71,5 +71,10 @@ MAX_LLM_KEYS = int(os.getenv("MAX_LLM_KEYS", "100"))
 EASYOCR_LANGS = ["ch_sim", "en"]
 EASYOCR_GPU = os.getenv("EASYOCR_GPU", "false").lower() == "true"
 
+# ---- Redis ----
+REDIS_URL = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
+OCR_CACHE_TTL = int(os.getenv("OCR_CACHE_TTL", str(24 * 3600)))  # OCR 缓存 TTL（秒）
+RATE_LIMIT_ENABLED = os.getenv("RATE_LIMIT_ENABLED", "true").lower() == "true"
+
 # ---- 模板文件 ----
 TEMPLATES_PATH = Path(__file__).resolve().parent / "templates.json"

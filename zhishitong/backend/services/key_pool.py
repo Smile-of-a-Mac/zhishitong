@@ -11,6 +11,7 @@
   - record_success: 使用成功，记录 usage_count++ & last_used_at
   - record_failure: 使用失败，fail_count++，超阈值自动禁用
 """
+import asyncio
 import datetime
 import logging
 from typing import Optional, NamedTuple
@@ -19,6 +20,7 @@ from sqlalchemy.orm import Session
 
 from models import ApiKey, ApiKeyType
 from services.crypto_service import decrypt
+from services.redis_service import keypool_incr_usage, keypool_incr_fail
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +92,14 @@ def resolve_key(
     return ResolvedKey(key_id=None, api_base=fallback_base, api_key=fallback_key, model=fallback_model)
 
 
+async def _redis_incr_usage(key_id: int):
+    """异步写入 Redis 计数（不阻塞主流程）"""
+    try:
+        await keypool_incr_usage(key_id)
+    except Exception:
+        pass
+
+
 def record_success(db: Session, key_id: Optional[int]) -> None:
     """记录一次成功使用"""
     if key_id is None:
@@ -99,6 +109,19 @@ def record_success(db: Session, key_id: Optional[int]) -> None:
         key.usage_count = (key.usage_count or 0) + 1
         key.last_used_at = datetime.datetime.now(datetime.timezone.utc)
         db.commit()
+    # 异步写入 Redis（不阻塞）
+    try:
+        asyncio.get_running_loop().create_task(_redis_incr_usage(key_id))
+    except RuntimeError:
+        pass
+
+
+async def _redis_incr_fail(key_id: int):
+    """异步写入 Redis 失败计数"""
+    try:
+        await keypool_incr_fail(key_id)
+    except Exception:
+        pass
 
 
 def record_failure(db: Session, key_id: Optional[int]) -> None:
@@ -116,6 +139,11 @@ def record_failure(db: Session, key_id: Optional[int]) -> None:
                 f"失败次数 {key.fail_count} >= {FAIL_THRESHOLD}，已自动禁用"
             )
         db.commit()
+    # 异步写入 Redis 失败计数（不阻塞）
+    try:
+        asyncio.get_running_loop().create_task(_redis_incr_fail(key_id))
+    except RuntimeError:
+        pass
 
 
 def get_pool_stats(db: Session, key_type: ApiKeyType) -> dict:

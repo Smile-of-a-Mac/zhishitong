@@ -1,5 +1,5 @@
 """OCR 路由 — 图片上传 & 识别"""
-import json, logging, time
+import asyncio, json, logging, time
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
@@ -8,13 +8,14 @@ from database import get_db
 from models import User, QuotaLog, ApprovalRecord, TierEnum
 from schemas import OCRResult
 from auth import get_current_user
-from config import LLM_API_BASE, LLM_API_KEY, LLM_MODEL, LLM_FILL_MODEL
+from config import LLM_API_BASE, LLM_API_KEY, LLM_MODEL, LLM_FILL_MODEL, RATE_LIMIT_WINDOW
 from services.file_service import validate_file, store_file
 from services.ocr_service import ocr_with_tier, OCRProvider
 from services.template_service import detect_document_type
 from services.crypto_service import decrypt
 from services.logging_service import LogCategory, log, log_error
 from services.key_pool import resolve_key, record_success, record_failure, ResolvedKey
+from services.redis_service import ocr_cache_get, ocr_cache_set, rate_limit_check
 from models import ApiKeyType
 
 logger = logging.getLogger(__name__)
@@ -72,6 +73,38 @@ async def ocr_upload(
     except Exception as e:
         log_error(LogCategory.OCR, f"文件处理失败: {file.filename}", exc=e, user_id=user.id, filename=file.filename)
         raise HTTPException(500, f"文件处理失败: {e}")
+
+    # 1.5 速率限制
+    allowed, remaining_rl = await rate_limit_check(user.id, user.tier.value)
+    if not allowed:
+        raise HTTPException(429, f"请求过于频繁，请 {RATE_LIMIT_WINDOW}s 后重试")
+
+    # 1.6 OCR 缓存查询
+    cached = await ocr_cache_get(content)
+    if cached:
+        duration_ms = round((time.time() - t_start) * 1000)
+        cached_quota = max(0, user.llm_ocr_quota - user.llm_ocr_used)
+        log(
+            LogCategory.OCR,
+            "info",
+            f"OCR 缓存命中 [{cached.get('provider', 'unknown')}] {file.filename}",
+            user_id=user.id,
+            duration_ms=duration_ms,
+            provider=cached.get("provider", ""),
+            doc_type=cached.get("document_type", "unknown"),
+        )
+        return OCRResult(
+            text=cached.get("text", ""),
+            provider=cached.get("provider", ""),
+            tier=user.tier.value,
+            quota_remaining=cached_quota if user.tier == TierEnum.pro else None,
+            document_type=cached.get("document_type"),
+            filled_json=cached.get("filled_json"),
+            storage_path=storage_path,
+            original_filename=file.filename,
+            mime_type=mime,
+            file_size=len(content),
+        )
 
     # 2. 选择 LLM 配置（智能 Key 池）
     ocr_cfg, fill_cfg = _resolve_llm_config(db)
@@ -135,6 +168,15 @@ async def ocr_upload(
         doc_type=doc_type or "unknown",
         text_len=len(text),
     )
+
+    # 8. 写入 OCR 缓存（异步，不阻塞响应）
+    cache_data = {
+        "text": text,
+        "provider": provider.value,
+        "document_type": doc_type,
+        "filled_json": filled_json,
+    }
+    asyncio.create_task(ocr_cache_set(content, cache_data))
 
     return OCRResult(
         text=text,
