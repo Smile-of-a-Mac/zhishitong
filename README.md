@@ -134,7 +134,7 @@ sito/
 ### 🧠 AI 能力
 | 模块 | 功能 |
 |------|------|
-| 📷 **智能 OCR** | 多模态 LLM 一步到位（Pro）→ 字段名映射归一化 + 正则兜底提取 → EasyOCR 降级 + PDF 文本直接提取（pypdf） |
+| 📷 **智能 OCR** | 多模态 LLM 一步到位（Pro）→ 字段名映射归一化 + 正则兜底提取 → EasyOCR 降级 + PDF 文本直接提取（pypdf） + 扫描件自动转图片（pymupdf） |
 | 📚 **RAG 政策检索** | TF-IDF 向量检索 + LLM 生成，6 个 AI 端点 |
 | 🎯 **意图识别** | 自然语言描述 → 自动推荐文档类型 + 预填字段 |
 | ⚖️ **合规性分析** | 自动检索相关政策条文，逐条核对申请合规性 |
@@ -167,7 +167,7 @@ sito/
 | 📋 **系统监控** | 概览/日志/错误 三面板 + 审计日志 |
 | 🔍 **OCR 工具链追踪** | 监控日志显示 provider/model/tier/doc_type 完整调用链 |
 | 🔗 **英文字段映射** | 多模态模型输出字段自动归一化为模板英文 key（invoice_number→invoice_no 等） |
-| 🧪 **LoRA 微调** | 山科大实际流程数据 → 微调 Qwen3-4B → GGUF 推理 |
+| 🧪 **LoRA 微调** | 山科大实际流程数据 → 微调 Qwen3-4B → 自动合并输出 GGUF |
 
 ---
 
@@ -177,7 +177,7 @@ sito/
 |----|------|
 | **前端** | React 18 + TypeScript + Vite + 玻璃拟态 UI |
 | **后端** | FastAPI + SQLAlchemy + SQLite + LangGraph + Redis |
-| **AI/OCR** | EasyOCR + 多模态 LLM API（MiMo/DeepSeek/Qwen-VL）+ llama.cpp 本地推理 + 字段名映射归一化 + 正则兜底提取 + pypdf 文本提取 |
+| **AI/OCR** | EasyOCR + 多模态 LLM API（MiMo/DeepSeek/Qwen-VL）+ llama.cpp 本地推理 + 字段名映射归一化 + 正则兜底提取 + pypdf 文本提取 + pymupdf 扫描件转图片 |
 | **RAG** | TF-IDF (scikit-learn) + 自定义 JSON 知识库（policy_kb.json） |
 | **LoRA** | PEFT + Transformers + PyTorch（Apple MPS / CUDA / CPU） |
 | **缓存/限流** | Redis（OCR 缓存、Key 池原子计数、速率限制） |
@@ -238,9 +238,8 @@ PYTHONPATH="$PWD/backend" python backend/seed.py
 ```bash
 cd training
 pip install -r train_requirements.txt
-python train_lora.py      # 训练
-python merge_lora.py       # 合并
-# start.sh 会自动检测并转换 GGUF
+python train_lora.py      # 训练 + 自动合并 GGUF（一步到位）
+# start.sh 会自动检测 qwen3-4b-lora.gguf
 ```
 
 ---

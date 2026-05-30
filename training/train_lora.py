@@ -9,8 +9,7 @@ LoRA 微调 Qwen3-4B → 山东科技大学事务流程助手
 
 用法:
     cd /Users/wangdaoyu/VSCode/sito
-    python training/train_lora.py        # 训练
-    python training/merge_lora.py        # 合并为 GGUF
+    python training/train_lora.py        # 训练 + 自动合并 GGUF
 
 首次运行会用本地 GGUF 文件（约 2.3GB），无需额外下载。
 """
@@ -46,7 +45,7 @@ LORA_TARGETS = ["q_proj", "k_proj", "v_proj", "o_proj",
                  "gate_proj", "up_proj", "down_proj"]
 
 # 训练
-NUM_EPOCHS = 20           # 9条数据，多跑几轮让 LoRA 充分学习
+NUM_EPOCHS = 10           # 9条数据，10轮足够，再多容易过拟合
 BATCH_SIZE = 1
 GRAD_ACCUM = 8            # 等效 batch=8
 LEARNING_RATE = 1e-4      # 降低 LR 避免在少量数据上过拟合
@@ -308,12 +307,14 @@ def train():
     # 打印下一步指令
     print(f"""
 {'='*60}
-训练完成！下一步：
-
-  # 合并 LoRA → GGUF（一步到位，无需额外转换）
-  python training/merge_lora.py
+训练完成！自动合并 LoRA → GGUF...
 {'='*60}
 """)
+
+    # 自动合并
+    sys.path.insert(0, str(Path(__file__).parent))
+    from merge_lora import merge
+    merge(auto_clean=True)
 
 
 if __name__ == "__main__":

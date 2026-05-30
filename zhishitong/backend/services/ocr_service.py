@@ -67,16 +67,36 @@ def extract_pdf_text(pdf_bytes: bytes, max_pages: int = 20) -> str:
     return text.strip()
 
 
+def pdf_page_to_image(pdf_bytes: bytes, page_index: int = 0) -> bytes:
+    """将 PDF 指定页渲染为 PNG 图片字节。需要 pymupdf。"""
+    import fitz  # pymupdf
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    if page_index >= len(doc):
+        page_index = 0
+    page = doc[page_index]
+    # 200 DPI 渲染
+    mat = fitz.Matrix(200 / 72, 200 / 72)
+    pix = page.get_pixmap(matrix=mat)
+    img_bytes = pix.tobytes("png")
+    doc.close()
+    return img_bytes
+
+
 async def pdf_text_ocr(
     pdf_bytes: bytes,
     fill_api_key: str = "",
     fill_api_base: str = "",
     fill_model: str = "",
-) -> tuple[str, Optional[dict]]:
-    """文字型 PDF：直接提取文本，再复用现有字段填充链路。"""
+) -> tuple[str, Optional[dict], bool]:
+    """
+    文字型 PDF：直接提取文本，再复用现有字段填充链路。
+    返回 (raw, filled, is_scanned)。
+    is_scanned=True 表示 PDF 是扫描件（无文本层），需走图片 OCR。
+    """
     raw = extract_pdf_text(pdf_bytes)
     if len(raw.strip()) < 20:
-        raise ValueError("PDF 未提取到足够文本，可能是扫描件")
+        return "", None, True  # 扫描件，标记 is_scanned
+
     doc_type = detect_document_type(raw)
     try:
         filled = await _fill_with_best(raw, fill_api_key, fill_api_base, fill_model, document_type=doc_type)
@@ -87,7 +107,7 @@ async def pdf_text_ocr(
         filled = _normalize_json_keys(filled)
         if doc_type == "leave":
             filled = _postprocess_leave_fields(filled, raw)
-    return raw, filled or {}
+    return raw, filled or {}, False  # 文字型 PDF
 
 
 # ========== 本地小模型 JSON 填充 ==========
@@ -886,8 +906,21 @@ async def ocr_with_tier(
     fill_model: str = "",
 ) -> tuple[str, str, Optional[dict]]:
     if mime_type == "application/pdf":
-        raw, filled = await pdf_text_ocr(image_bytes, fill_api_key, fill_api_base, fill_model)
-        return raw, OCRProvider.PDF_TEXT, filled
+        raw, filled, is_scanned = await pdf_text_ocr(image_bytes, fill_api_key, fill_api_base, fill_model)
+
+        # 文字型 PDF：直接返回
+        if not is_scanned:
+            return raw, OCRProvider.PDF_TEXT, filled
+
+        # 扫描件 PDF：提取首页为图片，走图片 OCR 流程
+        logger.info("PDF 为扫描件，提取首页图片进行 OCR")
+        try:
+            image_bytes = pdf_page_to_image(image_bytes, page_index=0)
+        except Exception as e:
+            logger.error(f"PDF 转图片失败: {e}")
+            raise ValueError("无法处理此 PDF：文本层为空且转图片失败") from e
+
+        # 扫描件继续走下面的图片 OCR 逻辑（不 return）
 
     if tier == "free":
         raw = local_easyocr(image_bytes)

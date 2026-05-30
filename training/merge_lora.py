@@ -55,11 +55,12 @@ def _find_convert_script() -> Path:
     sys.exit(1)
 
 
-def main():
+def merge(auto_clean: bool = False) -> bool:
+    """合并 LoRA 到 GGUF，auto_clean=True 时不询问直接清理 HF 中间文件。"""
     if not LORA_ADAPTER_PATH.exists():
         print(f"[ERROR] LoRA adapter 不存在: {LORA_ADAPTER_PATH}")
         print("请先运行 training/train_lora.py 完成训练")
-        return
+        return False
 
     convert_script = _find_convert_script()
     device = get_device()
@@ -81,10 +82,7 @@ def main():
         local_files_only=True,
     )
 
-    tokenizer = AutoTokenizer.from_pretrained(
-        BASE_MODEL_DIR,
-        local_files_only=True,
-    )
+    tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL_DIR, local_files_only=True)
 
     print("[2/3] 加载 LoRA 并合并...")
     model = PeftModel.from_pretrained(model, str(LORA_ADAPTER_PATH))
@@ -109,26 +107,34 @@ def main():
     if result.returncode != 0:
         print(f"[ERROR] GGUF 转换失败:\n{result.stderr}")
         print(f"  HF 中间文件保留在: {HF_MERGE_DIR}")
-        sys.exit(1)
+        return False
 
-    # 打印转换日志的最后几行
-    for line in result.stdout.strip().split("\n")[-5:]:
+    for line in result.stdout.strip().split("\n")[-3:]:
         print(f"  {line}")
 
     gguf_size = OUTPUT_GGUF.stat().st_size
     print(f"\n[SUCCESS] 合并完成！")
-    print(f"  输出:       {OUTPUT_GGUF} ({gguf_size / 1024**3:.1f}GB)")
-    print(f"  HF 缓存:    {HF_MERGE_DIR} ({hf_size / 1024**3:.1f}GB)")
+    print(f"  输出:    {OUTPUT_GGUF} ({gguf_size / 1024**3:.1f}GB)")
+    print(f"  HF 缓存: {HF_MERGE_DIR} ({hf_size / 1024**3:.1f}GB)")
 
-    # ---- 4. 可选：清理 HF 中间文件 ----
-    keep_hf = input("\n是否保留 HF 中间文件？[y/N]: ").strip().lower()
-    if keep_hf != "y":
+    # ---- 4. 清理 HF 中间文件 ----
+    if auto_clean:
         shutil.rmtree(HF_MERGE_DIR, ignore_errors=True)
-        print("  HF 中间文件已清理")
+        print("  HF 中间文件已自动清理")
     else:
-        print(f"  HF 中间文件保留在: {HF_MERGE_DIR}")
+        keep_hf = input("\n是否保留 HF 中间文件？[y/N]: ").strip().lower()
+        if keep_hf != "y":
+            shutil.rmtree(HF_MERGE_DIR, ignore_errors=True)
+            print("  HF 中间文件已清理")
+        else:
+            print(f"  HF 中间文件保留在: {HF_MERGE_DIR}")
 
     print(f"\n模型就绪！推理服务将自动检测: {OUTPUT_GGUF}")
+    return True
+
+
+def main():
+    merge(auto_clean=False)
 
 
 if __name__ == "__main__":
