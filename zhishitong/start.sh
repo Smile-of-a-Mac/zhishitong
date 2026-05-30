@@ -87,7 +87,7 @@ trap 'cleanup 0' SIGINT SIGTERM
 
 # ---------- 5. 切换微调模型（如有） ----------
 MERGED_DIR="$ROOT_DIR/../lora_output_merged"
-LORA_GGUF="$ROOT_DIR/../models/qwen2.5-0.5b-lora.gguf"
+LORA_GGUF="$ROOT_DIR/../models/qwen3-4b-lora.gguf"
 MODELS_DIR="$ROOT_DIR/../models"
 
 if [ -d "$MERGED_DIR" ]; then
@@ -113,13 +113,13 @@ for p in site.getsitepackages():
   fi
   if [ -f "$LORA_GGUF" ]; then
     export MODEL_PATH="$LORA_GGUF"
-    log "使用微调模型: qwen2.5-0.5b-lora.gguf"
+    log "使用微调模型: qwen3-4b-lora.gguf"
   fi
 fi
 
 # ---------- 6. 启动推理服务 ----------
 log "启动本地推理服务 (llama.cpp)…"
-export MODEL_PATH="${MODEL_PATH:-$MODELS_DIR/qwen2.5-0.5b.gguf}"
+export MODEL_PATH="${MODEL_PATH:-$MODELS_DIR/qwen3-4b.gguf}"
 PYTHONPATH="$INFER_DIR" "$VENV_UVICORN" server:app \
   --host 0.0.0.0 --port 18080 &
 INFER_PID=$!
