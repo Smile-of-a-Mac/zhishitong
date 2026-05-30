@@ -20,7 +20,7 @@
 
 ---
 
-## 一、用户分级体系（三级 + 三层管理角色）
+## 一、用户分级体系（Free/Pro 两级 + 管理角色）
 
 > **设计原则：** 即使是 4B 参数的小模型，多模态看图识字能力也有限（手写体、表格、复杂发票不可靠）。
 > 因此 Free 层采用 **EasyOCR 提取文字 → 本地模型做纯文本 JSON 填充**，而非直接看图。
@@ -261,7 +261,7 @@ Pro 用户如需本地降级，安装 ~200 MB（不含模型）
 | **物理删除任意用户数据** | ❌ | ✅ | ❌ | ❌ |
 | **创建/管理部门管理员** | ❌ | ❌ | ✅ | ❌ |
 | **为本校用户设置学校** | ❌ | ❌ | ✅ | ❌ |
-| **查看本校事务（同校所有部门）** | ❌ | ✅ | ✅ | ✅ |
+| **查看事务** | ❌ | ✅ 全量 | ✅ 本校全量 | ✅ 本校本部门 |
 | **审批（通过/不通过/需修改）** | ❌ | ❌ | ❌ | ✅ |
 | **系统监控** | ❌ | ✅ | ❌ | ❌ |
 
@@ -753,13 +753,13 @@ function renderField(field: FieldSchema) {
 | 层级 | 策略 | 说明 |
 |------|------|------|
 | 前端 | 文件类型过滤 | `accept="image/*,.pdf"` + 大小限制 |
-| 前端 | 预览时不可执行 | 图片用 `<img>` 渲染，PDF 用 `<iframe>` 沙箱 |
+| 前端 | 预览时不可执行 | 图片用 `<img>` 渲染；PDF 仅显示文件图标，不在前端内嵌执行 |
 | 后端 | MIME 白名单 | 仅允许 image/jpeg, image/png, image/webp, application/pdf |
 | 后端 | 魔数校验 | 检查文件头字节（非仅信任扩展名） |
 | 后端 | 文件大小上限 | 默认 10MB（可在环境变量配置） |
 | 后端 | 文件名清洗 | 去除路径分隔符、特殊字符，生成 UUID 文件名 |
-| 存储 | 隔离目录 | 按 `user_id/document_type/YYYY-MM/uuid.ext` 组织 |
-| 存储 | 禁用执行 | 存储目录在容器中挂载为 `noexec` |
+| 存储 | 隔离目录 | 按 `uploads/{user_id}/YYYY-MM/{uuid.ext}` 组织 |
+| 存储 | 路径防逃逸 | `resolve_storage_path()` 校验解析路径必须位于 `UPLOAD_DIR` 下 |
 
 ### 8.2 后端实现
 
@@ -796,7 +796,9 @@ async def validate_and_store(file: UploadFile, user_id: int) -> str:
     return str(storage)
 ```
 
-### 8.3 Docker 卷挂载安全
+### 8.3 Docker 卷挂载安全（规划）
+
+当前本地开发模式通过 MIME 魔数校验、UUID 文件名和路径防逃逸保护上传文件；Docker 部署时建议进一步将上传目录挂载为 `noexec`：
 
 ```yaml
 # docker-compose.yml
@@ -818,7 +820,7 @@ services:
 
 ## 九、完整数据模型
 
-### 5.1 新增/修改的表
+### 9.1 核心表（节选）
 
 ```sql
 -- ===== 用户表（扩展） =====
@@ -830,7 +832,7 @@ users:
 -- ===== LLM API Key 池 =====
 api_keys:
   id:              INT PK
-  key_type:        ENUM('ocr', 'json_fill')  -- OCR专用 / JSON填充专用
+  key_type:        ENUM('ocr', 'json_fill', 'llm')  -- OCR / JSON填充 / RAG与AI通用LLM
   provider:        VARCHAR(64)    -- 阿里百炼 / 火山引擎 / DeepSeek / 自定义
   api_base:        VARCHAR(256)   -- API 地址
   api_key:         VARCHAR(512)   -- 加密存储
@@ -851,7 +853,7 @@ approval_records:
   mime_type:       VARCHAR(64)
   file_size:       BIGINT
 
-  ocr_provider:    ENUM('local_model', 'llm_api')  -- 使用哪种方式
+  ocr_provider:    VARCHAR(32)     -- easyocr/pdf_text/llm_multimodal/local 等
   ocr_model:       VARCHAR(128)   -- 具体模型名
   api_key_id:      INT FK→api_keys NULL  -- 如果走 API，用的哪个 Key
 
@@ -860,11 +862,14 @@ approval_records:
 
   -- 审批状态
   document_type:   VARCHAR(32)
-  status:          ENUM('pending','approved','rejected','needs_revision','cancelled')
+  status:          ENUM('pending','approved','rejected','needs_revision','cancelled','withdrawn')
   decision_reason: TEXT           -- LLM 分析摘要 / 审批理由
   policy_refs:     TEXT           -- 引用规则条文
   suggestions:     TEXT           -- LLM 修改建议
   missing_info:    TEXT           -- LLM 标记缺失信息
+
+  current_stage:   VARCHAR(32)    -- dept_review / finance_review / school_review / completed
+  stage_history_json: TEXT        -- 阶段历史 JSON（兼容字段）
 
   -- 软删除字段
   is_deleted:      BOOLEAN DEFAULT FALSE
@@ -884,14 +889,25 @@ admin_audit_logs:
   target_id:       INT
   detail:          TEXT
   created_at:      DATETIME
+
+-- ===== 阶段历史（实际表名 approval_stage_histories） =====
+approval_stage_histories:
+  id:              INT PK
+  record_id:       INT FK→approval_records
+  stage:           VARCHAR(64)
+  status:          VARCHAR(32)
+  reviewer_id:     INT FK→users NULL
+  reason:          TEXT NULL
+  created_at:      DATETIME
 ```
 
-### 5.2 Key 数量限制实现
+### 9.2 Key 数量限制实现
 
 ```python
 # 伪代码
 MAX_OCR_KEYS = 100
 MAX_FILL_KEYS = 100
+MAX_LLM_KEYS = 100
 
 def add_api_key(key_type, ...):
     count = db.query(ApiKey).filter_by(key_type=key_type).count()
@@ -923,13 +939,23 @@ def add_api_key(key_type, ...):
 ├── /profile                  # 个人信息
 │   └── 用户名、学校（只读）、部门、角色、层级、LLM 用量、账号状态
 │
+├── /history                  # 我的事务 / 历史记录
+├── /dashboard                # 数据看板（管理员角色）
+├── /notifications            # 通知中心
+├── /announcements            # 公告制度
+├── /resources                # 资源预约
+├── /apply/:docType           # 19 类手动申请表单
+│
 ├── /admin/* (信息管理员)       # 需 is_admin 权限
+│   ├── /admin/test           # 模拟测试
 │   ├── /admin/api-keys       # API Key 管理
 │   │   ├── OCR Key 池 (≤100)
 │   │   ├── JSON 填充 Key 池 (≤100)
 │   │   ├── 添加 Key 弹窗
 │   │   └── Key 状态监控（🟢正常 / 🔴停用 / 🗑 永久删除）
 │   │
+│   ├── /admin/schools        # 学校管理
+│   ├── /admin/members        # 成员管理
 │   ├── /admin/data           # 用户数据管理
 │   │   ├── 所有用户的上传记录
 │   │   ├── 软删除管理（恢复/彻底删除）
@@ -939,10 +965,14 @@ def add_api_key(key_type, ...):
 │       └── 审计日志、运行状态
 │
 ├── /dept                     # 事务管理（需 is_dept_admin）
-│   └── 本校审批队列 → 审阅 AI 分析 → 通过/不通过/需修改
+│   └── 本部门审批队列 → 审阅 AI 分析 → 通过/不通过/需修改
+│
+├── /finance                  # 财务审批（需 is_finance_admin）
+│   └── 报销财务环节审批
 │
 └── /school                   # 学校管理（需 is_school_admin）
-    └── 管理部门管理员账号（增/删/改/查）
+    ├── 管理部门管理员账号（增/删/改/查）
+    └── /school/affairs       # 全校事务总览与学校级审批
 ```
 
 ---
@@ -1587,8 +1617,8 @@ cd training && python train_lora.py
 # Step 2: 合并 LoRA adapter 到基座模型
 python merge_lora.py
 
-# Step 3: 转换为 GGUF（start.sh 自动检测并执行）
-# 或手动：
+# Step 3: 转换为 GGUF（训练/合并阶段产出，start.sh 只负责检测并使用）
+# 手动示例：
 python -m llama_cpp.convert_hf_to_gguf lora_output_merged \
   --outfile models/qwen3-4b-lora.gguf --outtype q8_0
 ```
@@ -1597,14 +1627,12 @@ python -m llama_cpp.convert_hf_to_gguf lora_output_merged \
 
 ```bash
 # start.sh 检测逻辑（v0.5.0 新增）
-if [ -d "$MERGED_DIR" ]; then
-  if [ ! -f "$LORA_GGUF" ]; then
-    # 自动转换 HF → GGUF
-    python convert_hf_to_gguf.py "$MERGED_DIR" --outfile "$LORA_GGUF"
-  fi
+if [ -f "$LORA_GGUF" ]; then
   export MODEL_PATH="$LORA_GGUF"  # 使用微调模型
 fi
 ```
+
+当前 `start.sh` 不再负责 HF → GGUF 转换，只检测 `models/qwen3-4b-lora.gguf` 是否存在；转换由训练/合并阶段完成。
 
 ---
 
@@ -1721,22 +1749,22 @@ fi
 
 ---
 
-## 二十六b、前端架构设计
+## 二十七、前端架构设计
 
 > **设计原则：** 前端采用 React 18 + TypeScript 构建，基于 iOS 原生设计语言实现了完整的玻璃拟态（Glassmorphism）设计系统。所有页面共享统一的视觉风格、动效规范和交互模式。
 
-### 26b.1 技术栈
+### 27.1 技术栈
 
 | 依赖 | 版本 | 职责 |
 |------|------|------|
 | React | 18.3 | UI 框架（函数式组件 + Hooks） |
 | TypeScript | 5.5 | 类型安全 |
 | Vite | 5.4 | 构建工具 + 开发服务器 |
-| React Router | 6.26 | 客户端路由（20 条路由） |
-| Ant Design | 5.20 | 表单、表格、消息提示等基础 UI 组件 |
+| React Router | 6.26 | 客户端路由（19 条路由） |
+| Ant Design | 5.20 | ConfigProvider/中文 locale/主题 token 基础能力（业务 UI 主要为自研玻璃拟态组件） |
 | Axios | 1.7 | HTTP 请求 + AI 活动拦截器 |
 
-### 26b.2 设计系统（Glass Design System）
+### 27.2 设计系统（Glass Design System）
 
 #### CSS 变量体系
 
@@ -1763,8 +1791,8 @@ fi
 
 - `backdrop-filter: blur(25px) saturate(180%)` — 毛玻璃效果
 - `border-radius: 22px` — iOS 风格大圆角
-- 伪元素 HDR 高光提亮：`radial-gradient` 配合 `mix-blend-mode: color-dodge`
-- 触摸缩放动画：`transform: scale(0.98)` + `filter: brightness(0.99)`
+- 统一圆角、半透明边框、阴影和 `overflow: hidden` 圆角遮罩
+- 支持 `strong` 和 `size` 变体，交互动画主要由按钮、表格行、弹窗等具体组件承担
 
 #### 深色模式
 
@@ -1775,7 +1803,7 @@ fi
 - 文字：`#1d1d1f` → `#f5f5f7`
 - 强调色：`#007aff` → `#0a84ff`
 
-### 26b.3 组件架构
+### 27.3 组件架构
 
 #### Frame.tsx（425 行）— 布局框架
 
@@ -1801,11 +1829,11 @@ fi
 - 四个模块：合规分析、相似案例、政策条文、缺失信息
 - 始终可见（不折叠），数据在审批详情加载时自动获取
 
-#### AuroraBackground.tsx（189 行）— 全屏动态背景
+#### AuroraBackground.tsx（174 行）— 全屏动态背景
 
-- 6 条彩色柔光带全屏漂浮（径向渐变 + 正弦运动）
-- 40 颗微光粒子漂浮点缀
-- AI 调用时：光带加速、亮度提升、透明度增加
+- 6 个大型半透明 gradient blob 组成低饱和流体智能场
+- blob 采用低频正弦叠加漂移，边界轻微有机形变
+- AI 调用时：blob 向中上部隐形焦点聚合、速度提升、纹理流动增强
 - 静态时：极低存在感，不抢卡片注意力
 
 #### GlassCard.tsx（38 行）— 基础卡片
@@ -1819,7 +1847,7 @@ fi
 - 通过 axios blob 加载需要 JWT 认证的图片
 - 解决 `<img src>` 无法携带 Authorization header 的 403 问题
 
-### 26b.4 页面路由（20 条）
+### 27.4 页面路由（19 条）
 
 ```
 /login                              → LoginPage（登录）
@@ -1843,7 +1871,7 @@ fi
 /admin/data                         → AdminDataPage（数据管理）
 ```
 
-### 26b.5 权限守卫
+### 27.5 权限守卫
 
 | 守卫组件 | 逻辑 |
 |----------|------|
@@ -1856,17 +1884,17 @@ fi
 | `NoFinanceAdmin` | 财务管理员禁止访问申请页面（角色分离） |
 | `AdminRedirect` | 纯信息管理员访问 `/` 时重定向到管理页 |
 
-### 26b.6 Hooks & 工具
+### 27.6 Hooks & 工具
 
 | Hook/工具 | 职责 |
 |-----------|------|
 | `useAuth` | JWT 认证状态管理（登录/登出/刷新用户信息） |
 | `useFormStorage` | 表单数据本地暂存（防误刷新丢失） |
 | `aiActivity.ts` | axios 拦截器，按 URL 模式识别 AI 请求，广播 CustomEvent |
-| `api.ts` | axios 实例封装（baseURL + token 拦截器） |
-| `constants.ts` | API 基础 URL 等全局常量 |
+| `api.ts` | API 错误解析与弹窗辅助函数 |
+| `constants.ts` | 审批状态、阶段标签和前端兜底流程阶段常量 |
 
-### 26b.7 常量管理
+### 27.7 常量管理
 
 | 文件 | 内容 |
 |------|------|
@@ -1876,7 +1904,7 @@ fi
 
 ---
 
-## 二十七、待定/待讨论事项
+## 二十八、待定/待讨论事项
 
 > ⬜ 未决 | ✅ 已确认
 
@@ -1887,7 +1915,7 @@ fi
 | 3 | ✅ | 模型预加载策略 | start.sh 轮询 + llama-cpp-python 进程启动即加载 |
 | 4 | ✅ | API Key 加密 | Fernet 对称加密，密钥通过环境变量注入 |
 | 5 | ✅ | JSON 动态模板渲染 | 后端 JSON Schema 定义，前端按 type 渲染 |
-| 6 | ✅ | 文件上传安全 | MIME 白名单 + 魔数校验 + 文件名 UUID 化 + noexec 卷 |
+| 6 | ✅ | 文件上传安全 | MIME 白名单 + 魔数校验 + UUID 文件名 + 路径防逃逸；Docker `noexec` 卷为部署建议 |
 | 7 | ✅ | 部署方式 | **本地开发**（start.sh 一键启动）+ Docker（未来规划） |
 | 8 | ✅ | 本地模型 GGUF | 使用 Qwen3-4B GGUF，放在 models/ 目录，start.sh 自动检测 |
 | 9 | ⬜ | EasyOCR 在 ARM 上的中文识别精度 | 后续需在 ARM Mac 上实际测试确认 |
@@ -1899,13 +1927,13 @@ fi
 
 ---
 
-## 二十七、变更摘要
+## 二十九、变更摘要
 
 | 版本 | 变更内容 |
 |------|---------|
-| v1.0 → v2.0 | 三级分层体系；API Key 池；软删除；4 面板管理后台 |
+| v1.0 → v2.0 | 用户分层体系；API Key 池；软删除；4 面板管理后台 |
 | **v2.0 → v3.0** | Free 层改为 EasyOCR 提取 + 本地小模型 JSON 填充（两阶段）；LangGraph 审批流程；AES Fernet 密钥存储；JSON 动态模板渲染；文件上传安全；单/多容器架构 |
 | **v3.0 → v4.0** | 新增学校管理员角色；审批引擎改为「AI 辅助，不自动结论」；文档类型前端汉化；请假单固定字段；学校字段 tenant 化 |
-| **v4.0 → v4.1** | 角色体系：去掉「超级管理员」，改为「信息管理员」（API Key/数据/监控，不参与审批和用户管理）；新增第十二章「学校租户模型」：学校级套餐、租户隔离、学校管理员边界；新增第十三章「流程版本治理」：版本号规范、实例迁移策略、回滚与灰度；新增第十四章「审计合规与日志治理」：审计分层、日志防篡改、留存期限、数据脱敏、取证流程 |
-| **v0.5.0 → v0.5.1** | UI 精进 — 全局按钮系统重构（圆角10px、弹簧动画、focus-visible无障碍、success/danger/lg变体）；侧边栏呼吸感增强（导航项14px、间距加大、宽240px）；折叠展开双向弹簧动画（grid-template-rows过渡）；弹窗入场/退场动画（modalFadeIn/Out + modalCardIn/Out）；AuthImage组件解决认证图片403问题；字段中文汉化补全（getFieldLabel统一映射）；审批面板UI统一（查看详情→弹窗审批）；AI填写意见按钮去重；合规分析面板始终可见；部门管理员可见性改为全校范围（同校所有部门）；按钮emoji精简 |
+| **v4.0 → v4.1** | 角色体系：去掉旧称「超级管理员」，改为「信息管理员」（API Key/数据/监控，不参与审批和用户管理）；新增第十二章「学校租户模型」：学校级套餐、租户隔离、学校管理员边界；新增第十三章「流程版本治理」：版本号规范、实例迁移策略、回滚与灰度；新增第十四章「审计合规与日志治理」：审计分层、日志防篡改、留存期限、数据脱敏、取证流程 |
+| **v0.5.0 → v0.5.1** | UI 精进 — 全局按钮系统重构（圆角10px、弹簧动画、focus-visible无障碍、success/danger/lg变体）；侧边栏呼吸感增强（导航项14px、间距加大、宽240px）；折叠展开双向弹簧动画（grid-template-rows过渡）；弹窗入场/退场动画（modalFadeIn/Out + modalCardIn/Out）；AuthImage组件解决认证图片403问题；字段中文汉化补全（getFieldLabel统一映射）；审批面板UI统一（查看详情→弹窗审批）；AI填写意见按钮去重；合规分析面板始终可见；按钮emoji精简 |
 | **v0.5.1 → v0.5.2** | 背景动画重构 — 从传统极光色带改为低饱和流体智能场（blob field + 有机形变 + 微纹理流动）；新增 AI 活动状态联动（axios 拦截器 → CustomEvent → Canvas 逐帧插值 energy）；AI 调用中背景聚合/加速/清晰化，结束后缓动回落；去掉扫光/粒子/HUD/环等廉价特效；颜色收敛为蓝、青、紫、暖白 |

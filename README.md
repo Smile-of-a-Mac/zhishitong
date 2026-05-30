@@ -51,12 +51,12 @@ sito/
 │   │       └── logging_service.py      #   结构化日志
 │   ├── frontend/                       # React 18 + TypeScript + Vite
 │   │   └── src/
-│   │       ├── App.tsx                 #   路由定义（18 个路由）
+│   │       ├── App.tsx                 #   路由定义（19 个路由）
 │   │       ├── main.tsx                #   入口
 │   │       ├── components/             #   通用组件
 │   │       │   ├── Frame.tsx           #     玻璃侧边栏 + 角色导航 + 模拟横幅
-│   │       │   ├── GlassCard.tsx       #     毛玻璃卡片（触控高光）
-│   │       │   ├── AuroraBackground.tsx #    动态极光背景 Canvas
+│   │       │   ├── GlassCard.tsx       #     毛玻璃卡片基础组件
+│   │       │   ├── AuroraBackground.tsx #    低饱和流体智能场 Canvas
 │   │       │   ├── AIChatPanel.tsx     #     右下角 AI 政策问答悬浮面板
 │   │       │   ├── AIDecisionPanel.tsx #     AI 审批决策辅助面板（合规分析+相似案例）
 │   │       │   ├── AuthImage.tsx       #     认证图片加载（axios blob）
@@ -117,7 +117,7 @@ sito/
 │       ├── jwc.sdust.edu.cn/           #     教务处
 │       └── yjsy.sdust.edu.cn/          #     研究生院
 └── docs/
-    ├── DESIGN.md                       #   产品设计文档（27 章）
+    ├── DESIGN.md                       #   产品设计文档（29 章）
     └── TROUBLESHOOTING.md              #   运维排查手册
 ```
 
@@ -125,14 +125,14 @@ sito/
 
 ## 前端架构
 
-前端采用 **React 18 + TypeScript + Vite** 构建，基于 iOS 原生设计语言实现了完整的**玻璃拟态（Glassmorphism）设计系统**，共 **8,400+ 行代码**，包含 **36 个源文件**。
+前端采用 **React 18 + TypeScript + Vite** 构建，基于 iOS 原生设计语言实现了完整的**玻璃拟态（Glassmorphism）设计系统**，代码集中在 `frontend/src` 下的组件、页面、Hooks、工具和样式模块中。
 
 ### 设计系统
 
 | 特性 | 实现 |
 |------|------|
 | 🎨 **玻璃卡片** | `backdrop-filter: blur(25px) saturate(180%)`，圆角 22px，半透明边框，暗色模式自动适配 |
-| 🌌 **全屏动态背景** | Canvas 绘制，6 条彩色柔光带全屏漂浮 + 40 颗微光粒子，AI 调用时自动加速变亮 |
+| 🌌 **全屏动态背景** | Canvas 绘制低饱和流体智能场（6 个大型 gradient blob + 微纹理流动），AI 调用时聚合、加速并略微清晰化 |
 | 🌓 **深色模式** | `prefers-color-scheme: dark` 完整适配，CSS 变量一键切换 |
 | 📱 **响应式** | 移动端侧边栏折叠 + 自适应布局 |
 | 🎭 **动效系统** | 卡片触控缩放、弹窗入场/退场动画、按钮弹簧曲线（`cubic-bezier(0.34,1.56,0.64,1)`） |
@@ -144,12 +144,12 @@ sito/
 | `Frame.tsx` | 425 | 玻璃侧边栏 + 角色导航（19 类申请入口 + 管理/审批面板） + 模拟身份横幅 |
 | `AIChatPanel.tsx` | 385 | 右下角悬浮政策问答面板，支持多轮对话 + 来源引用 |
 | `AIDecisionPanel.tsx` | 328 | AI 审批决策辅助：合规分析 + 相似案例 + 政策条文 + 缺失信息 |
-| `AuroraBackground.tsx` | 189 | 全屏漂浮柔光背景，6 条彩色光带 + 微光粒子，AI 调用时联动 |
-| `GlassCard.tsx` | 38 | 毛玻璃卡片基础组件（触控高光 + HDR 提亮） |
+| `AuroraBackground.tsx` | 174 | 全屏低饱和流体智能场，blob field + 有机形变 + 微纹理流动，AI 调用时联动 |
+| `GlassCard.tsx` | 38 | 毛玻璃卡片基础组件（强弱样式、尺寸变体、统一圆角/阴影） |
 | `ApprovalProgressBar.tsx` | 35 | 多阶段审批进度条（部门→财务→学校） |
 | `AuthImage.tsx` | 73 | 认证图片加载（axios blob，解决 403 问题） |
 
-### 页面路由（20 条）
+### 页面路由（19 条）
 
 | 分类 | 路由 | 权限 |
 |------|------|------|
@@ -230,7 +230,7 @@ sito/
 
 | 层 | 技术 |
 |----|------|
-| **前端** | React 18 + TypeScript + Vite + Ant Design 5 + 玻璃拟态设计系统（Glassmorphism） |
+| **前端** | React 18 + TypeScript + Vite + 玻璃拟态设计系统（Ant Design 5 目前用于 ConfigProvider/主题基础能力） |
 | **后端** | FastAPI + SQLAlchemy + SQLite + LangGraph + Redis |
 | **AI/OCR** | EasyOCR + 多模态 LLM API（MiMo/DeepSeek/Qwen-VL）+ llama.cpp 本地推理 + 字段名映射归一化 + 正则兜底提取 + pypdf 文本提取 + pymupdf 扫描件转图片 |
 | **RAG** | TF-IDF (scikit-learn) + 自定义 JSON 知识库（policy_kb.json） |
@@ -254,7 +254,7 @@ sito/
 cd zhishitong && bash start.sh
 ```
 
-`start.sh` 自动完成：虚拟环境检测 → 依赖安装 → 推理服务启动（含 GPU 检测） → 微调模型检测与 GGUF 转换 → 后端启动 → 前端启动。
+`start.sh` 自动完成：虚拟环境检测 → 依赖安装 → 数据库初始化 → 推理服务启动（含 GPU 检测） → 微调 GGUF 模型检测 → 后端启动 → 前端启动。
 
 ### 一键停止
 
@@ -303,7 +303,7 @@ python train_lora.py      # 训练 + 自动合并 GGUF（一步到位）
 
 | 账号 | 密码 | 角色 | 学校 |
 |------|------|------|------|
-| `admin` | `admin123` | 信息管理员（超级管理员） | — |
+| `admin` | `admin123` | 信息管理员 | — |
 | `sdu_school_admin` | `admin123` | 学校管理员 | 山东科技大学 |
 | `sdu_dept_cs` | `123456` | 部门管理员（计算机学院） | 山东科技大学 |
 | `sdu_dept_fin` | `123456` | 部门管理员（财务处） | 山东科技大学 |
@@ -324,7 +324,7 @@ python train_lora.py      # 训练 + 自动合并 GGUF（一步到位）
 | 角色 | 主要操作 |
 |------|---------|
 | 👨‍🎓 **学生** | 上传材料 → 自动填表 → 编辑确认 → 提交审批 → 查看进度 & 通知 |
-| 🏢 **部门管理员** | 查看本校待审队列 → 核实材料 → 查看 AI 合规分析/政策条文 → 通过/驳回/需修改 → AI 智能填写意见 |
+| 🏢 **部门管理员** | 查看本部门待审队列 → 核实材料 → 查看 AI 合规分析/政策条文 → 通过/驳回/需修改 → AI 智能填写意见 |
 | 💰 **财务管理员** | 查看报销待审 → 审核金额发票 → 财务通过/驳回 |
 | 🏫 **学校管理员** | 管理部门管理员 → 查看全校事务总览 → 学校级审批 |
 | 🔧 **信息管理员** | API Key 管理 → 创建/管理学校 → 用户管理 → 模拟测试 → 系统监控 → 数据看板 |
@@ -350,13 +350,15 @@ python train_lora.py      # 训练 + 自动合并 GGUF（一步到位）
 
 ## 设计文档
 
-- 📐 [产品设计文档（27 章）](docs/DESIGN.md) — 完整的产品架构、数据模型、审批流程、安全策略
+- 📐 [产品设计文档（29 章）](docs/DESIGN.md) — 完整的产品架构、数据模型、审批流程、安全策略
 - 🔧 [运维排查手册](docs/TROUBLESHOOTING.md) — 系统架构、常见问题排查、日志格式参考
 
 ---
 
-## 最近更新 (v0.5.1)
+## 最近更新 (v0.5.2)
 
+- 🌌 背景动画重构为低饱和流体智能场（gradient blob + 有机形变 + 微纹理流动）
+- 🧠 新增 AI 活动状态联动：AI 请求期间背景聚合、加速、清晰化，结束后缓动回落
 - 🎨 全局按钮系统重构（圆角 10px、弹簧动画、focus-visible 无障碍、success/danger/lg 变体）
 - 📐 侧边栏呼吸感增强（导航项 14px、间距加大、宽 240px）
 - 🎬 折叠/弹窗双向弹簧动画（grid-template-rows 过渡 + modalFadeIn/Out）
