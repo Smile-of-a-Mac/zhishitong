@@ -300,7 +300,7 @@ python train_lora.py      # 训练 + 自动合并 GGUF（一步到位）
 
 ---
 
-## 最近更新 (v5.1)
+## 最近更新 (v0.5.1)
 
 - 🎨 全局按钮系统重构（圆角 10px、弹簧动画、focus-visible 无障碍、success/danger/lg 变体）
 - 📐 侧边栏呼吸感增强（导航项 14px、间距加大、宽 240px）
