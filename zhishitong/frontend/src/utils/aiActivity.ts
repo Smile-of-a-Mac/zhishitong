@@ -9,7 +9,7 @@ let activeCount = 0
 let installed = false
 
 const AI_ENDPOINTS = [
-  /^\/api\/ai\//,
+  // 政策问答 /api/ai/chat 不触发背景动画（只在 OCR 和审批时触发）
   /^\/api\/ocr(?:\?|$)/,
   /^\/api\/approvals\/suggest-review(?:\?|$)/,
   /^\/api\/approvals\/manual(?:\?|$)/,
