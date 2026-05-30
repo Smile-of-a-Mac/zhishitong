@@ -1721,6 +1721,161 @@ fi
 
 ---
 
+## 二十六b、前端架构设计
+
+> **设计原则：** 前端采用 React 18 + TypeScript 构建，基于 iOS 原生设计语言实现了完整的玻璃拟态（Glassmorphism）设计系统。所有页面共享统一的视觉风格、动效规范和交互模式。
+
+### 26b.1 技术栈
+
+| 依赖 | 版本 | 职责 |
+|------|------|------|
+| React | 18.3 | UI 框架（函数式组件 + Hooks） |
+| TypeScript | 5.5 | 类型安全 |
+| Vite | 5.4 | 构建工具 + 开发服务器 |
+| React Router | 6.26 | 客户端路由（20 条路由） |
+| Ant Design | 5.20 | 表单、表格、消息提示等基础 UI 组件 |
+| Axios | 1.7 | HTTP 请求 + AI 活动拦截器 |
+
+### 26b.2 设计系统（Glass Design System）
+
+#### CSS 变量体系
+
+所有颜色、间距、圆角均通过 CSS 变量管理，深色模式通过 `@media (prefers-color-scheme: dark)` 自动切换：
+
+```css
+:root {
+  --glass-bg: rgba(255, 255, 255, 0.65);      /* 玻璃卡片背景 */
+  --glass-bg-strong: rgba(255, 255, 255, 0.82); /* 强调卡片 */
+  --glass-border: rgba(255, 255, 255, 0.5);     /* 玻璃边框 */
+  --radius: 22px;                                /* 大圆角 */
+  --radius-sm: 12px;                             /* 小圆角 */
+  --accent: #007aff;                             /* iOS 蓝 */
+  --green: #34c759;                              /* 成功色 */
+  --red: #ff3b30;                                /* 错误色 */
+  --sidebar-width: 240px;                        /* 侧边栏宽度 */
+  --font-stack: -apple-system, 'SF Pro Display', ...;
+}
+```
+
+#### 玻璃卡片（`.glass-card`）
+
+所有页面内容均包裹在玻璃卡片中：
+
+- `backdrop-filter: blur(25px) saturate(180%)` — 毛玻璃效果
+- `border-radius: 22px` — iOS 风格大圆角
+- 伪元素 HDR 高光提亮：`radial-gradient` 配合 `mix-blend-mode: color-dodge`
+- 触摸缩放动画：`transform: scale(0.98)` + `filter: brightness(0.99)`
+
+#### 深色模式
+
+通过 CSS 变量自动切换，无需 JS 干预：
+
+- 背景色：`#f2f2f7` → `#000000`
+- 玻璃卡片：透明度降低（0.65 → 0.6）
+- 文字：`#1d1d1f` → `#f5f5f7`
+- 强调色：`#007aff` → `#0a84ff`
+
+### 26b.3 组件架构
+
+#### Frame.tsx（425 行）— 布局框架
+
+- **玻璃侧边栏**：固定左侧 240px，毛玻璃背景 + 导航高亮动画
+- **角色导航**：根据用户角色动态渲染不同导航组
+  - 普通用户：19 类申请入口 + 工具 + 社区
+  - 管理员：模拟测试、API Key、学校管理、成员管理、系统监控、数据管理
+  - 部门管理员：部门事务 + 数据看板
+  - 学校管理员：全校事务 + 数据看板
+  - 财务管理员：财务审批
+- **模拟身份横幅**：管理员切换身份时顶部黄色提示条
+
+#### AIChatPanel.tsx（385 行）— AI 政策问答
+
+- 右下角悬浮圆形按钮（AI 图标）
+- 点击展开聊天面板，支持多轮对话
+- 消息气泡区分用户/AI，AI 消息支持 Markdown 渲染
+- 引用来源显示（链接到政策知识库）
+
+#### AIDecisionPanel.tsx（328 行）— AI 审批决策辅助
+
+- 管理员审批页面的辅助面板
+- 四个模块：合规分析、相似案例、政策条文、缺失信息
+- 始终可见（不折叠），数据在审批详情加载时自动获取
+
+#### AuroraBackground.tsx（189 行）— 全屏动态背景
+
+- 6 条彩色柔光带全屏漂浮（径向渐变 + 正弦运动）
+- 40 颗微光粒子漂浮点缀
+- AI 调用时：光带加速、亮度提升、透明度增加
+- 静态时：极低存在感，不抢卡片注意力
+
+#### GlassCard.tsx（38 行）— 基础卡片
+
+- 统一封装玻璃卡片样式
+- 支持 `size` 属性控制内边距（xs/sm/md）
+- 支持 `strong` 属性控制玻璃强度
+
+#### AuthImage.tsx（73 行）— 认证图片
+
+- 通过 axios blob 加载需要 JWT 认证的图片
+- 解决 `<img src>` 无法携带 Authorization header 的 403 问题
+
+### 26b.4 页面路由（20 条）
+
+```
+/login                              → LoginPage（登录）
+/                                   → WorkbenchPage（智能 OCR 工作台）
+/apply/:docType                     → ManualFormPage（19 类申请表单）
+/history                            → HistoryPage（我的事务）
+/profile                            → ProfilePage（个人信息）
+/dashboard                          → DashboardPage（数据看板）
+/notifications                      → NotificationsPage（通知中心）
+/announcements                      → AnnouncementsPage（公告制度）
+/resources                          → ResourceBookingPage（资源预约）
+/dept                               → DeptAdminPage（部门审批）
+/finance                            → FinanceAdminPage（财务审批）
+/school                             → SchoolAdminPage（学校管理）
+/school/affairs                     → SchoolAffairsPage（全校事务）
+/admin/test                         → AdminTestPage（模拟测试）
+/admin/api-keys                     → AdminApiKeysPage（API Key 池）
+/admin/schools                      → AdminSchoolsPage（学校管理）
+/admin/members                      → AdminUsersPage（成员管理）
+/admin/monitor                      → AdminMonitorPage（系统监控）
+/admin/data                         → AdminDataPage（数据管理）
+```
+
+### 26b.5 权限守卫
+
+| 守卫组件 | 逻辑 |
+|----------|------|
+| `NeedAuth` | 未登录重定向 `/login` |
+| `NeedAdmin` | 非信息管理员重定向 `/` |
+| `NeedDeptStaff` | 非部门管理员重定向 `/` |
+| `NeedFinanceStaff` | 非财务管理员重定向 `/` |
+| `NeedSchoolStaff` | 非学校管理员重定向 `/` |
+| `NeedStaff` | 任意管理员角色 |
+| `NoFinanceAdmin` | 财务管理员禁止访问申请页面（角色分离） |
+| `AdminRedirect` | 纯信息管理员访问 `/` 时重定向到管理页 |
+
+### 26b.6 Hooks & 工具
+
+| Hook/工具 | 职责 |
+|-----------|------|
+| `useAuth` | JWT 认证状态管理（登录/登出/刷新用户信息） |
+| `useFormStorage` | 表单数据本地暂存（防误刷新丢失） |
+| `aiActivity.ts` | axios 拦截器，按 URL 模式识别 AI 请求，广播 CustomEvent |
+| `api.ts` | axios 实例封装（baseURL + token 拦截器） |
+| `constants.ts` | API 基础 URL 等全局常量 |
+
+### 26b.7 常量管理
+
+| 文件 | 内容 |
+|------|------|
+| `docTypes.ts` | 19 类文档类型中文标签映射（`reimbursement` → `报销申请`） |
+| `fieldLabels.ts` | 字段英文 key → 中文标签映射（`invoice_no` → `发票号码`） |
+| `approvalStatus.ts` | 审批状态 → Emoji 映射（`pending` → `⏳`） |
+
+---
+
 ## 二十七、待定/待讨论事项
 
 > ⬜ 未决 | ✅ 已确认

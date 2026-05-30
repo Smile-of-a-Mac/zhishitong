@@ -123,6 +123,59 @@ sito/
 
 ---
 
+## 前端架构
+
+前端采用 **React 18 + TypeScript + Vite** 构建，基于 iOS 原生设计语言实现了完整的**玻璃拟态（Glassmorphism）设计系统**，共 **8,400+ 行代码**，包含 **36 个源文件**。
+
+### 设计系统
+
+| 特性 | 实现 |
+|------|------|
+| 🎨 **玻璃卡片** | `backdrop-filter: blur(25px) saturate(180%)`，圆角 22px，半透明边框，暗色模式自动适配 |
+| 🌌 **全屏动态背景** | Canvas 绘制，6 条彩色柔光带全屏漂浮 + 40 颗微光粒子，AI 调用时自动加速变亮 |
+| 🌓 **深色模式** | `prefers-color-scheme: dark` 完整适配，CSS 变量一键切换 |
+| 📱 **响应式** | 移动端侧边栏折叠 + 自适应布局 |
+| 🎭 **动效系统** | 卡片触控缩放、弹窗入场/退场动画、按钮弹簧曲线（`cubic-bezier(0.34,1.56,0.64,1)`） |
+
+### 核心组件
+
+| 组件 | 行数 | 职责 |
+|------|:----:|------|
+| `Frame.tsx` | 425 | 玻璃侧边栏 + 角色导航（19 类申请入口 + 管理/审批面板） + 模拟身份横幅 |
+| `AIChatPanel.tsx` | 385 | 右下角悬浮政策问答面板，支持多轮对话 + 来源引用 |
+| `AIDecisionPanel.tsx` | 328 | AI 审批决策辅助：合规分析 + 相似案例 + 政策条文 + 缺失信息 |
+| `AuroraBackground.tsx` | 189 | 全屏漂浮柔光背景，6 条彩色光带 + 微光粒子，AI 调用时联动 |
+| `GlassCard.tsx` | 38 | 毛玻璃卡片基础组件（触控高光 + HDR 提亮） |
+| `ApprovalProgressBar.tsx` | 35 | 多阶段审批进度条（部门→财务→学校） |
+| `AuthImage.tsx` | 73 | 认证图片加载（axios blob，解决 403 问题） |
+
+### 页面路由（20 条）
+
+| 分类 | 路由 | 权限 |
+|------|------|------|
+| **工作台** | `/` (OCR 智能工作台), `/dashboard`, `/notifications`, `/announcements`, `/resources` | 普通用户 |
+| **申请** | `/apply/:docType` (19 类) | 普通用户 |
+| **审批** | `/dept` (部门), `/finance` (财务), `/school` + `/school/affairs` (学校) | 对应管理员 |
+| **管理** | `/admin/test`, `/admin/api-keys`, `/admin/schools`, `/admin/members`, `/admin/monitor`, `/admin/data` | 信息管理员 |
+| **其他** | `/login`, `/profile`, `/history` | 全局 |
+
+### 设计变量体系
+
+```css
+--glass-bg: rgba(255, 255, 255, 0.65);   /* 玻璃卡片背景 */
+--glass-border: rgba(255, 255, 255, 0.5); /* 玻璃卡片边框 */
+--radius: 22px;                            /* 卡片圆角 */
+--accent: #007aff;                         /* 主强调色（iOS 蓝） */
+--green: #34c759;                          /* 成功色 */
+--red: #ff3b30;                            /* 错误色 */
+--sidebar-width: 240px;                    /* 侧边栏宽度 */
+--font-stack: -apple-system, 'SF Pro Display', ...; /* 系统字体栈 */
+```
+
+暗色模式下所有变量通过 `@media (prefers-color-scheme: dark)` 自动切换为深色系。
+
+---
+
 ## 核心功能
 
 ### 🤖 审批流程
@@ -177,7 +230,7 @@ sito/
 
 | 层 | 技术 |
 |----|------|
-| **前端** | React 18 + TypeScript + Vite + 玻璃拟态 UI |
+| **前端** | React 18 + TypeScript + Vite + Ant Design 5 + 玻璃拟态设计系统（Glassmorphism） |
 | **后端** | FastAPI + SQLAlchemy + SQLite + LangGraph + Redis |
 | **AI/OCR** | EasyOCR + 多模态 LLM API（MiMo/DeepSeek/Qwen-VL）+ llama.cpp 本地推理 + 字段名映射归一化 + 正则兜底提取 + pypdf 文本提取 + pymupdf 扫描件转图片 |
 | **RAG** | TF-IDF (scikit-learn) + 自定义 JSON 知识库（policy_kb.json） |
