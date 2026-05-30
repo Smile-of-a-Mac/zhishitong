@@ -190,7 +190,7 @@ export default function Frame({ children }: { children: React.ReactNode }) {
           aria-label={sidebarOpen ? '关闭菜单' : '打开菜单'}
           style={{
             position: 'fixed', bottom: 24, left: 24, zIndex: 1100,
-            width: 44, height: 44, borderRadius: '50%',
+            width: 52, height: 52, borderRadius: '50%',
             background: 'var(--glass-bg-strong)', border: '1px solid var(--glass-border)',
             backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
             cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center',
