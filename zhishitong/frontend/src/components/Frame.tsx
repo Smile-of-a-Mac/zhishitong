@@ -202,20 +202,21 @@ export default function Frame({ children }: { children: React.ReactNode }) {
       )}
 
       {/* 移动端遮罩 */}
-      {isMobile && sidebarOpen && (
-        <div
-          onClick={closeSidebar}
-          style={{
-            position: 'fixed', inset: 0, zIndex: 1050,
-            background: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(4px)',
-          }}
-        />
-      )}
+      <div
+        onClick={closeSidebar}
+        style={{
+          position: 'fixed', inset: 0, zIndex: 1050,
+          background: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(4px)',
+          opacity: isMobile && sidebarOpen ? 1 : 0,
+          pointerEvents: isMobile && sidebarOpen ? 'auto' : 'none',
+          transition: 'opacity 0.3s ease',
+        }}
+      />
 
       {/* 侧边栏 — 桌面端 sticky 侧栏，移动端 fixed 抽屉 */}
       <aside className="glass-card glass-card-strong" style={{
         width: 'var(--sidebar-width)',
-        display: isMobile && !sidebarOpen ? 'none' : 'flex',
+        display: 'flex',
         flexDirection: 'column',
         borderRadius: 20,
         padding: 0,
@@ -229,6 +230,12 @@ export default function Frame({ children }: { children: React.ReactNode }) {
         overflow: 'hidden',
         zIndex: isMobile ? 1060 : 'auto',
         boxShadow: isMobile ? '0 8px 40px rgba(0,0,0,0.2)' : undefined,
+        ...(isMobile ? {
+          opacity: sidebarOpen ? 1 : 0,
+          transform: sidebarOpen ? 'translateX(0)' : 'translateX(-16px)',
+          pointerEvents: sidebarOpen ? 'auto' : 'none',
+          transition: 'opacity 0.3s cubic-bezier(0.2, 0.85, 0.2, 1), transform 0.35s cubic-bezier(0.2, 0.85, 0.2, 1)',
+        } : {}),
       }}>
         {/* Logo 区域 */}
         <div style={{
