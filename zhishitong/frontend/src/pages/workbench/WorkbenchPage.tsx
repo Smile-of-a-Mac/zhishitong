@@ -404,7 +404,7 @@ export default function WorkbenchPage() {
 
       {/* ── AI 意图识别 ── */}
       {!resubmitId && (
-        <GlassCard size="xs" style={{ marginBottom: 12, padding: '12px 16px' }}>
+        <GlassCard style={{ marginBottom: 12, padding: '12px 16px' }}>
           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
             <span>🤖</span> 用自然语言描述申请，AI 自动识别类型并预填表单
           </div>
