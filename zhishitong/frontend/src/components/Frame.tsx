@@ -183,21 +183,28 @@ export default function Frame({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="app-layout" style={{ display: 'flex', minHeight: '100vh', gap: 0 }}>
-      {/* 移动端汉堡按钮 */}
+      {/* 移动端汉堡按钮 — 展开时旋转 90° 变为 ✕ */}
       {isMobile && (
         <button
           onClick={() => setSidebarOpen(o => !o)}
-          aria-label="菜单"
+          aria-label={sidebarOpen ? '关闭菜单' : '打开菜单'}
           style={{
             position: 'fixed', top: 12, left: 12, zIndex: 1100,
             width: 36, height: 36, borderRadius: 10,
             background: 'var(--glass-bg-strong)', border: '1px solid var(--glass-border)',
             backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
-            cursor: 'pointer', fontSize: 20, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center',
             color: 'var(--text-primary)',
+            padding: 0, lineHeight: 1,
           }}
         >
-          ☰
+          <span style={{
+            display: 'inline-block',
+            transform: `rotate(${sidebarOpen ? 90 : 0}deg)`,
+            transition: 'transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
+          }}>
+            {sidebarOpen ? '✕' : '☰'}
+          </span>
         </button>
       )}
 
