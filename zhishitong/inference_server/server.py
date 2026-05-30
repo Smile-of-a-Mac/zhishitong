@@ -10,6 +10,7 @@ GPU 加速策略（自动检测，优先级从高到低）：
 暴露 OpenAI 兼容的 /v1/chat/completions 端点，供后端 RAG 服务调用。
 """
 import os
+import re
 import sys
 import time
 import json
@@ -125,6 +126,24 @@ model = Llama(
 
 logger.info(f"模型加载完成，耗时 {time.time() - t0:.1f}s | GPU 后端: {gpu_backend}")
 
+# ── 禁用 Qwen3 的思考模式 ──
+# Qwen3 chat_template 默认 enable_thinking=true，会在回复中输出 <think> 思考过程。
+# llama-cpp-python 0.3.x 不支持传 enable_thinking=False 给模板，
+# 因此重建一个 chat_handler，使用修改后的模板强制跳过思考。
+_chat_tmpl = model.metadata.get("tokenizer.chat_template", "")
+if "enable_thinking" in _chat_tmpl:
+    _chat_tmpl = _chat_tmpl.replace(
+        "enable_thinking is defined and enable_thinking is false",
+        "true",
+    )
+    from llama_cpp.llama_chat_format import Jinja2ChatFormatter
+    model.chat_handler = Jinja2ChatFormatter(
+        template=_chat_tmpl,
+        eos_token=model.metadata.get("tokenizer.ggml.eos_token_id", ""),
+        bos_token=model.metadata.get("tokenizer.ggml.bos_token_id", ""),
+    ).to_chat_handler()
+    logger.info("已禁用 Qwen3 思考模式（重建 chat_handler）")
+
 inference_lock = Lock()
 
 
@@ -167,12 +186,35 @@ class ChatResponse(BaseModel):
 
 
 def _build_qwen_prompt(messages: list[ChatMessage]) -> str:
-    """构建 Qwen3 ChatML 格式 prompt"""
+    """构建 Qwen3 ChatML 格式 prompt（含禁用思考的系统指令）"""
     parts: list[str] = []
+    # 始终注入系统指令，禁止 Qwen3 在回答中输出思考过程
+    parts.append(f"<|im_start|>system\n{NO_THINK_SYSTEM}<|im_end|>")
     for msg in messages:
         parts.append(f"<|im_start|>{msg.role}\n{msg.content}<|im_end|>")
     parts.append("<|im_start|>assistant\n")
     return "\n".join(parts)
+
+
+def _strip_thinking(text: str) -> str:
+    """移除 Qwen3 的 <think> 思考过程标签（兜底方案）"""
+    if not text:
+        return text
+    if "</think>" in text:
+        text = text.split("</think>", 1)[-1]
+    elif "<think>" in text:
+        text = text.split("<think>", 1)[-1]
+    text = text.replace("<think>", "").replace("</think>", "")
+    return text.strip()
+
+
+NO_THINK_SYSTEM = (
+    "You are a helpful assistant. "
+    "Answer directly and concisely. "
+    "Do NOT include your internal reasoning, thinking process, "
+    "or phrases like '好的，用户...' or '首先，我得...' in your response. "
+    "Output only the final answer."
+)
 
 
 @app.get("/health")
@@ -197,27 +239,26 @@ def chat_completions(req: ChatRequest):
     if not req.messages:
         raise HTTPException(status_code=400, detail="messages is required")
 
-    prompt_text = _build_qwen_prompt(req.messages)
-
     with inference_lock:
         try:
-            output = model.create_completion(
-                prompt=prompt_text,
+            output = model.create_chat_completion(
+                messages=[{"role": m.role, "content": m.content} for m in req.messages],
                 max_tokens=min(req.max_tokens, 1024),
                 temperature=req.temperature,
                 top_p=0.9,
-                stop=["<|im_end|>", "<|im_start|>"],
-                echo=False,
             )
         except Exception as exc:
             logger.error(f"推理失败: {exc}")
             raise HTTPException(status_code=500, detail="推理服务暂时不可用")
 
     try:
-        generated = output["choices"][0]["text"].strip()
+        generated = output["choices"][0]["message"]["content"].strip()
     except (KeyError, IndexError, TypeError) as exc:
         logger.error(f"推理响应格式异常: {exc}")
         raise HTTPException(status_code=500, detail="推理服务暂时不可用")
+
+    # 剥离 Qwen3 <think> 思考过程，只返回纯结论
+    generated = _strip_thinking(generated)
 
     return ChatResponse(
         id=f"chatcmpl-{uuid.uuid4().hex}",

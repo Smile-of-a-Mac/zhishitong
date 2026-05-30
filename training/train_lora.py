@@ -43,10 +43,10 @@ LORA_TARGETS = ["q_proj", "k_proj", "v_proj", "o_proj",
                  "gate_proj", "up_proj", "down_proj"]
 
 # 训练
-NUM_EPOCHS = 5
+NUM_EPOCHS = 20           # 9条数据，多跑几轮让 LoRA 充分学习
 BATCH_SIZE = 1
-GRAD_ACCUM = 8           # 等效 batch=8
-LEARNING_RATE = 2e-4
+GRAD_ACCUM = 8            # 等效 batch=8
+LEARNING_RATE = 1e-4      # 降低 LR 避免在少量数据上过拟合
 MAX_SEQ_LENGTH = 1024
 WARMUP_STEPS = 10
 LOGGING_STEPS = 5
