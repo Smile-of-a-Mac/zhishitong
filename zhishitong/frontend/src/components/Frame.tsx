@@ -183,18 +183,19 @@ export default function Frame({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="app-layout" style={{ display: 'flex', minHeight: '100vh', gap: 0 }}>
-      {/* 移动端汉堡按钮 — 展开时旋转 90° 变为 ✕ */}
+      {/* 移动端汉堡按钮 — 左下角，与小助手悬浮按钮水平对齐 */}
       {isMobile && (
         <button
           onClick={() => setSidebarOpen(o => !o)}
           aria-label={sidebarOpen ? '关闭菜单' : '打开菜单'}
           style={{
-            position: 'fixed', top: 12, left: 12, zIndex: 1100,
-            width: 36, height: 36, borderRadius: 10,
+            position: 'fixed', bottom: 24, left: 24, zIndex: 1100,
+            width: 44, height: 44, borderRadius: '50%',
             background: 'var(--glass-bg-strong)', border: '1px solid var(--glass-border)',
             backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
             cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center',
             color: 'var(--text-primary)',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
             padding: 0, lineHeight: 1,
           }}
         >
@@ -258,13 +259,6 @@ export default function Frame({ children }: { children: React.ReactNode }) {
               高校行政审批自动化 Agent
             </div>
           </div>
-          {/* 移动端关闭按钮 */}
-          {isMobile && (
-            <button onClick={closeSidebar}
-              style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--text-secondary)', padding: 0 }}>
-              ✕
-            </button>
-          )}
           <Link to="/notifications" onClick={closeSidebar} style={{ position: 'relative', textDecoration: 'none' }}>
             <span style={{ fontSize: 20 }}>🔔</span>
             {unreadCount > 0 && (

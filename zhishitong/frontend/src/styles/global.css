@@ -170,7 +170,7 @@ main {
 
 @media (max-width: 768px) {
   main {
-    padding: 60px 16px calc(16px + var(--floating-chat-safe)) 16px;
+    padding: 16px 16px calc(16px + var(--floating-chat-safe)) 16px;
   }
 }
 
