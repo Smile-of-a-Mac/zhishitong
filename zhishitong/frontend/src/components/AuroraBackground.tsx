@@ -63,7 +63,7 @@ function drawBlob(
 
 function drawMicroTexture(ctx: CanvasRenderingContext2D, w: number, h: number, tick: number, energy: number) {
   const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-  const alpha = (isDark ? 0.03 : 0.04) + energy * (isDark ? 0.055 : 0.05)
+  const alpha = (isDark ? 0.05 : 0.06) + energy * (isDark ? 0.055 : 0.05)
   const gap = 72
   const offsetX = Math.sin(tick * (0.002 + energy * 0.004)) * (18 + energy * 34)
   const offsetY = Math.cos(tick * (0.0017 + energy * 0.003)) * (16 + energy * 28)
@@ -71,7 +71,7 @@ function drawMicroTexture(ctx: CanvasRenderingContext2D, w: number, h: number, t
   ctx.save()
   ctx.globalCompositeOperation = isDark ? 'screen' : 'source-over'
   ctx.lineWidth = 1
-  ctx.strokeStyle = `rgba(90, 140, 210, ${alpha})`
+  ctx.strokeStyle = `rgba(120, 150, 220, ${alpha})`
 
   for (let y = -gap; y < h + gap; y += gap) {
     ctx.beginPath()
@@ -115,14 +115,14 @@ function drawFluidField(
     const y = mix(naturalY, blob.focusY, focusStrength) * h
     const breathe = 0.94 + Math.sin(tick * (0.006 + energy * 0.018) + blob.phase) * (0.055 + energy * 0.07)
     const radius = minSide * blob.size * breathe * (1 - energy * 0.1)
-    const alpha = (isDark ? 0.22 : 0.16) + energy * (isDark ? 0.28 : 0.22)
+    const alpha = (isDark ? 0.28 : 0.22) + energy * (isDark ? 0.28 : 0.22)
 
     drawBlob(ctx, x, y, radius, blob.color, alpha, tick, blob.phase, energy)
   }
 
   const focusX = w * (0.5 + Math.sin(tick * 0.0017) * 0.025)
   const focusY = h * (0.38 + Math.cos(tick * 0.0021) * 0.018)
-  const focusAlpha = (isDark ? 0.15 : 0.25) + energy * 0.32
+  const focusAlpha = (isDark ? 0.2 : 0.3) + energy * 0.28
   drawBlob(ctx, focusX, focusY, minSide * (0.46 - energy * 0.08), '255, 255, 255', focusAlpha, tick, 4.8, energy)
 
   ctx.restore()
