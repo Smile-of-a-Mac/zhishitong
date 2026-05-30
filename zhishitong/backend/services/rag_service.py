@@ -289,7 +289,19 @@ async def check_compliance(form_json: dict, doc_type: str, db: Session) -> dict:
     对表单进行 RAG 合规性分析。
     返回: {policy_hits, compliance_summary, risk_level, compliance_items, suggestions}
     """
-    query_text = doc_type + " " + " ".join(str(v) for v in form_json.values() if v)
+    # 提取 OCR 原文（如果是由 router 注入的）
+    ocr_text = str(form_json.pop("_ocr_text", "") or "")
+    doc_type_from_raw = str(form_json.pop("document_type", "") or "")
+
+    # 构建检索文本：优先用结构化字段，否则用 OCR 原文
+    field_text = " ".join(str(v) for v in form_json.values() if v and str(v).strip())
+    if field_text:
+        query_text = doc_type + " " + field_text
+    elif ocr_text:
+        query_text = doc_type + " " + ocr_text[:800]  # 截断避免过长
+    else:
+        query_text = doc_type
+
     policy_hits = search_policies(query_text, doc_type=doc_type, top_k=4)
     if not policy_hits:
         policy_hits = search_policies(query_text, doc_type=None, top_k=3)
@@ -301,13 +313,21 @@ async def check_compliance(form_json: dict, doc_type: str, db: Session) -> dict:
 
     doc_name = get_doc_label(doc_type)
 
+    # 构建待审数据：优先结构化字段，无结构化数据时使用 OCR 原文
+    if form_json:
+        form_display = json.dumps(form_json, ensure_ascii=False, indent=2)
+    elif ocr_text:
+        form_display = f"[OCR 识别原文]\n{ocr_text[:1200]}"
+    else:
+        form_display = "（无表单数据）"
+
     prompt = f"""你是一名高校行政审批合规顾问。请严格依据下方政策条文，分析该申请表单的合规性。
 
 === 政策依据 ===
 {policy_context}
 
 === 待审申请（{doc_name}）===
-{json.dumps(form_json, ensure_ascii=False, indent=2)}
+{form_display}
 
 请输出严格 JSON（勿加任何解释）：
 {{
@@ -324,7 +344,7 @@ async def check_compliance(form_json: dict, doc_type: str, db: Session) -> dict:
         result = _extract_json(raw)
     except Exception as e:
         logger.warning(f"合规分析 LLM 失败: {e}")
-        return _compliance_rule_fallback(form_json, doc_type, policy_hits)
+        return _compliance_rule_fallback(form_json, ocr_text, doc_type, policy_hits)
 
     result["policy_hits"] = [
         {"doc_title": h["doc_title"], "text": h["text"]} for h in policy_hits
@@ -332,13 +352,34 @@ async def check_compliance(form_json: dict, doc_type: str, db: Session) -> dict:
     return result
 
 
-def _compliance_rule_fallback(form_json: dict, doc_type: str, policy_hits: list) -> dict:
+def _compliance_rule_fallback(form_json: dict, ocr_text: str, doc_type: str, policy_hits: list) -> dict:
     """规则兜底合规检查（LLM 完全不可用时）"""
     items = []
     suggestions = []
 
+    # 检查是否有有效数据（结构化或 OCR 原文）
+    has_data = bool(form_json and any(v for v in form_json.values() if v))
+    has_ocr = bool(ocr_text and ocr_text.strip())
+
+    if not has_data and not has_ocr:
+        return {
+            "risk_level": "low",
+            "compliance_summary": "暂无表单数据，无法执行合规分析",
+            "compliance_items": [{"item": "数据状态", "status": "warning", "detail": "表单数据为空，请确认是否已提交"}],
+            "suggestions": ["请先填写并提交申请表单"],
+            "policy_hits": [{"doc_title": h["doc_title"], "text": h["text"]} for h in policy_hits],
+        }
+
     if doc_type == "reimbursement":
-        amount = float(form_json.get("amount", 0) or 0)
+        # 字段名容错：尝试多个可能的键名
+        amount = float(
+            form_json.get("amount") or form_json.get("total_amount") or
+            form_json.get("reimbursement_amount") or form_json.get("金额") or 0
+        )
+        invoice = (
+            form_json.get("invoice_no") or form_json.get("invoice_number") or
+            form_json.get("invoice_num") or form_json.get("发票号") or ""
+        )
         if amount <= 0:
             items.append({"item": "报销金额", "status": "error", "detail": "金额必须大于0"})
         elif amount > 50000:
@@ -349,7 +390,7 @@ def _compliance_rule_fallback(form_json: dict, doc_type: str, policy_hits: list)
             items.append({"item": "报销金额", "status": "warning", "detail": "超5000元需分管校领导审批"})
         else:
             items.append({"item": "报销金额", "status": "ok", "detail": "由部门负责人审批"})
-        if not form_json.get("invoice_no"):
+        if not invoice:
             items.append({"item": "发票", "status": "error", "detail": "缺少发票号码"})
 
     elif doc_type == "leave":

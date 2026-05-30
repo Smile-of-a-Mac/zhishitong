@@ -14,12 +14,12 @@ interface BlobNode {
 }
 
 const BLOBS: BlobNode[] = [
-  { x: 0.16, y: 0.12, size: 0.52, color: '77, 139, 255', phase: 0.2, driftX: 0.0031, driftY: 0.0022, focusX: 0.42, focusY: 0.3 },
-  { x: 0.84, y: 0.14, size: 0.42, color: '84, 212, 190', phase: 1.4, driftX: 0.0024, driftY: 0.0034, focusX: 0.56, focusY: 0.32 },
-  { x: 0.72, y: 0.78, size: 0.54, color: '143, 108, 255', phase: 2.6, driftX: 0.0035, driftY: 0.0026, focusX: 0.58, focusY: 0.48 },
-  { x: 0.22, y: 0.78, size: 0.46, color: '115, 197, 255', phase: 3.8, driftX: 0.0028, driftY: 0.003, focusX: 0.44, focusY: 0.48 },
-  { x: 0.52, y: 0.04, size: 0.38, color: '235, 241, 255', phase: 5.1, driftX: 0.002, driftY: 0.0027, focusX: 0.5, focusY: 0.24 },
-  { x: 0.5, y: 0.9, size: 0.5, color: '182, 155, 255', phase: 6.0, driftX: 0.0023, driftY: 0.0021, focusX: 0.5, focusY: 0.56 },
+  { x: 0.16, y: 0.12, size: 0.52, color: '60, 130, 255', phase: 0.2, driftX: 0.0031, driftY: 0.0022, focusX: 0.42, focusY: 0.3 },
+  { x: 0.84, y: 0.14, size: 0.42, color: '40, 220, 180', phase: 1.4, driftX: 0.0024, driftY: 0.0034, focusX: 0.56, focusY: 0.32 },
+  { x: 0.72, y: 0.78, size: 0.54, color: '150, 80, 255', phase: 2.6, driftX: 0.0035, driftY: 0.0026, focusX: 0.58, focusY: 0.48 },
+  { x: 0.22, y: 0.78, size: 0.46, color: '255, 120, 180', phase: 3.8, driftX: 0.0028, driftY: 0.003, focusX: 0.44, focusY: 0.48 },
+  { x: 0.52, y: 0.04, size: 0.38, color: '255, 200, 100', phase: 5.1, driftX: 0.002, driftY: 0.0027, focusX: 0.5, focusY: 0.24 },
+  { x: 0.5, y: 0.9, size: 0.5, color: '200, 140, 255', phase: 6.0, driftX: 0.0023, driftY: 0.0021, focusX: 0.5, focusY: 0.56 },
 ]
 
 function mix(a: number, b: number, t: number) {
@@ -63,7 +63,7 @@ function drawBlob(
 
 function drawMicroTexture(ctx: CanvasRenderingContext2D, w: number, h: number, tick: number, energy: number) {
   const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-  const alpha = (isDark ? 0.018 : 0.026) + energy * (isDark ? 0.045 : 0.038)
+  const alpha = (isDark ? 0.03 : 0.04) + energy * (isDark ? 0.055 : 0.05)
   const gap = 72
   const offsetX = Math.sin(tick * (0.002 + energy * 0.004)) * (18 + energy * 34)
   const offsetY = Math.cos(tick * (0.0017 + energy * 0.003)) * (16 + energy * 28)
@@ -115,15 +115,15 @@ function drawFluidField(
     const y = mix(naturalY, blob.focusY, focusStrength) * h
     const breathe = 0.94 + Math.sin(tick * (0.006 + energy * 0.018) + blob.phase) * (0.055 + energy * 0.07)
     const radius = minSide * blob.size * breathe * (1 - energy * 0.1)
-    const alpha = (isDark ? 0.14 : 0.11) + energy * (isDark ? 0.22 : 0.18)
+    const alpha = (isDark ? 0.22 : 0.16) + energy * (isDark ? 0.28 : 0.22)
 
     drawBlob(ctx, x, y, radius, blob.color, alpha, tick, blob.phase, energy)
   }
 
   const focusX = w * (0.5 + Math.sin(tick * 0.0017) * 0.025)
   const focusY = h * (0.38 + Math.cos(tick * 0.0021) * 0.018)
-  const focusAlpha = (isDark ? 0.08 : 0.16) + energy * 0.28
-  drawBlob(ctx, focusX, focusY, minSide * (0.46 - energy * 0.08), '245, 249, 255', focusAlpha, tick, 4.8, energy)
+  const focusAlpha = (isDark ? 0.15 : 0.25) + energy * 0.32
+  drawBlob(ctx, focusX, focusY, minSide * (0.46 - energy * 0.08), '255, 255, 255', focusAlpha, tick, 4.8, energy)
 
   ctx.restore()
 }

@@ -2,7 +2,7 @@
  * AI 辅助决策面板（嵌入审批详情页）
  * 功能：合规分析 + 相似案例 + 意见草稿生成
  */
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import axios from 'axios'
 
 interface Props {
@@ -59,36 +59,50 @@ export default function AIDecisionPanel({ recordId, decision, onFillOpinion }: P
   const [opinionLoading, setOpinionLoading] = useState(false)
   const [policyOpen, setPolicyOpen] = useState(false)
 
-  // 自动加载合规分析
+  // 竞态防护：每次挂载分配唯一 ID，旧请求结果自动丢弃
+  const mountIdRef = useRef(0)
+
   useEffect(() => {
     if (!recordId) return
+    const mountId = ++mountIdRef.current
+    let cancelled = false
+
+    const loadCompliance = async () => {
+      setComplianceLoading(true)
+      try {
+        const res = await axios.post(`/api/ai/compliance/${recordId}`)
+        if (!cancelled && res.data && typeof res.data === 'object') {
+          setCompliance(res.data)
+        }
+      } catch {
+        // API 失败时保留旧结果不清空
+      } finally {
+        if (!cancelled) setComplianceLoading(false)
+      }
+    }
+
+    const loadSimilar = async () => {
+      setCasesLoading(true)
+      try {
+        const res = await axios.post(`/api/ai/similar/${recordId}`)
+        if (!cancelled && res.data?.cases) {
+          setCases(res.data.cases)
+        }
+      } catch {
+        // 保留旧结果
+      } finally {
+        if (!cancelled) setCasesLoading(false)
+      }
+    }
+
+    // 不清空旧结果——保留到新数据到达
+    setTab('compliance')
+    setPolicyOpen(false)
     loadCompliance()
     loadSimilar()
+
+    return () => { cancelled = true }
   }, [recordId])
-
-  const loadCompliance = async () => {
-    setComplianceLoading(true)
-    try {
-      const res = await axios.post(`/api/ai/compliance/${recordId}`)
-      setCompliance(res.data)
-    } catch {
-      // 静默失败
-    } finally {
-      setComplianceLoading(false)
-    }
-  }
-
-  const loadSimilar = async () => {
-    setCasesLoading(true)
-    try {
-      const res = await axios.post(`/api/ai/similar/${recordId}`)
-      setCases(res.data.cases || [])
-    } catch {
-      // 静默失败
-    } finally {
-      setCasesLoading(false)
-    }
-  }
 
   const generateOpinion = async () => {
     if (!decision || !onFillOpinion) return
@@ -174,12 +188,17 @@ export default function AIDecisionPanel({ recordId, decision, onFillOpinion }: P
           {/* ── 合规分析 Tab ── */}
           {tab === 'compliance' && (
             <>
-              {complianceLoading && (
+              {complianceLoading && !compliance && (
                 <div style={{ fontSize: 13, color: 'var(--text-secondary)', padding: '8px 0' }}>
                   🔍 正在检索政策知识库...
                 </div>
               )}
-              {!complianceLoading && compliance && (
+              {complianceLoading && compliance && (
+                <div style={{ fontSize: 11, color: 'var(--text-secondary)', padding: '4px 0', opacity: 0.6 }}>
+                  🔄 正在更新合规分析...
+                </div>
+              )}
+              {compliance && (
                 <>
                   {/* 摘要 */}
                   <div
@@ -278,7 +297,7 @@ export default function AIDecisionPanel({ recordId, decision, onFillOpinion }: P
           {/* ── 相似案例 Tab ── */}
           {tab === 'similar' && (
             <>
-              {casesLoading && (
+              {casesLoading && cases.length === 0 && (
                 <div style={{ fontSize: 13, color: 'var(--text-secondary)', padding: '8px 0' }}>
                   🔍 正在检索历史案例...
                 </div>
@@ -286,7 +305,7 @@ export default function AIDecisionPanel({ recordId, decision, onFillOpinion }: P
               {!casesLoading && cases.length === 0 && (
                 <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>暂无相似历史案例</div>
               )}
-              {!casesLoading && cases.map(c => (
+              {cases.map(c => (
                 <div
                   key={c.id}
                   style={{

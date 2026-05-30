@@ -98,7 +98,14 @@ async def check_compliance(
     try:
         form_json = json.loads(record.filled_json or "{}")
     except (json.JSONDecodeError, TypeError):
+        logger.warning(f"合规分析: record {record_id} filled_json 解析失败，尝试从 OCR 文本提取")
         form_json = {}
+
+    # 如果 filled_json 为空，尝试用 OCR 原文做合规分析（至少知道内容）
+    use_raw_text = not form_json or all(v in (None, "") for v in form_json.values())
+    if use_raw_text and record.ocr_text:
+        logger.info(f"合规分析: record {record_id} 无结构化数据，使用 OCR 原文")
+        form_json = {"_ocr_text": record.ocr_text, "document_type": record.document_type or ""}
 
     from services.rag_service import check_compliance as svc_compliance
     try:

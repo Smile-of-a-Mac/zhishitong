@@ -489,6 +489,7 @@ export default function DeptAdminPage() {
                   <>
                     {/* AI 辅助决策面板 */}
                     <AIDecisionPanel
+                      key={selectedRecord.id}
                       recordId={selectedRecord.id}
                       decision={reviewAction === 'approved' ? 'approved' : reviewAction === 'rejected' ? 'rejected' : 'needs_revision'}
                       onFillOpinion={(text) => setReviewReason(prev => prev ? prev + '\n' + text : text)}

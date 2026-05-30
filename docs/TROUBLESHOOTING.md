@@ -205,6 +205,32 @@ redis-server --daemonize yes
 | REDIS_URL 配置错误 | 检查是否指向 `redis://127.0.0.1:6379/0` |
 | 降级模式下工作 | 系统自动降级，不影响核心流程 |
 
+### 3.8 AI 合规分析结果闪烁消失 / 误判数据缺失
+
+**症状 A**：审核员打开审批面板后，AI 合规分析结果短暂出现后消失
+
+**症状 B**：表单数据完整填写，但 AI 判断为「数据缺失」或「金额必须大于0」
+
+**根因分析**：
+- 症状 A：前端竞态条件 —— 组件卸载时旧 API 响应覆盖新数据（`useRef` 跨挂载存活）
+- 症状 B：后端 `filled_json` 解析失败 → 空 `{}` → 规则兜底误报；字段名不匹配（如 `total_amount` vs `amount`）
+
+**排查步骤**：
+1. 打开浏览器 DevTools → Network 标签 → 筛选 `compliance`
+2. 检查 `/api/ai/compliance/{id}` 的响应状态：
+   - 200：查看返回的 `compliance_items` 是否合理
+   - 500：后端 LLM 调用失败，已自动降级为规则兜底
+3. 后端日志：`grep "合规分析" zhishitong/data/*.log` 查看 `filled_json` 解析情况
+
+**已修复（v0.5.3）**：
+| 修复项 | 文件 | 说明 |
+|--------|------|------|
+| 前端闪烁 | `AIDecisionPanel.tsx` | 改用 `useEffect` cleanup（`cancelled` 标志）替代共享 `useRef`，组件卸载时彻底丢弃旧请求 |
+| 前端闪烁 | `DeptAdminPage.tsx` | 添加 `key={selectedRecord.id}` 确保切换记录时强制重建组件 |
+| 后端误判 | `rag_router.py` | `filled_json` 为空时自动回退到 OCR 原文 `_ocr_text` |
+| 后端误判 | `rag_service.py` | 规则兜底增加字段名容错（`amount`/`total_amount`/`金额` 等均能识别）；无数据时返回明确提示而非乱报「缺失」 |
+| Loading 保留 | `AIDecisionPanel.tsx` | 刷新期间保留旧结果显示（仅顶部小字提示「正在更新」），不再隐藏已有数据 |
+
 ---
 
 ## 4. 日志格式参考
@@ -336,4 +362,4 @@ cp -r uploads/ ./
 tar -czf lora_backup.tar.gz lora_output/ lora_output_merged/ models/qwen3-4b-lora.gguf
 ```
 
-*文档版本: 2.0 | 最后更新: 2026-05-29*
+*文档版本: 2.1 | 最后更新: 2026-05-30*
