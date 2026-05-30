@@ -5,7 +5,10 @@ import { ConfigProvider } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
 import App from './App'
 import AuroraBackground from './components/AuroraBackground'
+import { setupAiActivityTracking } from './utils/aiActivity'
 import './styles/global.css'
+
+setupAiActivityTracking()
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

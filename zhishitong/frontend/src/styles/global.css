@@ -121,16 +121,28 @@ body::before {
   width: 100%;
   height: 100%;
   z-index: 0;
-  opacity: 0.82;
-  filter: blur(30px) saturate(0.88) contrast(0.96);
-  transform: scale(1.06);
+  opacity: 0.72;
+  filter: blur(34px) saturate(0.86) contrast(0.96);
+  transform: scale(1.08);
   pointer-events: none;
+  transition: opacity 0.45s ease, filter 0.45s ease, transform 0.45s ease;
+}
+
+#aurora-canvas[data-ai-active='true'] {
+  opacity: 0.96;
+  filter: blur(18px) saturate(1.16) contrast(1.04);
+  transform: scale(1.035);
 }
 
 @media (prefers-color-scheme: dark) {
   #aurora-canvas {
-    opacity: 0.66;
-    filter: blur(34px) saturate(0.82) contrast(0.94);
+    opacity: 0.62;
+    filter: blur(36px) saturate(0.8) contrast(0.96);
+  }
+
+  #aurora-canvas[data-ai-active='true'] {
+    opacity: 0.9;
+    filter: blur(20px) saturate(1.08) contrast(1.05);
   }
 }
 

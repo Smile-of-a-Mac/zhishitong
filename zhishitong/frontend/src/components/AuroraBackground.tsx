@@ -1,131 +1,129 @@
 import React, { useEffect, useRef } from 'react'
+import { addAiActivityListener } from '../utils/aiActivity'
 
-interface HSLColor { h: number; s: number; l: number }
-interface ColorPair { c1: HSLColor; c2: HSLColor }
-interface GlowOrb { x: number; y: number; r: number; color: string; phase: number; drift: number }
+interface BlobNode {
+  x: number
+  y: number
+  size: number
+  color: string
+  phase: number
+  driftX: number
+  driftY: number
+  focusX: number
+  focusY: number
+}
 
-class AuroraLine {
-  i: number
-  nodes: { x: number; baseY: number; lx: number; ly: number }[] = []
-  colorPair!: ColorPair
-  seed!: number
+const BLOBS: BlobNode[] = [
+  { x: 0.16, y: 0.12, size: 0.52, color: '77, 139, 255', phase: 0.2, driftX: 0.0031, driftY: 0.0022, focusX: 0.42, focusY: 0.3 },
+  { x: 0.84, y: 0.14, size: 0.42, color: '84, 212, 190', phase: 1.4, driftX: 0.0024, driftY: 0.0034, focusX: 0.56, focusY: 0.32 },
+  { x: 0.72, y: 0.78, size: 0.54, color: '143, 108, 255', phase: 2.6, driftX: 0.0035, driftY: 0.0026, focusX: 0.58, focusY: 0.48 },
+  { x: 0.22, y: 0.78, size: 0.46, color: '115, 197, 255', phase: 3.8, driftX: 0.0028, driftY: 0.003, focusX: 0.44, focusY: 0.48 },
+  { x: 0.52, y: 0.04, size: 0.38, color: '235, 241, 255', phase: 5.1, driftX: 0.002, driftY: 0.0027, focusX: 0.5, focusY: 0.24 },
+  { x: 0.5, y: 0.9, size: 0.5, color: '182, 155, 255', phase: 6.0, driftX: 0.0023, driftY: 0.0021, focusX: 0.5, focusY: 0.56 },
+]
 
-  constructor(i: number) {
-    this.i = i
-    this.refresh()
-    for (let n = 0; n <= 6; n++) {
-      this.nodes.push({ x: 0, baseY: 0, lx: 0, ly: 0 })
-    }
+function mix(a: number, b: number, t: number) {
+  return a + (b - a) * t
+}
+
+function drawBlob(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  radius: number,
+  color: string,
+  alpha: number,
+  tick: number,
+  phase: number,
+  energy: number,
+) {
+  const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius)
+  gradient.addColorStop(0, `rgba(${color}, ${alpha})`)
+  gradient.addColorStop(0.38, `rgba(${color}, ${alpha * 0.45})`)
+  gradient.addColorStop(0.74, `rgba(${color}, ${alpha * 0.14})`)
+  gradient.addColorStop(1, 'rgba(255, 255, 255, 0)')
+  ctx.fillStyle = gradient
+  ctx.beginPath()
+  const points = 18
+  for (let i = 0; i <= points; i++) {
+    const a = (i / points) * Math.PI * 2
+    const organic =
+      Math.sin(a * 2 + tick * 0.006 + phase) * 0.025 +
+      Math.cos(a * 3 - tick * 0.004 + phase * 1.7) * 0.018 +
+      Math.sin(a * 5 + tick * 0.003 + phase * 0.4) * 0.012
+    const r = radius * (1 + organic * (0.7 + energy * 1.1))
+    const px = x + Math.cos(a) * r
+    const py = y + Math.sin(a) * r
+    if (i === 0) ctx.moveTo(px, py)
+    else ctx.lineTo(px, py)
   }
+  ctx.closePath()
+  ctx.fill()
+}
 
-  refresh() {
-    const p = getPalette()
-    this.colorPair = p[this.i % p.length]
-    // 首次构造时生成随机种子，后续 refresh（暗色模式切换）保留形状
-    if (this.seed === undefined) this.seed = Math.random() * 100
-  }
+function drawMicroTexture(ctx: CanvasRenderingContext2D, w: number, h: number, tick: number, energy: number) {
+  const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+  const alpha = (isDark ? 0.018 : 0.026) + energy * (isDark ? 0.045 : 0.038)
+  const gap = 72
+  const offsetX = Math.sin(tick * (0.002 + energy * 0.004)) * (18 + energy * 34)
+  const offsetY = Math.cos(tick * (0.0017 + energy * 0.003)) * (16 + energy * 28)
 
-  update(ctx: CanvasRenderingContext2D, w: number, h: number, tick: number) {
+  ctx.save()
+  ctx.globalCompositeOperation = isDark ? 'screen' : 'source-over'
+  ctx.lineWidth = 1
+  ctx.strokeStyle = `rgba(90, 140, 210, ${alpha})`
+
+  for (let y = -gap; y < h + gap; y += gap) {
     ctx.beginPath()
-    const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-    const alpha = isDark ? 0.2 : 0.16
-    const xOff = Math.sin(tick * 0.0032 + this.i) * 76
-
-    ctx.moveTo(-200, h)
-    for (let n = 0; n <= 6; n++) {
-      const node = this.nodes[n]
-      node.x = (w / 6) * n
-      node.baseY = h * (0.38 + this.i * 0.08)
-      const noise =
-        Math.sin(tick * 0.011 + n * 0.8 + this.seed) * 78 +
-        Math.cos(tick * 0.019 + n) * 28
-      const tx = node.x + xOff
-      const ty = node.baseY + noise
-      if (n === 0) {
-        ctx.lineTo(tx, ty)
-      } else {
-        const prev = this.nodes[n - 1]
-        const cx = (prev.lx + tx) / 2
-        const cy = (prev.ly + ty) / 2
-        ctx.quadraticCurveTo(prev.lx, prev.ly, cx, cy)
-      }
-      node.ly = ty
-      node.lx = tx
+    for (let x = -gap; x < w + gap; x += 16) {
+      const px = x + offsetX
+      const py = y + offsetY + Math.sin(x * 0.012 + tick * (0.004 + energy * 0.012)) * (4 + energy * 16)
+      if (x === -gap) ctx.moveTo(px, py)
+      else ctx.lineTo(px, py)
     }
-    ctx.lineTo(w + 200, h)
-
-    const g = ctx.createLinearGradient(0, h, 0, 0)
-    g.addColorStop(0, 'transparent')
-    g.addColorStop(
-      0.2,
-      `hsla(${this.colorPair.c1.h},${this.colorPair.c1.s}%,${this.colorPair.c1.l}%,${alpha})`
-    )
-    g.addColorStop(
-      0.8,
-      `hsla(${this.colorPair.c2.h},${this.colorPair.c2.s}%,${this.colorPair.c2.l}%,${alpha})`
-    )
-    g.addColorStop(1, 'transparent')
-    ctx.fillStyle = g
-    ctx.fill()
+    ctx.stroke()
   }
+  ctx.restore()
 }
 
-function getPalette(): ColorPair[] {
+function drawFluidField(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  tick: number,
+  energy: number,
+) {
   const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-  return isDark
-    ? [
-        { c1: { h: 214, s: 86, l: 42 }, c2: { h: 194, s: 76, l: 46 } },
-        { c1: { h: 206, s: 72, l: 38 }, c2: { h: 250, s: 58, l: 48 } },
-        { c1: { h: 178, s: 62, l: 34 }, c2: { h: 214, s: 62, l: 42 } },
-      ]
-    : [
-        { c1: { h: 210, s: 72, l: 72 }, c2: { h: 195, s: 58, l: 76 } },
-        { c1: { h: 205, s: 52, l: 70 }, c2: { h: 245, s: 42, l: 76 } },
-        { c1: { h: 175, s: 46, l: 70 }, c2: { h: 212, s: 48, l: 74 } },
-      ]
-}
-
-function drawGeminiGlow(ctx: CanvasRenderingContext2D, w: number, h: number, tick: number) {
-  const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-  const alpha = isDark ? 0.2 : 0.16
   const minSide = Math.min(w, h)
-  const orbs: GlowOrb[] = [
-    { x: 0.18, y: 0.2, r: 0.42, color: '66, 133, 244', phase: 0.1, drift: 0.009 },
-    { x: 0.78, y: 0.18, r: 0.34, color: '52, 168, 83', phase: 1.7, drift: 0.007 },
-    { x: 0.36, y: 0.82, r: 0.46, color: '155, 81, 224', phase: 3.2, drift: 0.008 },
-    { x: 0.88, y: 0.76, r: 0.32, color: '251, 188, 5', phase: 4.4, drift: 0.006 },
-  ]
+  const speed = 1 + energy * 3.4
 
   ctx.save()
   ctx.globalCompositeOperation = isDark ? 'screen' : 'multiply'
 
-  for (const orb of orbs) {
-    const breath = 0.9 + Math.sin(tick * 0.024 + orb.phase) * 0.1
-    const px = w * orb.x + Math.sin(tick * orb.drift + orb.phase) * minSide * 0.07
-    const py = h * orb.y + Math.cos(tick * orb.drift * 0.85 + orb.phase) * minSide * 0.055
-    const radius = minSide * orb.r * breath
-    const g = ctx.createRadialGradient(px, py, 0, px, py, radius)
+  for (const blob of BLOBS) {
+    const naturalX =
+      blob.x +
+      Math.sin(tick * blob.driftX * speed + blob.phase) * (0.055 + energy * 0.04) +
+      Math.sin(tick * blob.driftY * (0.72 + energy * 1.1) + blob.phase * 1.7) * (0.024 + energy * 0.026)
+    const naturalY =
+      blob.y +
+      Math.cos(tick * blob.driftY * speed + blob.phase) * (0.05 + energy * 0.04) +
+      Math.sin(tick * blob.driftX * (0.86 + energy * 1.15) + blob.phase * 0.9) * (0.02 + energy * 0.024)
 
-    g.addColorStop(0, `rgba(${orb.color}, ${alpha})`)
-    g.addColorStop(0.36, `rgba(${orb.color}, ${alpha * 0.42})`)
-    g.addColorStop(0.72, `rgba(${orb.color}, ${alpha * 0.12})`)
-    g.addColorStop(1, 'rgba(255, 255, 255, 0)')
-    ctx.fillStyle = g
-    ctx.beginPath()
-    ctx.arc(px, py, radius, 0, Math.PI * 2)
-    ctx.fill()
+    const focusStrength = energy * 0.76
+    const x = mix(naturalX, blob.focusX, focusStrength) * w
+    const y = mix(naturalY, blob.focusY, focusStrength) * h
+    const breathe = 0.94 + Math.sin(tick * (0.006 + energy * 0.018) + blob.phase) * (0.055 + energy * 0.07)
+    const radius = minSide * blob.size * breathe * (1 - energy * 0.1)
+    const alpha = (isDark ? 0.14 : 0.11) + energy * (isDark ? 0.22 : 0.18)
+
+    drawBlob(ctx, x, y, radius, blob.color, alpha, tick, blob.phase, energy)
   }
 
-  const cx = w * 0.5 + Math.sin(tick * 0.005) * minSide * 0.04
-  const cy = h * 0.48 + Math.cos(tick * 0.006) * minSide * 0.035
-  const halo = ctx.createRadialGradient(cx, cy, 0, cx, cy, minSide * 0.58)
-  halo.addColorStop(0, isDark ? 'rgba(160, 190, 255, 0.08)' : 'rgba(255, 255, 255, 0.36)')
-  halo.addColorStop(0.54, isDark ? 'rgba(120, 160, 255, 0.03)' : 'rgba(255, 255, 255, 0.18)')
-  halo.addColorStop(1, 'rgba(255, 255, 255, 0)')
-  ctx.fillStyle = halo
-  ctx.beginPath()
-  ctx.arc(cx, cy, minSide * 0.58, 0, Math.PI * 2)
-  ctx.fill()
+  const focusX = w * (0.5 + Math.sin(tick * 0.0017) * 0.025)
+  const focusY = h * (0.38 + Math.cos(tick * 0.0021) * 0.018)
+  const focusAlpha = (isDark ? 0.08 : 0.16) + energy * 0.28
+  drawBlob(ctx, focusX, focusY, minSide * (0.46 - energy * 0.08), '245, 249, 255', focusAlpha, tick, 4.8, energy)
 
   ctx.restore()
 }
@@ -142,14 +140,16 @@ export default function AuroraBackground() {
 
     let w = window.innerWidth
     let h = window.innerHeight
-    const dpr = window.devicePixelRatio || 1
-    const lines: AuroraLine[] = [new AuroraLine(0), new AuroraLine(1), new AuroraLine(2)]
+    let dpr = window.devicePixelRatio || 1
     let animationId: number
     let tick = 0
+    let targetEnergy = 0
+    let energy = 0
 
     function resize() {
       w = window.innerWidth
       h = window.innerHeight
+      dpr = window.devicePixelRatio || 1
       canvas!.width = w * dpr
       canvas!.height = h * dpr
       ctx!.setTransform(1, 0, 0, 1, 0, 0)
@@ -158,14 +158,13 @@ export default function AuroraBackground() {
 
     function loop() {
       ctx!.clearRect(0, 0, w, h)
-      ctx!.globalCompositeOperation = window.matchMedia('(prefers-color-scheme: dark)').matches
-        ? 'screen'
-        : 'source-over'
-      tick += 0.46
-      drawGeminiGlow(ctx!, w, h, tick)
-      for (const line of lines) {
-        line.update(ctx!, w, h, tick)
-      }
+      energy += (targetEnergy - energy) * 0.085
+      tick += 0.58 + energy * 1.55
+      canvas!.dataset.aiActive = energy > 0.06 ? 'true' : 'false'
+
+      drawMicroTexture(ctx!, w, h, tick, energy)
+      drawFluidField(ctx!, w, h, tick, energy)
+
       animationId = requestAnimationFrame(loop)
     }
 
@@ -175,16 +174,14 @@ export default function AuroraBackground() {
     const onResize = () => resize()
     window.addEventListener('resize', onResize)
 
-    const darkMode = window.matchMedia('(prefers-color-scheme: dark)')
-    const onColorSchemeChange = () => {
-      for (const line of lines) line.refresh()
-    }
-    darkMode.addEventListener('change', onColorSchemeChange)
+    const removeAiActivityListener = addAiActivityListener(active => {
+      targetEnergy = active ? 1 : 0
+    })
 
     return () => {
       cancelAnimationFrame(animationId)
       window.removeEventListener('resize', onResize)
-      darkMode.removeEventListener('change', onColorSchemeChange)
+      removeAiActivityListener()
     }
   }, [])
 
