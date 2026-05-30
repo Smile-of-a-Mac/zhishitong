@@ -1,5 +1,5 @@
 """
-智审通 · 本地推理服务 — 加载 Qwen2.5 GGUF 模型，自动检测 GPU 加速
+智审通 · 本地推理服务 — 加载 Qwen3 GGUF 模型，自动检测 GPU 加速
 
 GPU 加速策略（自动检测，优先级从高到低）：
   Apple Silicon (M1/M2/M3/M4) → Metal (MPS) 加速
@@ -77,7 +77,7 @@ logger = logging.getLogger("inference_server")
 MODEL_PATH = os.getenv(
     "MODEL_PATH",
     os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-                 "models", "qwen2.5-0.5b.gguf")
+                 "models", "qwen3-4b.gguf")
 )
 PORT = int(os.getenv("PORT", "18080"))
 N_CTX = int(os.getenv("N_CTX", "2048"))
@@ -162,12 +162,12 @@ class ChatResponse(BaseModel):
     id: str = "local-inference"
     object: str = "chat.completion"
     created: int = 0
-    model: str = "qwen2.5-0.5b-instruct"
+    model: str = "qwen3-4b-instruct"
     choices: list[dict]
 
 
 def _build_qwen_prompt(messages: list[ChatMessage]) -> str:
-    """构建 Qwen2.5 ChatML 格式 prompt"""
+    """构建 Qwen3 ChatML 格式 prompt"""
     parts: list[str] = []
     for msg in messages:
         parts.append(f"<|im_start|>{msg.role}\n{msg.content}<|im_end|>")
@@ -179,7 +179,7 @@ def _build_qwen_prompt(messages: list[ChatMessage]) -> str:
 def health():
     return {
         "status": "ok",
-        "model": "qwen2.5-0.5b-instruct",
+        "model": "qwen3-4b-instruct",
         "gpu_backend": gpu_backend,
     }
 
@@ -188,7 +188,7 @@ def health():
 def list_models():
     return {
         "object": "list",
-        "data": [{"id": "qwen2.5-0.5b-instruct", "object": "model"}],
+        "data": [{"id": "qwen3-4b-instruct", "object": "model"}],
     }
 
 

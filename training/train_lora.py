@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-LoRA 微调 Qwen2.5-0.5B → 山东科技大学事务流程助手
+LoRA 微调 Qwen3-4B → 山东科技大学事务流程助手
 
 依赖: torch, transformers, peft, sentencepiece (无 datasets/accelerate)
 支持: Apple MPS / CUDA / CPU
@@ -9,7 +9,7 @@ LoRA 微调 Qwen2.5-0.5B → 山东科技大学事务流程助手
     cd /Users/wangdaoyu/VSCode/sito
     python train_lora.py
 
-首次运行会自动从 HuggingFace 下载 Qwen2.5-0.5B（约 1GB）。
+首次运行会用本地 GGUF 文件（约 2.3GB），无需额外下载。
 """
 
 import json
@@ -29,8 +29,9 @@ from tqdm import tqdm
 # ========================= 配置 =========================
 
 # 本地模型目录（含 config.json + GGUF 文件，无需下载）
-BASE_MODEL_DIR = str(Path(__file__).parent.parent / "models" / "qwen2.5-0.5b-local")
-GGUF_FILE = "qwen2.5-0.5b.gguf"
+BASE_MODEL_DIR = str(Path(__file__).parent.parent / "models" / "Qwen3-4B")
+GGUF_FILE = "qwen3-4b.gguf"
+
 CORPUS_PATH = Path(__file__).parent.parent / "data" / "sdust_process_corpus_lora.jsonl"
 OUTPUT_DIR = Path(__file__).parent.parent / "lora_output"
 
@@ -42,7 +43,7 @@ LORA_TARGETS = ["q_proj", "k_proj", "v_proj", "o_proj",
                  "gate_proj", "up_proj", "down_proj"]
 
 # 训练
-NUM_EPOCHS = 5            # 9条数据，少跑几轮避免过拟合
+NUM_EPOCHS = 5
 BATCH_SIZE = 1
 GRAD_ACCUM = 8           # 等效 batch=8
 LEARNING_RATE = 2e-4
@@ -52,6 +53,9 @@ LOGGING_STEPS = 5
 SAVE_STEPS = 50
 WEIGHT_DECAY = 0.01
 SEED = 42
+
+# 内存优化（4B+ 模型建议开启）
+USE_GRADIENT_CHECKPOINTING = True  # 用计算换内存，降低激活值占用
 
 # ========================= 设备 =========================
 
@@ -153,17 +157,24 @@ def train():
 
     # ---- 加载模型 ----
     print(f"[模型] 加载本地模型: {BASE_MODEL_DIR}")
+    print(f"[模型] 使用 GGUF: {GGUF_FILE}")
+
     tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL_DIR, local_files_only=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    # GGUF 必须先 float32 加载到 CPU，反量化后才能安全移到 MPS
+    # GGUF 须先 float32 加载到 CPU，反量化后才能安全移到 MPS
     model = AutoModelForCausalLM.from_pretrained(
         BASE_MODEL_DIR,
         gguf_file=GGUF_FILE,
         torch_dtype=torch.float32,
         local_files_only=True,
     )
+
+    # ---- 梯度检查点（用计算换内存）----
+    if USE_GRADIENT_CHECKPOINTING:
+        model.gradient_checkpointing_enable()
+        print("[内存] 梯度检查点已启用")
 
     # ---- 应用 LoRA（在 CPU 上，再移 MPS）----
     lora_config = LoraConfig(
@@ -298,7 +309,7 @@ def train():
 
   # 1. 合并 LoRA 到基座模型
   cd /Users/wangdaoyu/VSCode/sito
-  python merge_lora.py
+  python training/merge_lora.py
 
   # 2. 用合并后的模型替换推理服务
   #    - 将合并模型转为 GGUF（用 llama.cpp 的 convert_hf_to_gguf.py）

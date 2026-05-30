@@ -22,8 +22,8 @@
 
 ## 一、用户分级体系（三级 + 三层管理角色）
 
-> **设计原则：** 0.5B 参数的多模态模型看图识字能力极其有限（手写体、表格、复杂发票几乎不可用）。
-> 因此 Free 层改为 **EasyOCR 提取文字 → 本地小模型做纯文本 JSON 填充**，而非直接看图。
+> **设计原则：** 即使是 4B 参数的小模型，多模态看图识字能力也有限（手写体、表格、复杂发票不可靠）。
+> 因此 Free 层采用 **EasyOCR 提取文字 → 本地模型做纯文本 JSON 填充**，而非直接看图。
 
 ### 0. 角色体系
 
@@ -65,7 +65,7 @@ LLM 辅助引擎输出：
 |          |      Free 免费版              |     Pro 专业版           |
 |----------|-----------------------------|-------------------------|
 | **文字提取** | EasyOCR（本地，ARM/x86通用）+ PDF 文本提取 | 多模态 LLM API（看图）   |
-| **JSON 填充** | 本地小模型（Qwen2.5-0.5B）   | 同一 LLM 完成（一步到位）|
+| **JSON 填充** | 本地小模型（Qwen3-4B）       | 同一 LLM 完成（一步到位）|
 | **调用次数**  | 无限制（纯本地，无外部依赖）   | 管理员设定月度配额      |
 | **用户编辑**  | ✅ 前端可编辑表单            | ✅ 同 Free              |
 | **适用场景**  | 日常轻度使用 / 个人           | 高频审批部门            |
@@ -86,9 +86,9 @@ LLM 辅助引擎输出：
           │ 纯文本（不是图片）
           ▼
 ┌──────────────────────────┐
-│ Step 2: 本地小模型推理    │  ← Qwen2.5-0.5B
+│ Step 2: 本地小模型推理    │  ← Qwen3-4B
 │ 输入: EasyOCR 提取的文本  │    通过 llama.cpp (llama-cpp-python) 运行
-│ 输出: 结构化 JSON          │    纯文本填充，0.5B 参数绰绰有余
+│ 输出: 结构化 JSON          │    纯文本填充，4B 参数轻松胜任
 │                          │
 │ {                        │
 │   "document_type": "报销",│
@@ -131,7 +131,7 @@ LLM 辅助引擎输出：
 │ 步骤二: 结构化 JSON 填充     │
 │                             │
 │ 优势:                       │
-│ - 识别精度 >> 本地 0.5B     │
+│ - 识别精度 >> 本地模型      │
 │ - 理解上下文(发票/请假条等)  │
 │ - 自动纠错和格式化          │
 └─────────┬───────────────────┘
@@ -147,24 +147,24 @@ LLM 辅助引擎输出：
 
 ## 二、本地小模型方案（纯文本 JSON 填充，不做多模态）
 
-### 2.1 为什么不让 0.5B 模型看图？
+### 2.1 为什么不让小模型直接看图？
 
-| 任务 | 0.5B 多模态能力 | 实用结论 |
+| 任务 | 本地小模型多模态能力 | 实用结论 |
 |------|:--------------:|---------|
-| 印刷体发票 OCR | ❌ 几乎不可用 | 0.5B 的视觉编码器太弱，无法区分细粒度文字 |
+| 印刷体发票 OCR | ❌ 不可靠 | 视觉编码需要专门的多模态大模型 |
 | 手写请假条 | ❌ 完全不可读 | 手写体本身就需要大模型才能处理 |
 | 扫描件/表格 | ❌ 无法解析结构 | 表格区域检测需要专门模型 |
-| **纯文本 → JSON 结构化** | ✅ 绰绰有余 | 这就是 0.5B 擅长的：看一段文字填空 |
+| **纯文本 → JSON 结构化** | ✅ 绰绰有余 | 本地模型专长：阅读文字并结构化填空 |
 
-**结论：用 EasyOCR（专业 OCR 引擎）处理看图，用 0.5B 小模型处理看字，各取所长。**
+**结论：用 EasyOCR（专业 OCR 引擎）处理看图，用本地模型处理看字，各取所长。**
 
 ### 2.2 候选模型
 
 | 模型 | 参数量 | 内存 | 中文 | 用途 | GGUF 文件名 |
 |------|--------|------|:----:|------|------------|
-| **Qwen2.5-0.5B-Instruct** | 0.5B | ~450MB | ⭐⭐⭐ | JSON 填充 | `qwen2.5-0.5b.gguf` |
+| **Qwen3-4B-Instruct** | 4B | ~2.5GB (Q4_K_M) | ⭐⭐⭐⭐⭐ | JSON 填充 | `qwen3-4b.gguf` |
 
-**当前使用 Qwen2.5-0.5B-Instruct**，Q4_K_M 量化版约 400MB。后续可升级至 Qwen3-0.5B。
+**当前使用 Qwen3-4B-Instruct**，Q4_K_M 量化版约 2.5GB。相比旧版 0.5B 模型，中文理解和 JSON 结构化能力大幅提升。
 
 ### 2.3 推理引擎选择
 
@@ -190,7 +190,7 @@ LLM 辅助引擎输出：
 PYTHONPATH="$INFER_DIR" uvicorn server:app --host 0.0.0.0 --port 18080
 
 # 环境变量配置
-MODEL_PATH=models/qwen2.5-0.5b.gguf  # 模型路径
+MODEL_PATH=models/qwen3-4b.gguf  # 模型路径
 PORT=18080                             # 服务端口
 N_CTX=2048                             # 上下文长度
 N_THREADS=4                            # CPU 线程数
@@ -236,7 +236,7 @@ Free 版本:
   业务代码 + FastAPI:   ~50 MB
   EasyOCR + 模型:       ~120 MB  (轻量版，纯 CPU wheels)
   llama-cpp-python:     ~50 MB
-  本地小模型文件:        ~400 MB  (qwen2.5-0.5b q4_k_m)
+  本地小模型文件:        ~2.5 GB  (qwen3-4b q4_k_m)
   ─────────────────────────
   合计:                 ~920 MB
 
@@ -976,7 +976,7 @@ PYTHONPATH="$BACKEND_DIR" uvicorn main:app --host 0.0.0.0 --port 8080 --reload &
 **时间预估：**
 | 阶段 | 耗时 | 说明 |
 |------|------|------|
-| llama-cpp-python 模型加载 | ~2-5s | 0.5B q4_k_m 约 400MB |
+| llama-cpp-python 模型加载 | ~3-8s | 4B q4_k_m 约 2.5GB |
 | GPU 加速初始化（如有） | ~1-2s | Metal/CUDA/ROCm |
 | 首次推理（热身） | ~0.5s | CPU/GPU 执行一次空推理 |
 | **总计** | **~3-8s** | 用户第一次请求即热状态 |
@@ -997,7 +997,7 @@ PYTHONPATH="$BACKEND_DIR" uvicorn main:app --host 0.0.0.0 --port 8080 --reload &
 │                                                             │
 │  2. 推理服务启动（llama-cpp-python + uvicorn :18080）       │
 │     ├─ 自动 GPU 检测（Metal/CUDA/ROCm/CPU）                 │
-│     ├─ Qwen2.5-0.5B GGUF 模型加载                           │
+│     ├─ Qwen3-4B GGUF 模型加载                               │
 │     └─ 暴露 OpenAI 兼容 API                                 │
 │                                                             │
 │  3. 后端启动（uvicorn :8080）                                │
@@ -1059,7 +1059,7 @@ Dockerfile 和 docker-compose.yml 待后续补充。
 
 | 层级 | 文字提取 | JSON 填充 | 调用限制 |
 |------|---------|-----------|---------|
-| **Free** | EasyOCR（本地）+ PDF 文本提取 | 本地小模型（Qwen2.5-0.5B） | 不限制（纯本地） |
+| **Free** | EasyOCR（本地）+ PDF 文本提取 | 本地小模型（Qwen3-4B） | 不限制（纯本地） |
 | **Pro** | 多模态 LLM API | 同一 LLM | 管理员设定月度配额 |
 
 **过渡策略（从用户级 → 学校级）：**
@@ -1521,7 +1521,7 @@ class RuleConfig(Base):
 
 ## 二十二、LoRA 微调管线（v5.0 新增）
 
-> **目标：** 用山东科技大学实际事务流程数据微调 Qwen2.5-0.5B，使其成为「山科大事务流程专家」。
+> **目标：** 用山东科技大学实际事务流程数据微调 Qwen3-4B，使其成为「山科大事务流程专家」。
 
 ### 22.1 数据制备
 
@@ -1543,7 +1543,7 @@ data/
 
 ```python
 # training/train_lora.py
-BASE_MODEL = "Qwen2.5-0.5B"    # 基座模型（本地 GGUF）
+MODEL_ID = "Qwen/Qwen3-4B"     # 基座模型（HuggingFace）
 LORA_R = 16                     # LoRA 秩
 LORA_ALPHA = 32                 # 缩放因子
 LORA_TARGETS = [                # 目标模块
@@ -1575,7 +1575,7 @@ lora_output_merged/          # 合并后的完整模型（HuggingFace 格式）
 └── ...
 
 models/
-└── qwen2.5-0.5b-lora.gguf   # 转换为 GGUF 格式（给 llama.cpp 推理用）
+└── qwen3-4b-lora.gguf       # 转换为 GGUF 格式（给 llama.cpp 推理用）
 ```
 
 ### 22.4 训练 & 合并 & 转换流程
@@ -1590,7 +1590,7 @@ python merge_lora.py
 # Step 3: 转换为 GGUF（start.sh 自动检测并执行）
 # 或手动：
 python -m llama_cpp.convert_hf_to_gguf lora_output_merged \
-  --outfile models/qwen2.5-0.5b-lora.gguf --outtype q8_0
+  --outfile models/qwen3-4b-lora.gguf --outtype q8_0
 ```
 
 ### 22.5 start.sh 自动切换
@@ -1687,7 +1687,7 @@ fi
 | 5 | ✅ | JSON 动态模板渲染 | 后端 JSON Schema 定义，前端按 type 渲染 |
 | 6 | ✅ | 文件上传安全 | MIME 白名单 + 魔数校验 + 文件名 UUID 化 + noexec 卷 |
 | 7 | ✅ | 部署方式 | **本地开发**（start.sh 一键启动）+ Docker（未来规划） |
-| 8 | ✅ | 本地模型 GGUF | 使用 Qwen2.5-0.5B GGUF，放在 models/ 目录，start.sh 自动检测 |
+| 8 | ✅ | 本地模型 GGUF | 使用 Qwen3-4B GGUF，放在 models/ 目录，start.sh 自动检测 |
 | 9 | ⬜ | EasyOCR 在 ARM 上的中文识别精度 | 后续需在 ARM Mac 上实际测试确认 |
 | 10 | ✅ | 推理服务并发 | llama-cpp-python 支持并发请求排队（cont-batching），默认上下文 2048 tokens |
 | 11 | ⬜ | 学校级套餐迁移 | 从用户级 tier 过渡到 school_config 表，见第十二章 |

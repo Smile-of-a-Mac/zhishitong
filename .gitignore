@@ -28,6 +28,12 @@ zhishitong/uploads/
 .encryption_key
 **/.encryption_key
 
+# ===== 模型文件（体积大，不提交） =====
+models/
+lora_output/
+lora_output_merged/
+*.gguf
+
 # ===== 模型文件 =====
 models/*.gguf
 *.gguf

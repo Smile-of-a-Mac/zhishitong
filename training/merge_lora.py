@@ -3,7 +3,7 @@
 合并 LoRA adapter 到基座模型，输出完整模型。
 
 用法:
-    python merge_lora.py
+    python training/merge_lora.py
 
 输出:
     ./lora_output_merged/  合并后的完整模型（HuggingFace 格式）
@@ -14,8 +14,10 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from peft import PeftModel
 from pathlib import Path
 
-BASE_MODEL_DIR = str(Path(__file__).parent.parent / "models" / "qwen2.5-0.5b-local")
-GGUF_FILE = "qwen2.5-0.5b.gguf"
+# 本地模型目录（需与训练时一致）
+BASE_MODEL_DIR = str(Path(__file__).parent.parent / "models" / "Qwen3-4B")
+GGUF_FILE = "qwen3-4b.gguf"
+
 LORA_ADAPTER_PATH = Path(__file__).parent.parent / "lora_output" / "final"
 OUTPUT_PATH = Path(__file__).parent.parent / "lora_output_merged"
 
@@ -31,7 +33,7 @@ def get_device():
 def main():
     if not LORA_ADAPTER_PATH.exists():
         print(f"[ERROR] LoRA adapter 不存在: {LORA_ADAPTER_PATH}")
-        print("请先运行 train_lora.py 完成训练")
+        print("请先运行 training/train_lora.py 完成训练")
         return
 
     device = get_device()
@@ -60,25 +62,23 @@ def main():
 
     print(f"[INFO] 保存合并模型到: {OUTPUT_PATH}")
     OUTPUT_PATH.mkdir(parents=True, exist_ok=True)
-    model.save_pretrained(str(OUTPUT_PATH))
+    model.save_pretrained(str(OUTPUT_PATH), safe_serialization=True)
     tokenizer.save_pretrained(str(OUTPUT_PATH))
 
     print("\n[SUCCESS] 合并完成！")
     print(f"  合并模型: {OUTPUT_PATH}")
     print(f"""
-[下一步] 转换为 GGUF（给 llama.cpp 使用）:
+[下一步] 转换为 GGUF（给 llama.cpp 推理使用）:
 
   # 方法1: 使用 llama.cpp 的 convert_hf_to_gguf.py
   python /path/to/llama.cpp/convert_hf_to_gguf.py \\
     {OUTPUT_PATH} \\
-    --outfile {Path(__file__).parent / 'models' / 'qwen2.5-0.5b-lora.gguf'} \\
+    --outfile {Path(__file__).parent.parent / 'models' / 'qwen3-4b-lora.gguf'} \\
     --outtype f16
 
-  # 方法2: 如果需要量化
-  python /path/to/llama.cpp/convert_hf_to_gguf.py \\
-    {OUTPUT_PATH} \\
-    --outfile {Path(__file__).parent / 'models' / 'qwen2.5-0.5b-lora-f16.gguf'} \\
-    --outtype f16
+  # 方法2: 直接下载官方 Qwen3-4B GGUF 用于推理（不包含 LoRA）
+  # huggingface-cli download Qwen/Qwen3-4B-GGUF qwen3-4b-q4_k_m.gguf \\
+  #   --local-dir models/
 """)
 
 

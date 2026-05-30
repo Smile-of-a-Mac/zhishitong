@@ -95,7 +95,7 @@ sito/
 │   ├── start.sh                        # 一键启动（自动检测微调模型）
 │   └── shutdown.sh                     # 一键停止所有服务
 ├── training/                           # LoRA 微调管线
-│   ├── train_lora.py                   #   训练脚本（Qwen2.5-0.5B）
+│   ├── train_lora.py                   #   训练脚本（Qwen3-4B）
 │   ├── merge_lora.py                   #   合并 adapter → 完整模型
 │   └── train_requirements.txt
 ├── lora_output/                        # LoRA 训练产出
@@ -104,9 +104,9 @@ sito/
 │   └── final/                          #   最终 LoRA adapter
 ├── lora_output_merged/                 # 合并后的完整模型（HF 格式）
 ├── models/                             # 模型文件
-│   ├── qwen2.5-0.5b.gguf               #   原始 GGUF
-│   ├── qwen2.5-0.5b-lora.gguf          #   微调后 GGUF
-│   └── qwen2.5-0.5b-local/             #   本地基座模型文件
+│   ├── qwen3-4b.gguf                   #   推理用 GGUF（Q4_K_M 量化，~2.5GB）
+│   ├── qwen3-4b-lora.gguf              #   微调后 GGUF
+│   └── Qwen3-4B/                       #   HuggingFace 基座模型缓存
 ├── data/                               # 训练数据 & 语料
 │   ├── build_corpus_local.py           #   语料构建脚本
 │   ├── sdust_process_corpus_lora.jsonl #   LoRA 训练数据
@@ -167,7 +167,7 @@ sito/
 | 📋 **系统监控** | 概览/日志/错误 三面板 + 审计日志 |
 | 🔍 **OCR 工具链追踪** | 监控日志显示 provider/model/tier/doc_type 完整调用链 |
 | 🔗 **英文字段映射** | 多模态模型输出字段自动归一化为模板英文 key（invoice_number→invoice_no 等） |
-| 🧪 **LoRA 微调** | 山科大实际流程数据 → 微调 Qwen2.5-0.5B → GGUF 推理 |
+| 🧪 **LoRA 微调** | 山科大实际流程数据 → 微调 Qwen3-4B → GGUF 推理 |
 
 ---
 
@@ -284,7 +284,7 @@ python merge_lora.py       # 合并
 | `JWT_SECRET` | JWT 签名密钥 | 开发默认值 |
 | `ENCRYPTION_KEY` | API Key Fernet 加密密钥 | 自动生成 |
 | `LLAMA_SERVER_URL` | 本地推理服务地址 | `http://127.0.0.1:18080` |
-| `MODEL_PATH` | 推理模型路径 | `models/qwen2.5-0.5b.gguf`（微调后自动切换） |
+| `MODEL_PATH` | 推理模型路径 | `models/qwen3-4b.gguf`（微调后自动切换） |
 | `LLM_API_BASE` | 外部 LLM API 地址 | DashScope |
 | `LLM_API_KEY` | 外部 LLM Key | 空（使用 Key 池） |
 | `LLM_MODEL` | 多模态 OCR 模型 | `qwen-vl-max` |

@@ -4,7 +4,7 @@ RAG + LLM 增强服务 v2.0
 核心变更（相比 v1 Demo）：
   1. 从 data/policy_kb.json 加载科学编写的政策知识库（非硬编码）
   2. TF-IDF 语义向量检索替代简单关键词匹配
-  3. 所有 LLM 调用统一走本地推理服务（llama.cpp + Qwen2.5-0.5B）
+  3. 所有 LLM 调用统一走本地推理服务（llama.cpp + Qwen3-4B）
   4. 仅保留规则兜底用于 LLM 完全不可用时的容错
   5. TF-IDF 矩阵磁盘缓存，避免每次重启重新构建
 

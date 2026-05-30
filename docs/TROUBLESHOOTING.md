@@ -34,7 +34,7 @@
                │
 ┌──────────────▼──────────────────────┐
 │  inference 容器 (推理服务 :18080)     │
-│  Qwen2.5-0.5B-Instruct              │
+│  Qwen3-4B-Instruct                  │
 │  模型路径: /models/... (挂载)        │
 └─────────────────────────────────────┘
 ```
@@ -43,7 +43,7 @@
 | 端口 | 服务 | 说明 |
 |------|------|------|
 | 8080 | 智审通主服务 | Web UI + API |
-| 18080 | 本地推理服务 | Qwen2.5-0.5B JSON 填充 |
+| 18080 | 本地推理服务 | Qwen3-4B JSON 填充 |
 
 ---
 
@@ -97,9 +97,9 @@
 | 原因 | 解决方案 |
 |------|----------|
 | 推理服务未启动 | 重新运行 `bash start.sh` 或手动启动推理服务 |
-| 模型文件缺失 | 检查 `models/qwen2.5-0.5b.gguf` 是否存在 |
+| 模型文件缺失 | 检查 `models/qwen3-4b.gguf` 是否存在 |
 | EasyOCR 未安装 | `pip install easyocr` |
-| 内存不足 | 0.5B 模型需约 2GB RAM，检查 `top` 或 `htop` |
+| 内存不足 | Q4_K_M 量化模型需约 3GB RAM，检查 `top` 或 `htop` |
 
 ### 3.2 Pro 用户外部 LLM 调用失败
 
@@ -226,7 +226,7 @@ redis-server --daemonize yes
   "extra": {
     "tier": "free",
     "provider": "local_easyocr",
-    "model": "easyocr+qwen2.5-0.5b",
+    "model": "easyocr+qwen3-4b",
     "doc_type": "reimbursement",
     "text_len": 156,
     "has_filled_json": true
@@ -334,7 +334,7 @@ cp -r zhishitong/data/zhishitong.db zhishitong/data/
 cp -r uploads/ ./
 
 # 备份 LoRA 训练产出
-tar -czf lora_backup.tar.gz lora_output/ lora_output_merged/ models/qwen2.5-0.5b-lora.gguf
+tar -czf lora_backup.tar.gz lora_output/ lora_output_merged/ models/qwen3-4b-lora.gguf
 ```
 
 *文档版本: 2.0 | 最后更新: 2026-05-29*

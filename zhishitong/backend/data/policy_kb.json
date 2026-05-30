@@ -474,7 +474,7 @@
         {
           "id": "OPS-2024-001-C01",
           "title": "系统架构与端口",
-          "text": "智审通采用三层架构：用户浏览器(8080端口) → FastAPI主服务(8080) → 本地推理服务(18080)。主服务包含认证模块、OCR路由、LangGraph审批引擎、监控路由和日志系统。推理服务运行Qwen2.5-0.5B模型，通过llama-cpp-python加载GGUF文件，自动检测GPU加速（Apple Silicon用Metal、NVIDIA用CUDA、AMD用ROCm、无GPU用CPU）。数据库使用SQLite，路径为backend/data/zhishitong.db。",
+          "text": "智审通采用三层架构：用户浏览器(8080端口) → FastAPI主服务(8080) → 本地推理服务(18080)。主服务包含认证模块、OCR路由、LangGraph审批引擎、监控路由和日志系统。推理服务运行Qwen3-4B模型，通过llama-cpp-python加载GGUF文件，自动检测GPU加速（Apple Silicon用Metal、NVIDIA用CUDA、AMD用ROCm、无GPU用CPU）。数据库使用SQLite，路径为backend/data/zhishitong.db。",
           "keywords": [
             "架构",
             "端口",
@@ -491,7 +491,7 @@
         {
           "id": "OPS-2024-001-C02",
           "title": "推理服务故障排查",
-          "text": "推理服务不可用的症状：AI助手回答为兜底模板、合规分析返回规则结果而非LLM结果。排查步骤：1. 检查推理服务健康状态 curl http://localhost:18080/health；2. 如返回502或连接失败，检查推理服务进程是否在运行；3. 检查模型文件是否存在（默认路径models/qwen2.5-0.5b.gguf，可通过MODEL_PATH环境变量覆盖）；4. 首次加载Metal着色器需要约10-15秒，请耐心等待；5. 如内存不足，可降低N_CTX（默认2048）或N_BATCH（默认512）。常见原因：模型文件不存在、端口被占用、内存不足。",
+          "text": "推理服务不可用的症状：AI助手回答为兜底模板、合规分析返回规则结果而非LLM结果。排查步骤：1. 检查推理服务健康状态 curl http://localhost:18080/health；2. 如返回502或连接失败，检查推理服务进程是否在运行；3. 检查模型文件是否存在（默认路径models/qwen3-4b.gguf，可通过MODEL_PATH环境变量覆盖）；4. 首次加载Metal着色器需要约10-15秒，请耐心等待；5. 如内存不足，可降低N_CTX（默认2048）或N_BATCH（默认512）。常见原因：模型文件不存在、端口被占用、内存不足。",
           "keywords": [
             "推理",
             "故障",
