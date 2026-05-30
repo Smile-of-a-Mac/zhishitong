@@ -2,12 +2,15 @@
 """
 LoRA 微调 Qwen3-4B → 山东科技大学事务流程助手
 
+流程: 基座 GGUF → 训练 LoRA adapter → 合并脚本直接导出 GGUF
+
 依赖: torch, transformers, peft, sentencepiece (无 datasets/accelerate)
 支持: Apple MPS / CUDA / CPU
 
 用法:
     cd /Users/wangdaoyu/VSCode/sito
-    python train_lora.py
+    python training/train_lora.py        # 训练
+    python training/merge_lora.py        # 合并为 GGUF
 
 首次运行会用本地 GGUF 文件（约 2.3GB），无需额外下载。
 """
@@ -307,13 +310,8 @@ def train():
 {'='*60}
 训练完成！下一步：
 
-  # 1. 合并 LoRA 到基座模型
-  cd /Users/wangdaoyu/VSCode/sito
+  # 合并 LoRA → GGUF（一步到位，无需额外转换）
   python training/merge_lora.py
-
-  # 2. 用合并后的模型替换推理服务
-  #    - 将合并模型转为 GGUF（用 llama.cpp 的 convert_hf_to_gguf.py）
-  #    - 或直接用 transformers 做推理测试
 {'='*60}
 """)
 
