@@ -229,7 +229,7 @@ export default function Frame({ children }: { children: React.ReactNode }) {
         borderRadius: 20,
         padding: 0,
         margin: 12,
-        height: 'calc(100vh - 24px)',
+        height: 'calc(100dvh - 24px)',
         position: isMobile ? 'fixed' : 'sticky',
         top: 12,
         left: 12,
@@ -242,9 +242,7 @@ export default function Frame({ children }: { children: React.ReactNode }) {
           opacity: sidebarOpen ? 1 : 0,
           transform: sidebarOpen ? 'translateX(0)' : 'translateX(-16px)',
           pointerEvents: sidebarOpen ? 'auto' : 'none',
-          // 给底部退出登录按钮留空间，避免被悬浮按钮遮挡
-          paddingBottom: sidebarOpen ? 80 : 0,
-          transition: 'opacity 0.3s cubic-bezier(0.2, 0.85, 0.2, 1), transform 0.35s cubic-bezier(0.2, 0.85, 0.2, 1), padding-bottom 0.35s cubic-bezier(0.2, 0.85, 0.2, 1)',
+          transition: 'opacity 0.3s cubic-bezier(0.2, 0.85, 0.2, 1), transform 0.35s cubic-bezier(0.2, 0.85, 0.2, 1)',
         } : {}),
       }}>
         {/* Logo 区域 */}
