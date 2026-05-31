@@ -593,7 +593,13 @@ async def parse_intent(text: str, db: Optional[Session] = None) -> dict:
     "start_date": "YYYY-MM-DD（如有）",
     "end_date": "YYYY-MM-DD（如有）",
     "amount": "金额数字（如有）",
-    "destination": "目的地（如有）"
+    "destination": "出差/活动目的地（如有）",
+    "current_dorm": "当前宿舍号如B6-605（如有）",
+    "target_dorm": "目标宿舍号如B6-105（如有）",
+    "participant_count": "参与人数（如有）",
+    "activity_name": "活动名称（如有）",
+    "days": "请假/出差天数（如有）",
+    "seal_type": "用章类型如公章/合同章（如有）"
   }}
 }}
 仅包含有值的字段。"""
