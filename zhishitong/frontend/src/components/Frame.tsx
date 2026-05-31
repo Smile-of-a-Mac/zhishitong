@@ -189,7 +189,9 @@ export default function Frame({ children }: { children: React.ReactNode }) {
           onClick={() => setSidebarOpen(o => !o)}
           aria-label={sidebarOpen ? '关闭菜单' : '打开菜单'}
           style={{
-            position: 'fixed', bottom: 24, left: 24, zIndex: 1100,
+            position: 'fixed', bottom: 24,
+            left: sidebarOpen ? 'calc(var(--sidebar-width) + 28px)' : 24,
+            zIndex: 1100,
             width: 52, height: 52, borderRadius: '50%',
             background: 'var(--glass-bg-strong)', border: '1px solid var(--glass-border)',
             backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
@@ -197,6 +199,7 @@ export default function Frame({ children }: { children: React.ReactNode }) {
             color: 'var(--text-primary)',
             boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
             padding: 0, lineHeight: 1,
+            transition: 'left 0.35s cubic-bezier(0.2, 0.85, 0.2, 1), transform 0.2s ease',
           }}
         >
           <span style={{
