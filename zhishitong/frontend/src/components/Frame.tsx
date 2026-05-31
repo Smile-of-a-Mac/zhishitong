@@ -95,7 +95,7 @@ export default function Frame({ children }: { children: React.ReactNode }) {
   const closeSidebar = () => setSidebarOpen(false)
 
   useEffect(() => {
-    const mq = window.matchMedia('(max-width: 768px)')
+    const mq = window.matchMedia('(max-width: 1024px)')
     setIsMobile(mq.matches)
     const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches)
     mq.addEventListener('change', handler)
