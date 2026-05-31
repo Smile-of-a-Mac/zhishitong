@@ -95,6 +95,7 @@ export default function WorkbenchPage() {
   const [nlInput, setNlInput] = useState('')
   const [nlLoading, setNlLoading] = useState(false)
   const [nlResult, setNlResult] = useState<IntentResult | null>(null)
+  const [nlError, setNlError] = useState('')
   const [showNlForm, setShowNlForm] = useState(false)
   const [ocrTextOpen, setOcrTextOpen] = useState(false)
 
@@ -302,6 +303,7 @@ export default function WorkbenchPage() {
   const handleNlIntent = async () => {
     if (!nlInput.trim() || nlLoading) return
     setNlLoading(true)
+    setNlError('')
     try {
       const res = await axios.post('/api/ai/intent', { text: nlInput.trim() })
       const data: IntentResult = res.data
@@ -318,7 +320,7 @@ export default function WorkbenchPage() {
         setShowNlForm(true)
       }
     } catch {
-      alert('意图识别失败，请重试或手动选择申请类型')
+      setNlError('识别失败，请重试或手动选择申请类型')
     } finally {
       setNlLoading(false)
     }
@@ -442,6 +444,16 @@ export default function WorkbenchPage() {
               <span style={{ marginLeft: 'auto', opacity: 0.7 }}>
                 置信度 {Math.round(nlResult.confidence * 100)}%
               </span>
+            </div>
+          )}
+          {nlError && (
+            <div style={{
+              marginTop: 8, padding: '6px 10px', borderRadius: 8,
+              background: 'rgba(255,59,48,0.08)', border: '1px solid rgba(255,59,48,0.2)',
+              fontSize: 12, color: 'var(--red)', display: 'flex', alignItems: 'center', gap: 8,
+            }}>
+              <span>⚠️</span>
+              <span>{nlError}</span>
             </div>
           )}
         </GlassCard>
