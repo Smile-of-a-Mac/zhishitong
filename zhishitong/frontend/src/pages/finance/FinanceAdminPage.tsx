@@ -171,18 +171,16 @@ export default function FinanceAdminPage() {
 
       {/* 统一详情 + 审批弹窗 */}
       {selectedRecord && (
-        <div style={{
+        <div className="modal-overlay" style={{
           position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
           display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
         }} onClick={() => { setSelectedRecord(null); setReviewId(null) }}>
-          <GlassCard strong style={{ width: 560, maxWidth: '90vw', maxHeight: '90vh', overflow: 'auto' }}
+          <GlassCard strong className="modal-card detail-modal-card"
             onClick={e => e.stopPropagation()}>
-            <h3 style={{ margin: '0 0 16px', fontSize: 17 }}>
-              📋 事务详情 #{selectedRecord.id}
-              <span style={{ marginLeft: 12, fontSize: 14, fontWeight: 400, color: '#666' }}>
-                {STATUS_LABELS[selectedRecord.status]}
-              </span>
-            </h3>
+            <div className="detail-modal-header">
+              <h3 className="detail-modal-title">📋 事务详情 #{selectedRecord.id}</h3>
+              <span className="detail-status-chip">{STATUS_LABELS[selectedRecord.status]}</span>
+            </div>
 
             <div style={{ padding: 12, background: '#f6f8fa', borderRadius: 6, marginBottom: 12, fontSize: 13, color: '#666' }}>
               <div>👤 申请人：{selectedRecord.username}</div>
@@ -285,7 +283,7 @@ export default function FinanceAdminPage() {
               </>
             )}
 
-            <div style={{ marginTop: 16, textAlign: 'right' }}>
+            <div className="detail-footer">
               <button onClick={() => { setSelectedRecord(null); setReviewId(null) }}
                 className="glass-btn glass-btn-outline">关闭</button>
             </div>

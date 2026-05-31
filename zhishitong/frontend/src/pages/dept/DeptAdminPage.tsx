@@ -388,22 +388,23 @@ export default function DeptAdminPage() {
             display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
           }}
           onClick={() => { setSelectedRecord(null); setReviewId(null) }}>
-          <GlassCard strong className="modal-card" style={{ width: 560, maxWidth: '90vw', maxHeight: '90vh', overflow: 'auto' }}
+          <GlassCard strong className="modal-card detail-modal-card"
             onClick={e => e.stopPropagation()}>
-            <h3 style={{ margin: '0 0 16px', fontSize: 17 }}>
-              📋 事务详情 #{selectedRecord.id}
-              <span style={{ marginLeft: 12, fontSize: 14, fontWeight: 400, color: 'var(--text-secondary)' }}>
-                {STATUS_LABELS[selectedRecord.status]}
-              </span>
-            </h3>
+            <div className="detail-modal-header">
+              <h3 className="detail-modal-title">📋 事务详情 #{selectedRecord.id}</h3>
+              <span className="detail-status-chip">{STATUS_LABELS[selectedRecord.status]}</span>
+            </div>
 
             {/* ---- 基本信息 ---- */}
-            <GlassCard size="xs" style={{ marginBottom: 12, fontSize: 13, color: 'var(--text-secondary)' }}>
-              <div>👤 申请人：{selectedRecord.username}</div>
-              <div>🏢 部门：{selectedRecord.department || '—'}</div>
-              <div>📄 文件：{selectedRecord.original_filename || '—'}</div>
-              <div>🏷️ 类型：{getDocTypeLabel(selectedRecord.document_type)}</div>
-              <div>📌 阶段：{selectedRecord.current_stage === 'dept_review' ? '📋 部门审批' : selectedRecord.current_stage === 'finance_review' ? '💰 财务审批' : selectedRecord.current_stage === 'school_review' ? '🏫 学校审批' : selectedRecord.current_stage}</div>
+            <GlassCard size="xs" className="detail-section" style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+              <div className="detail-section-title">🧾 基本信息</div>
+              <div className="detail-meta-grid">
+                <div>👤 申请人：{selectedRecord.username}</div>
+                <div>🏢 部门：{selectedRecord.department || '—'}</div>
+                <div>📄 文件：{selectedRecord.original_filename || '—'}</div>
+                <div>🏷️ 类型：{getDocTypeLabel(selectedRecord.document_type)}</div>
+                <div>📌 阶段：{selectedRecord.current_stage === 'dept_review' ? '📋 部门审批' : selectedRecord.current_stage === 'finance_review' ? '💰 财务审批' : selectedRecord.current_stage === 'school_review' ? '🏫 学校审批' : selectedRecord.current_stage}</div>
+              </div>
               {selectedRecord.decision_reason && (
                 <div style={{ marginTop: 4, color: 'var(--accent)' }}>📋 分析：{selectedRecord.decision_reason}</div>
               )}
@@ -425,14 +426,14 @@ export default function DeptAdminPage() {
                 const data = JSON.parse(selectedRecord.filled_json);
                 const entries = Object.entries(data);
                 if (entries.length > 0) return (
-                  <GlassCard size="xs" style={{ background: 'rgba(0,122,255,0.06)', border: '1px solid rgba(0,122,255,0.15)', marginBottom: 12 }}>
-                    <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--accent)', marginBottom: 6 }}>📋 事务详情</div>
-                    <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
+                  <GlassCard size="xs" className="detail-section" style={{ background: 'rgba(0,122,255,0.06)', border: '1px solid rgba(0,122,255,0.15)' }}>
+                    <div className="detail-section-title" style={{ color: 'var(--accent)' }}>📋 事务详情</div>
+                    <table className="detail-kv-table">
                       <tbody>
                         {entries.map(([k, v]) => (
-                          <tr key={k} style={{ borderBottom: '1px solid var(--divider)' }}>
-                            <td style={{ padding: '4px 8px', color: 'var(--text-secondary)', width: 120 }}>{getFieldLabel(k)}</td>
-                            <td style={{ padding: '4px 8px', color: 'var(--text-primary)' }}>{String(v ?? '')}</td>
+                          <tr key={k}>
+                            <td>{getFieldLabel(k)}</td>
+                            <td>{String(v ?? '')}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -444,8 +445,8 @@ export default function DeptAdminPage() {
 
             {/* ---- 审批历程 ---- */}
             {selectedRecord.stages && selectedRecord.stages.length > 0 && (
-              <GlassCard size="xs" style={{ background: 'rgba(52,199,89,0.06)', border: '1px solid rgba(52,199,89,0.15)', marginBottom: 12 }}>
-                <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6 }}>📋 审批历程</div>
+              <GlassCard size="xs" className="detail-section" style={{ background: 'rgba(52,199,89,0.06)', border: '1px solid rgba(52,199,89,0.15)' }}>
+                <div className="detail-section-title">📋 审批历程</div>
                 {selectedRecord.stages.map((s: any, i: number) => (
                   <div key={i} style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 3 }}>
                     • {s.label || s.stage}：{s.status === 'approved' ? '✅ 通过' : s.status === 'rejected' ? '❌ 驳回' : '⏳'} — {s.reviewer || '系统'}（{s.reason || '无意见'}）
@@ -459,8 +460,8 @@ export default function DeptAdminPage() {
               try {
                 const sug = JSON.parse(selectedRecord.suggestions);
                 if (Array.isArray(sug) && sug.length > 0) return (
-                  <GlassCard size="xs" style={{ background: 'rgba(255,149,0,0.08)', border: '1px solid rgba(255,149,0,0.2)', marginBottom: 12 }}>
-                    <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--orange)', marginBottom: 4 }}>💡 智能建议</div>
+                  <GlassCard size="xs" className="detail-section" style={{ background: 'rgba(255,149,0,0.08)', border: '1px solid rgba(255,149,0,0.2)' }}>
+                    <div className="detail-section-title" style={{ color: 'var(--orange)' }}>💡 智能建议</div>
                     {sug.map((s: string, i: number) => <div key={i} style={{ fontSize: 13, color: 'var(--text-secondary)' }}>• {s}</div>)}
                   </GlassCard>
                 );
@@ -523,7 +524,7 @@ export default function DeptAdminPage() {
               </>
             )}
 
-            <div style={{ marginTop: 16, textAlign: 'right' }}>
+            <div className="detail-footer">
               <button onClick={() => { setSelectedRecord(null); setReviewId(null) }}
                 className="glass-btn glass-btn-outline">关闭</button>
             </div>
