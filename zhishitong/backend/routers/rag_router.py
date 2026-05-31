@@ -50,7 +50,7 @@ class NlSearchRequest(BaseModel):
 # ============================================================
 
 @router.post("/intent")
-async def parse_intent(body: IntentRequest, current_user: User = Depends(get_current_user)):
+async def parse_intent(body: IntentRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """识别用户描述的申请意图，返回推荐的文档类型和预填字段"""
     if not body.text or not body.text.strip():
         raise HTTPException(status_code=400, detail="请输入描述文本")
