@@ -232,7 +232,7 @@ export default function Frame({ children }: { children: React.ReactNode }) {
         top: 12,
         left: 12,
         ...(isMobile
-          ? { bottom: 12, margin: 0 }
+          ? { height: 'calc(100dvh - 24px)', margin: 0 }
           : { height: 'calc(100vh - 24px)', margin: 12 }
         ),
         flexShrink: 0,
