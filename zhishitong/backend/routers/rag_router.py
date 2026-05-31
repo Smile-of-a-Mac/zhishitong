@@ -56,7 +56,7 @@ async def parse_intent(body: IntentRequest, current_user: User = Depends(get_cur
         raise HTTPException(status_code=400, detail="请输入描述文本")
     from services.rag_service import parse_intent as svc_parse
     try:
-        result = await svc_parse(body.text.strip())
+        result = await svc_parse(body.text.strip(), db)
         return result
     except Exception as e:
         logger.error(f"意图识别失败: {e}")

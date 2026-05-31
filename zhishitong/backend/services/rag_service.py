@@ -572,7 +572,7 @@ _INTENT_KEYWORDS: dict[str, list[str]] = {
 }
 
 
-async def parse_intent(text: str) -> dict:
+async def parse_intent(text: str, db: Optional[Session] = None) -> dict:
     """识别用户意图，返回推荐文档类型及可预填字段"""
     keyword_type = _keyword_intent(text)
     doc_name = get_doc_label(keyword_type)
@@ -599,7 +599,7 @@ async def parse_intent(text: str) -> dict:
 仅包含有值的字段。"""
 
     try:
-        raw = await _call_llm(prompt, max_tokens=300)
+        raw = await _call_llm(prompt, max_tokens=300, db=db)
         result = _extract_json(raw)
         pf = {k: v for k, v in result.get("prefill_fields", {}).items()
               if v and v != "null"}
