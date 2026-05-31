@@ -56,6 +56,10 @@
     --orange: #ff9f0a;
     --purple: #bf5af2;
   }
+
+  .glass-card::before {
+    opacity: 0;
+  }
 }
 
 /* --- 2. 基础重置 --- */
