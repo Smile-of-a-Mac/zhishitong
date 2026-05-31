@@ -313,7 +313,24 @@ export default function WorkbenchPage() {
         if (data.prefill_fields && Object.keys(data.prefill_fields).length > 0) {
           const fields: Record<string, string> = {}
           for (const [k, v] of Object.entries(data.prefill_fields)) {
-            if (v) fields[k] = String(v)
+            if (!v) continue
+            const val = String(v)
+            // 意图识别字段名 → 表单字段名映射
+            if (k === 'current_dorm') {
+              const m = val.match(/^([A-Za-z]+\d*)[- ](\d+)$/)
+              if (m) { fields.current_building = m[1]; fields.current_room = m[2] }
+              else fields.current_building = val
+            } else if (k === 'target_dorm') {
+              const m = val.match(/^([A-Za-z]+\d*)[- ](\d+)$/)
+              if (m) { fields.preferred_building = m[1]; fields.preferred_room = m[2] }
+              else fields.preferred_building = val
+            } else if (k === 'participant_count') {
+              fields.participants = val
+            } else if (k === 'activity_name') {
+              fields.activity = val
+            } else {
+              fields[k] = val
+            }
           }
           setFormFields(fields)
         }
