@@ -15,6 +15,7 @@
   --shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
   --shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.08);
   --accent: #007aff;
+  --accent-2: #4f46e5;
   --accent-hover: #0066d6;
   --green: #34c759;
   --red: #ff3b30;
@@ -199,7 +200,22 @@ main {
   /* iOS Safari 圆角遮罩修复 */
   -webkit-mask-image: -webkit-radial-gradient(white, black);
   mask-image: radial-gradient(white, black);
-  transition: box-shadow 0.2s ease;
+  transition: box-shadow 0.28s ease, transform 0.28s ease, border-color 0.28s ease;
+}
+
+.glass-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0));
+  opacity: 0.6;
+}
+
+.glass-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(0, 122, 255, 0.24);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.1);
 }
 
 .glass-card-strong {
@@ -221,9 +237,14 @@ main {
 /* --- 6. 排版 --- */
 .page-title {
   margin: 0 0 24px 0;
-  font-size: clamp(22px, 3.5vw, 28px);
-  font-weight: 700;
-  letter-spacing: 0.3px;
+  font-size: clamp(24px, 3.8vw, 34px);
+  font-weight: 760;
+  letter-spacing: 0.2px;
+  line-height: 1.15;
+  background: linear-gradient(120deg, #0f172a 0%, #1d4ed8 52%, #6d28d9 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 /* 当 page-title 后跟 page-subtitle 时，减少间距（由 subtitle 承担 separator） */
@@ -239,10 +260,19 @@ main {
 
 .page-subtitle {
   margin: 0 0 24px 0;
-  padding-bottom: 16px;
+  padding: 0 0 16px;
   border-bottom: 1px solid var(--divider);
   font-size: 14px;
   color: var(--text-secondary);
+}
+
+@media (prefers-color-scheme: dark) {
+  .page-title {
+    background: linear-gradient(120deg, #e2e8f0 0%, #60a5fa 52%, #c084fc 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
 }
 
 .section-title {
@@ -280,10 +310,13 @@ main {
 .glass-table thead {
   background: var(--glass-bg);
   backdrop-filter: blur(10px);
+  position: sticky;
+  top: 0;
+  z-index: 2;
 }
 
 .glass-table th {
-  padding: 10px 16px;
+  padding: 11px 14px;
   text-align: left;
   font-weight: 600;
   color: var(--text-secondary);
@@ -294,9 +327,13 @@ main {
 }
 
 .glass-table td {
-  padding: 11px 16px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--divider);
   color: var(--text-primary);
+}
+
+.glass-table tbody tr:nth-child(odd) {
+  background: rgba(120, 120, 128, 0.045);
 }
 
 .glass-table tbody tr:last-child td {
@@ -371,10 +408,10 @@ main {
 /* --- 8. 表单元素 --- */
 .glass-input {
   width: 100%;
-  padding: 8px 12px;
+  padding: 10px 12px;
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);
-  border-radius: var(--radius-xs);
+  border-radius: 10px;
   font-size: 13px;
   font-family: var(--font-stack);
   color: var(--text-primary);
@@ -384,7 +421,7 @@ main {
 
 .glass-input:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.15);
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.16), 0 6px 20px rgba(0, 122, 255, 0.08);
 }
 
 .glass-input::placeholder {
@@ -415,13 +452,13 @@ textarea.glass-input {
   gap: 5px;
   padding: 8px 20px;
   border: none;
-  border-radius: 10px;
+  border-radius: 11px;
   font-size: 14px;
   font-weight: 510;
   font-family: var(--font-stack);
   cursor: pointer;
   transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
-  background: var(--accent);
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
   color: #fff;
   letter-spacing: 0.01em;
   -webkit-user-select: none;
@@ -432,8 +469,8 @@ textarea.glass-input {
 
 .glass-btn:hover {
   opacity: 0.96;
-  transform: translateY(-1px) scale(1.01);
-  box-shadow: 0 4px 14px rgba(0, 122, 255, 0.25);
+  transform: translateY(-1px) scale(1.015);
+  box-shadow: 0 10px 22px rgba(0, 122, 255, 0.28);
 }
 
 .glass-btn:active {
@@ -462,9 +499,9 @@ textarea.glass-input {
 }
 
 .glass-btn-outline:hover {
-  background: var(--glass-bg);
+  background: linear-gradient(135deg, rgba(0, 122, 255, 0.1), rgba(79, 70, 229, 0.1));
   border-color: var(--accent);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.08);
   color: var(--accent);
 }
 
@@ -778,7 +815,7 @@ details[open] > *:not(summary) {
   color: var(--text-secondary);
   font-size: 13px;
   border-radius: var(--radius-sm);
-  background: rgba(120, 120, 128, 0.06);
+  background: linear-gradient(135deg, rgba(120, 120, 128, 0.09), rgba(120, 120, 128, 0.04));
   border: 1px dashed var(--glass-border);
 }
 
