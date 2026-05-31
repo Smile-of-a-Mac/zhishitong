@@ -56,10 +56,6 @@
     --orange: #ff9f0a;
     --purple: #bf5af2;
   }
-
-  .glass-card::before {
-    opacity: 0;
-  }
 }
 
 /* --- 2. 基础重置 --- */
@@ -204,22 +200,7 @@ main {
   /* iOS Safari 圆角遮罩修复 */
   -webkit-mask-image: -webkit-radial-gradient(white, black);
   mask-image: radial-gradient(white, black);
-  transition: box-shadow 0.28s ease, transform 0.28s ease, border-color 0.28s ease;
-}
-
-.glass-card::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0));
-  opacity: 0.6;
-}
-
-.glass-card:hover {
-  transform: translateY(-2px);
-  border-color: rgba(0, 122, 255, 0.24);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.1);
+  transition: box-shadow 0.2s ease;
 }
 
 .glass-card-strong {
