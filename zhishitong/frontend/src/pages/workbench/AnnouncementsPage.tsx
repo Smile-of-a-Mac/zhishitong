@@ -48,7 +48,7 @@ export default function AnnouncementsPage() {
     return new Date(d).toLocaleDateString('zh-CN')
   }
 
-  if (loading) return <GlassCard style={{ padding: 30, textAlign: 'center', color: 'var(--text-secondary)' }}>加载中...</GlassCard>
+  if (loading) return <GlassCard className="state-panel state-panel-loading">加载中...</GlassCard>
 
   // 详情视图
   if (selected) {
@@ -104,7 +104,7 @@ export default function AnnouncementsPage() {
       </GlassCard>
 
       {items.length === 0 ? (
-        <GlassCard style={{ padding: 40, textAlign: 'center', color: 'var(--text-secondary)' }}>
+        <GlassCard className="state-panel state-panel-empty">
           暂无内容
         </GlassCard>
       ) : (

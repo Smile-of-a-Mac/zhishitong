@@ -108,7 +108,7 @@ export default function HistoryPage() {
     }, 250)
   }
 
-  if (loading) return <GlassCard style={{ color: 'var(--text-secondary)', padding: 40, textAlign: 'center' }}>加载中...</GlassCard>
+  if (loading) return <GlassCard className="state-panel state-panel-loading">加载中...</GlassCard>
 
   const statusLabel = (s: string) => STATUS_LABELS[s] || s
 
@@ -178,7 +178,7 @@ export default function HistoryPage() {
       )}
 
       {filteredRecords.length === 0 ? (
-        <GlassCard style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 30 }}>
+        <GlassCard className="state-panel state-panel-empty">
           暂无记录
         </GlassCard>
       ) : (

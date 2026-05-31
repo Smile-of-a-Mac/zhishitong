@@ -141,8 +141,8 @@ export default function SchoolAffairsPage() {
         <span style={{ marginLeft: 'auto', fontSize: 13, color: 'var(--text-secondary)' }}>共 {total} 条</span>
       </GlassCard>
 
-      {loading ? <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-secondary)' }}>加载中...</div> :
-        records.length === 0 ? <GlassCard style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>暂无事务</GlassCard> : (
+      {loading ? <GlassCard className="state-panel state-panel-loading">加载中...</GlassCard> :
+        records.length === 0 ? <GlassCard className="state-panel state-panel-empty">暂无事务</GlassCard> : (
           <GlassCard strong className="glass-table-wrapper" style={{ padding: 0 }}>
             <table className="glass-table">
               <thead><tr>

@@ -105,7 +105,7 @@ export default function ResourceBookingPage() {
     return <span style={{ fontSize: 11, padding: '2px 6px', borderRadius: 8, background: m.color + '20', color: m.color }}>{m.label}</span>
   }
 
-  if (loading) return <GlassCard style={{ padding: 30, textAlign: 'center', color: 'var(--text-secondary)' }}>加载中...</GlassCard>
+  if (loading) return <GlassCard className="state-panel state-panel-loading">加载中...</GlassCard>
 
   if (errorMsg) {
     return (
@@ -169,7 +169,7 @@ export default function ResourceBookingPage() {
       <GlassCard style={{ padding: 16 }}>
         <h3 className="section-title" style={{ margin: '0 0 12px' }}>📋 预约记录</h3>
         {bookings.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-secondary)', fontSize: 13 }}>暂无预约记录</div>
+          <div className="state-panel state-panel-empty" style={{ padding: 20 }}>暂无预约记录</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {bookings.map(b => (

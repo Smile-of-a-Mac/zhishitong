@@ -48,7 +48,7 @@ export default function DashboardPage() {
   useEffect(() => { fetchData() }, [])
 
   if (loading) {
-    return <GlassCard style={{ padding: 30, textAlign: 'center', color: 'var(--text-secondary)' }}>加载中...</GlassCard>
+    return <GlassCard className="state-panel state-panel-loading">加载中...</GlassCard>
   }
 
   if (errorMsg) {
@@ -61,7 +61,7 @@ export default function DashboardPage() {
   }
 
   if (!data) {
-    return <GlassCard style={{ padding: 30, textAlign: 'center', color: 'var(--text-secondary)' }}>暂无数据</GlassCard>
+    return <GlassCard className="state-panel state-panel-empty">暂无数据</GlassCard>
   }
 
   const maxDayCount = Math.max(1, ...data.approvals_by_day.map(d => d.count))
