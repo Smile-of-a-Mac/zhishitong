@@ -228,11 +228,13 @@ export default function Frame({ children }: { children: React.ReactNode }) {
         flexDirection: 'column',
         borderRadius: 20,
         padding: 0,
-        margin: 12,
-        height: 'calc(100dvh - 24px)',
         position: isMobile ? 'fixed' : 'sticky',
         top: 12,
         left: 12,
+        ...(isMobile
+          ? { bottom: 12, margin: 0 }
+          : { height: 'calc(100vh - 24px)', margin: 12 }
+        ),
         flexShrink: 0,
         alignSelf: 'flex-start',
         overflow: 'hidden',
