@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import axios from 'axios'
+import { useAuth } from '../../hooks/useAuth'
 import GlassCard from '../../components/GlassCard'
 
 interface Notification {
@@ -60,6 +61,9 @@ export default function NotificationsPage() {
   const [detail, setDetail] = useState<Notification | null>(null)
   const nav = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
+  const { user } = useAuth()
+
+  const isReviewer = user?.is_dept_admin || user?.is_finance_admin || user?.is_school_admin
 
   const fetchNotifications = async () => {
     setLoading(true)
@@ -97,7 +101,12 @@ export default function NotificationsPage() {
 
   const goToRecord = (recordId: number) => {
     setDetail(null)
-    nav(`/history?detail=${recordId}`)
+    // 审核员（部门/财务/学校管理员）跳转到部门事务，普通用户跳转到历史记录
+    if (isReviewer) {
+      nav(`/dept?detail=${recordId}`)
+    } else {
+      nav(`/history?detail=${recordId}`)
+    }
   }
 
   // 支持 URL 参数 ?record_id=xxx 直接跳转审批详情

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import axios from 'axios'
 import { getDocTypeLabel } from '../../constants/docTypes'
 import { getFieldLabel } from '../../constants/fieldLabels'
@@ -49,6 +50,7 @@ export default function DeptAdminPage() {
   const [submitting, setSubmitting] = useState(false)
   const [selectedRecord, setSelectedRecord] = useState<DeptRecord | null>(null)
   const [suggesting, setSuggesting] = useState(false)
+  const [searchParams, setSearchParams] = useSearchParams()
 
   // ── 审批意见模板 ──
   const [templates, setTemplates] = useState<any[]>([])
@@ -134,6 +136,15 @@ export default function DeptAdminPage() {
   useEffect(() => { fetchRecords(); fetchStats() }, [page, filterStatus, filterStage])
   // 切换筛选时回到第一页
   useEffect(() => { if (page !== 1) setPage(1) }, [filterStatus, filterStage])
+
+  // 从通知消息跳转：URL 带 ?detail=123 自动打开记录详情
+  useEffect(() => {
+    const detailId = searchParams.get('detail')
+    if (detailId) {
+      const id = parseInt(detailId)
+      if (!isNaN(id)) showDetail(id)
+    }
+  }, [searchParams])
 
   const getAiSuggestion = async () => {
     if (!reviewId) return
