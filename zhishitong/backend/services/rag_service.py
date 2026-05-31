@@ -581,28 +581,25 @@ async def parse_intent(text: str, db: Optional[Session] = None) -> dict:
 
 用户输入：{text}
 
-可选类型: reimbursement(报销), leave(请假), business_trip(出差), club_application(社团活动), classroom_booking(教室借用), seal_application(用章), scholarship(奖学金), dorm_change(换宿舍)
+可选类型与可填字段：
+- reimbursement(报销): applicant, amount, reason, date, category, destination
+- leave(请假): applicant, reason, start_date, end_date, destination, leave_type
+- business_trip(出差): applicant, purpose, destination, start_date, end_date, estimated_cost
+- club_application(社团活动): activity, purpose, venue, date, participants, budget
+- classroom_booking(教室借用): applicant, purpose, room_no, date, start_time, end_time, participants
+- seal_application(用章): applicant, purpose, seal_type, document_name, copies, date
+- scholarship(奖学金): applicant, scholarship_type, achievements, gpa
+- dorm_change(换宿舍): applicant, current_building, current_room, preferred_building, preferred_room, reason, phone
 
 输出严格 JSON：
 {{
   "document_type": "类型 key",
   "confidence": 0.0~1.0,
   "prefill_fields": {{
-    "applicant": "姓名（如有）",
-    "reason": "事由（如有）",
-    "start_date": "YYYY-MM-DD（如有）",
-    "end_date": "YYYY-MM-DD（如有）",
-    "amount": "金额数字（如有）",
-    "destination": "出差/活动目的地（如有）",
-    "current_dorm": "当前宿舍号如B6-605（如有）",
-    "target_dorm": "目标宿舍号如B6-105（如有）",
-    "participant_count": "参与人数（如有）",
-    "activity_name": "活动名称（如有）",
-    "days": "请假/出差天数（如有）",
-    "seal_type": "用章类型如公章/合同章（如有）"
+    "字段名": "提取值"
   }}
 }}
-仅包含有值的字段。"""
+仅包含有值的字段。从描述中精确提取数字/日期/名称，日期格式 YYYY-MM-DD。"""
 
     try:
         raw = await _call_llm(prompt, max_tokens=300, db=db)

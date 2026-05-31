@@ -315,13 +315,14 @@ export default function WorkbenchPage() {
           for (const [k, v] of Object.entries(data.prefill_fields)) {
             if (!v) continue
             const val = String(v)
-            // 意图识别字段名 → 表单字段名映射
+            // 字段名映射（兜底：LLM 返回的通用名 → 模板键名）
+            // 宿舍号拆分：B6-605 → building B6, room 605
             if (k === 'current_dorm') {
-              const m = val.match(/^([A-Za-z]+\d*)[- ](\d+)$/)
+              const m = val.match(/^([A-Za-z]+\d*)[- ](\d{2,4})$/)
               if (m) { fields.current_building = m[1]; fields.current_room = m[2] }
               else fields.current_building = val
             } else if (k === 'target_dorm') {
-              const m = val.match(/^([A-Za-z]+\d*)[- ](\d+)$/)
+              const m = val.match(/^([A-Za-z]+\d*)[- ](\d{2,4})$/)
               if (m) { fields.preferred_building = m[1]; fields.preferred_room = m[2] }
               else fields.preferred_building = val
             } else if (k === 'participant_count') {
@@ -329,6 +330,7 @@ export default function WorkbenchPage() {
             } else if (k === 'activity_name') {
               fields.activity = val
             } else {
+              // 直接透传（与模板 key 一致或模板本就有该 key）
               fields[k] = val
             }
           }
