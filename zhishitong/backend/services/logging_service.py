@@ -65,7 +65,7 @@ def log(
 ):
     """统一日志入口 — 同时输出到控制台、文件、内存缓冲、DB"""
     entry = {
-        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "timestamp": datetime.datetime.now().astimezone().isoformat(),
         "category": category.value if isinstance(category, LogCategory) else category,
         "level": level,
         "message": message,
@@ -181,9 +181,17 @@ def get_recent_logs(
 
 
 def _row_to_dict(row) -> dict:
+    ts = row.created_at
+    if ts:
+        # 数据库存的是 naive UTC，转为本地时间输出
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=datetime.timezone.utc).astimezone()
+        ts_str = ts.isoformat()
+    else:
+        ts_str = ""
     return {
         "id": row.id,
-        "timestamp": row.created_at.isoformat() + "Z" if row.created_at else "",
+        "timestamp": ts_str,
         "category": row.category,
         "level": row.level,
         "message": row.message,

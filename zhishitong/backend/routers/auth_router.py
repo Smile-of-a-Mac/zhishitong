@@ -14,8 +14,21 @@ from schemas import UserCreate, UserOut, Token, LoginRequest
 from auth import hash_password, verify_password, create_token, create_access_token, create_refresh_token, get_current_user
 from auth import clear_test_override
 from services.logging_service import LogCategory, log
+from config import APP_ENV
 
 router = APIRouter(prefix="/api", tags=["auth"])
+
+
+def _cookie_secure(request: Request) -> bool:
+    """仅在 HTTPS 或生产环境下启用 Secure Cookie。
+    HTTP 本地开发环境下设 False，否则浏览器拒绝存储 secure cookie。"""
+    if APP_ENV == "production":
+        return True
+    # 也检查实际请求协议：通过代理时可能用 X-Forwarded-Proto
+    proto = request.headers.get("X-Forwarded-Proto", "")
+    if proto == "https":
+        return True
+    return request.url.scheme == "https"
 
 # ---- 登录频率限制（滑动窗口，按 IP） ----
 _LOGIN_ATTEMPTS: dict[str, list[float]] = defaultdict(list)
@@ -35,7 +48,7 @@ def _check_login_rate(ip: str) -> None:
 
 
 @router.post("/register", response_model=Token)
-def register(body: UserCreate, response: Response, db: Session = Depends(get_db)):
+def register(body: UserCreate, request: Request, response: Response, db: Session = Depends(get_db)):
     if db.query(User).filter(User.username == body.username).first():
         raise HTTPException(400, "用户名已存在")
 
@@ -54,16 +67,17 @@ def register(body: UserCreate, response: Response, db: Session = Depends(get_db)
 
     access_token = create_access_token(user)
     refresh_token = create_refresh_token(user)
+    secure = _cookie_secure(request)
     response.set_cookie(
         key="auth_token",
         value=access_token,
-        httponly=True, secure=True, samesite="strict",
+        httponly=True, secure=secure, samesite="strict",
         max_age=30 * 60,
     )
     response.set_cookie(
         key="refresh_token",
         value=refresh_token,
-        httponly=True, secure=True, samesite="strict",
+        httponly=True, secure=secure, samesite="strict",
         max_age=7 * 24 * 3600,
         path="/api/auth/refresh",
     )
@@ -99,12 +113,13 @@ def login(body: LoginRequest, request: Request, response: Response, db: Session 
 
     access_token = create_access_token(user)
     refresh_token = create_refresh_token(user)
-    # 设置 HttpOnly; Secure; SameSite=Strict Cookie
+    # 设置 HttpOnly; SameSite=Strict Cookie（secure 根据环境自适应）
+    secure = _cookie_secure(request)
     response.set_cookie(
         key="auth_token",
         value=access_token,
         httponly=True,
-        secure=True,
+        secure=secure,
         samesite="strict",
         max_age=30 * 60,  # 30 分钟
     )
@@ -112,7 +127,7 @@ def login(body: LoginRequest, request: Request, response: Response, db: Session 
         key="refresh_token",
         value=refresh_token,
         httponly=True,
-        secure=True,
+        secure=secure,
         samesite="strict",
         max_age=7 * 24 * 3600,
         path="/api/auth/refresh",  # 仅 refresh 端点可见
@@ -173,10 +188,11 @@ def refresh_token(
         raise HTTPException(401, "用户不存在或未激活")
 
     access_token = create_access_token(user)
+    secure = _cookie_secure(request)
     response.set_cookie(
         key="auth_token",
         value=access_token,
-        httponly=True, secure=True, samesite="strict",
+        httponly=True, secure=secure, samesite="strict",
         max_age=30 * 60,
     )
     return Token(access_token=access_token, user=UserOut.model_validate(user))

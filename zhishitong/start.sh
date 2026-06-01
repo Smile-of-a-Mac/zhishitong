@@ -52,15 +52,57 @@ if [ ! -d "$INFER_DIR" ]; then err "未找到推理服务目录: $INFER_DIR"; ex
 if [ ! -f "$VENV_PYTHON" ]; then err "未找到虚拟环境 Python: $VENV_PYTHON"; exit 1; fi
 if ! command -v node &>/dev/null; then err "未检测到 Node.js，请先安装"; exit 1; fi
 
+# ---------- JWT 密钥持久化 ----------
+# 确保 JWT_SECRET 跨重启不变（优先从文件读取，否则自动生成并持久化）
+JWT_SECRET_FILE="$BACKEND_DIR/data/.jwt_secret"
+if [ -f "$JWT_SECRET_FILE" ]; then
+  JWT_SECRET=$(cat "$JWT_SECRET_FILE")
+  export JWT_SECRET
+  log "JWT_SECRET 已从 $JWT_SECRET_FILE 加载"
+else
+  # 确保 data 目录存在
+  mkdir -p "$BACKEND_DIR/data"
+  # 生成随机密钥并写入文件（config.py 也会做同样的事，但提前设置可以避免首次启动时密钥变更）
+  JWT_SECRET=$(python3 -c "import secrets; print(secrets.token_urlsafe(48))")
+  echo "$JWT_SECRET" > "$JWT_SECRET_FILE"
+  export JWT_SECRET
+  log "JWT_SECRET 已自动生成并持久化到 $JWT_SECRET_FILE"
+fi
+
+# ---------- Redis 检查 ----------
+log "检查 Redis 连接…"
+REDIS_URL="${REDIS_URL:-redis://127.0.0.1:6379/0}"
+if command -v redis-cli &>/dev/null; then
+  if redis-cli -u "$REDIS_URL" ping 2>/dev/null | grep -q "PONG"; then
+    log "Redis 连接正常"
+  else
+    warn "Redis 无法连接（$REDIS_URL），部分功能（缓存/限流/通知）可能不可用"
+  fi
+else
+  warn "未安装 redis-cli，跳过 Redis 检查。部分功能（缓存/限流/通知）可能不可用"
+fi
+
 # ---------- 1. 后端依赖 ----------
-run_step "安装后端 Python 依赖…" "$VENV_PIP" install -r "$ROOT_DIR/../requirements.txt"
+if "$VENV_PYTHON" -c "import fastapi, sqlalchemy, jose, passlib" 2>/dev/null; then
+  log "后端 Python 依赖已就绪，跳过 pip install"
+else
+  run_step "安装后端 Python 依赖…" "$VENV_PIP" install -r "$ROOT_DIR/../requirements.txt"
+fi
 
 # ---------- 2. 推理服务依赖 ----------
-run_step "安装推理服务 Python 依赖…" "$VENV_PIP" install -r "$INFER_DIR/requirements.txt"
+if "$VENV_PYTHON" -c "import llama_cpp, huggingface_hub" 2>/dev/null; then
+  log "推理服务 Python 依赖已就绪，跳过 pip install"
+else
+  run_step "安装推理服务 Python 依赖…" "$VENV_PIP" install -r "$INFER_DIR/requirements.txt"
+fi
 
 # ---------- 2.5 训练可选依赖 ----------
 if [ -f "$ROOT_DIR/../training/train_requirements.txt" ]; then
-  run_step "安装训练 Python 依赖…" "$VENV_PIP" install -r "$ROOT_DIR/../training/train_requirements.txt"
+  if "$VENV_PYTHON" -c "import torch, transformers, peft" 2>/dev/null; then
+    log "训练 Python 依赖已就绪，跳过 pip install"
+  else
+    run_step "安装训练 Python 依赖…" "$VENV_PIP" install -r "$ROOT_DIR/../training/train_requirements.txt"
+  fi
 fi
 
 # ---------- 3. 数据库初始化 ----------
@@ -68,10 +110,11 @@ log "初始化数据库 & 种子数据…"
 PYTHONPATH="$BACKEND_DIR" "$VENV_PYTHON" "$BACKEND_DIR/seed.py" 2>&1
 
 # ---------- 4. 前端依赖 ----------
-log "安装前端 npm 依赖…"
-cd "$FRONTEND_DIR"
-npm install
-cd "$ROOT_DIR"
+if [ ! -d "$FRONTEND_DIR/node_modules" ]; then
+  run_step "安装前端 npm 依赖…" npm --prefix "$FRONTEND_DIR" install
+else
+  log "前端 node_modules 已存在，跳过 npm install"
+fi
 
 # ---------- 清理旧进程 ----------
 cleanup() {
@@ -98,8 +141,10 @@ fi
 # ---------- 6. 启动推理服务 ----------
 log "启动本地推理服务 (llama.cpp)…"
 export MODEL_PATH="${MODEL_PATH:-$MODELS_DIR/qwen3-4b.gguf}"
+mkdir -p "$ROOT_DIR/logs"
 PYTHONPATH="$INFER_DIR" "$VENV_UVICORN" server:app \
-  --host 0.0.0.0 --port 18080 &
+  --host 0.0.0.0 --port 18080 \
+  > "$ROOT_DIR/logs/inference.log" 2>&1 &
 INFER_PID=$!
 
 INFER_READY=0
@@ -118,13 +163,15 @@ fi
 
 # ---------- 7. 启动后端 ----------
 log "启动后端 (uvicorn)…"
-PYTHONPATH="$BACKEND_DIR" "$VENV_UVICORN" main:app \
-  --host 0.0.0.0 --port 8080 --reload &
+mkdir -p "$ROOT_DIR/logs"
+PYTHONPATH="$BACKEND_DIR" JWT_SECRET="$JWT_SECRET" "$VENV_UVICORN" main:app \
+  --host 0.0.0.0 --port 8080 --reload \
+  > "$ROOT_DIR/logs/backend.log" 2>&1 &
 BACKEND_PID=$!
 
 BACKEND_READY=0
 for i in $(seq 1 30); do
-  if curl -sf http://127.0.0.1:8080/api/docs >/dev/null 2>&1; then
+  if curl -sf http://127.0.0.1:8080/api/health >/dev/null 2>&1; then
     log "后端就绪 → http://localhost:8080"
     BACKEND_READY=1
     break

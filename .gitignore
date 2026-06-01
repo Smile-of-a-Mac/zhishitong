@@ -24,6 +24,9 @@ dist/
 uploads/
 zhishitong/uploads/
 
+# ===== 运行时日志 =====
+zhishitong/logs/
+
 # ===== Agent Skills / Copilot / OpenCode 配置（非项目代码） =====
 .agent-skills/
 .opencode/
@@ -32,6 +35,7 @@ zhishitong/uploads/
 # ===== 安全密钥（禁止提交到版本库） =====
 .encryption_key
 **/.encryption_key
+**/.jwt_secret
 
 # ===== 模型文件（体积大，不提交） =====
 models/

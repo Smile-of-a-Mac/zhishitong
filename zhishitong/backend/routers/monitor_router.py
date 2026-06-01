@@ -16,7 +16,7 @@ from schemas import (
 )
 from auth import require_admin
 from services.logging_service import get_recent_logs, get_error_summary
-from config import LLAMA_SERVER_URL
+from config import LLAMA_SERVER_URL, REDIS_URL
 
 router = APIRouter(prefix="/api/admin/monitor", tags=["monitor"])
 
@@ -45,6 +45,37 @@ def _check_easyocr() -> tuple[bool, str]:
         return True, f"easyocr {easyocr.__version__}"
     except ImportError:
         return False, "easyocr 未安装"
+    except Exception as e:
+        return False, str(e)
+
+
+def _check_redis() -> tuple[bool, str]:
+    """检测 Redis 是否可达"""
+    try:
+        import redis as sync_redis
+        r = sync_redis.from_url(REDIS_URL, socket_connect_timeout=2, socket_timeout=2)
+        info = r.info()
+        r.close()
+        version = info.get("redis_version", "?")
+        raw = info.get("used_memory_human", "0")
+        if isinstance(raw, str):
+            if raw.endswith("M"):
+                used = raw[:-1]
+            elif raw.endswith("K"):
+                used = str(round(float(raw[:-1]) / 1024, 1))
+            elif raw.endswith("G"):
+                used = str(round(float(raw[:-1]) * 1024, 1))
+            else:
+                try:
+                    used = str(round(int(raw) / 1024 / 1024, 1))
+                except ValueError:
+                    used = "0"
+        else:
+            used = "0"
+        clients = info.get("connected_clients", 0)
+        return True, f"Redis {version} | 内存: {used}M | 连接: {clients}"
+    except ImportError:
+        return False, "redis-py 未安装"
     except Exception as e:
         return False, str(e)
 
@@ -93,7 +124,16 @@ def system_health(
         checked_at=now,
     ))
 
-    # 5. 数据库连接池
+    # 5. Redis
+    redis_ok, redis_detail = _check_redis()
+    services.append(ServiceStatus(
+        name="Redis",
+        status="ok" if redis_ok else "down",
+        detail=redis_detail,
+        checked_at=now,
+    ))
+
+    # 6. 数据库连接池
     services.append(ServiceStatus(
         name="数据库",
         status=db_status,
@@ -185,6 +225,35 @@ def system_stats(
     inf_ok, _ = _check_url(LLAMA_SERVER_URL, timeout=2.0)
     inf_uptime = 100.0 if inf_ok else 0.0
 
+    # Redis 详情
+    redis_ok, redis_detail = _check_redis()
+    redis_version = ""
+    redis_memory_mb = 0
+    redis_clients = 0
+    if redis_ok:
+        try:
+            import redis as sync_redis
+            r = sync_redis.from_url(REDIS_URL, socket_connect_timeout=2, socket_timeout=2)
+            info = r.info()
+            r.close()
+            redis_version = info.get("redis_version", "")
+            used_mem_str = info.get("used_memory_human", "0")
+            if isinstance(used_mem_str, str):
+                if used_mem_str.endswith("M"):
+                    redis_memory_mb = float(used_mem_str[:-1])
+                elif used_mem_str.endswith("K"):
+                    redis_memory_mb = round(float(used_mem_str[:-1]) / 1024, 1)
+                elif used_mem_str.endswith("G"):
+                    redis_memory_mb = round(float(used_mem_str[:-1]) * 1024, 1)
+                else:
+                    try:
+                        redis_memory_mb = round(int(used_mem_str) / 1024 / 1024, 1)
+                    except ValueError:
+                        pass
+            redis_clients = info.get("connected_clients", 0)
+        except Exception:
+            pass
+
     return SystemStats(
         total_users=total_users,
         active_users_today=active_today,
@@ -194,6 +263,10 @@ def system_stats(
         approvals_by_status=approvals_by_status,
         errors_24h=errors_24h,
         inference_uptime_percent=inf_uptime,
+        redis_connected=redis_ok,
+        redis_version=redis_version,
+        redis_memory_mb=redis_memory_mb,
+        redis_clients=redis_clients,
     )
 
 

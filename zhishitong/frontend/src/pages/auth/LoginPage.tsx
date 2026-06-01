@@ -84,6 +84,7 @@ export default function LoginPage() {
           ))}
         </div>
 
+        <form onSubmit={e => { e.preventDefault(); handleSubmit() }}>
         <div style={{ marginBottom: 12 }}>
           <input
             placeholder="请输入用户名"
@@ -139,13 +140,14 @@ export default function LoginPage() {
         )}
 
         <button
-          onClick={handleSubmit}
+          type="submit"
           disabled={loading}
           className="glass-btn glass-btn-lg"
           style={{ width: '100%' }}
         >
           {loading ? '处理中…' : mode === 'login' ? '登  录' : '注  册'}
         </button>
+        </form>
 
         <hr className="glass-divider" />
 

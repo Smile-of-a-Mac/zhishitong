@@ -201,6 +201,29 @@ class MemberRolesUpdate(BaseModel):
     is_finance_admin: Optional[bool] = None
     is_active: Optional[bool] = None
     department: Optional[str] = None
+    real_name: Optional[str] = None
+    school: Optional[str] = None
+
+
+class MemberUpdate(BaseModel):
+    """成员信息全面更新"""
+    real_name: Optional[str] = None
+    gender: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    department: Optional[str] = None
+    school: Optional[str] = None
+    student_id: Optional[str] = None
+    major: Optional[str] = None
+    class_name: Optional[str] = None
+    enrollment_year: Optional[int] = None
+    advisor: Optional[str] = None
+    employee_id: Optional[str] = None
+    title: Optional[str] = None
+    is_school_admin: Optional[bool] = None
+    is_dept_admin: Optional[bool] = None
+    is_finance_admin: Optional[bool] = None
+    is_active: Optional[bool] = None
 
 
 @router.get("/members", response_model=list[UserOut])
@@ -344,6 +367,83 @@ def restore_member(
         user_id=admin.id, target_user_id=user_id)
 
     return {"detail": f"成员 {target.username} 已恢复"}
+
+
+# ---- 更新成员信息 ----
+
+@router.put("/members/{user_id}")
+def update_member(
+    user_id: int,
+    body: MemberUpdate,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """更新成员信息（姓名/部门/学校/角色/状态）"""
+    target = db.query(User).filter(User.id == user_id, ~User.is_admin).first()
+    if not target:
+        raise HTTPException(404, "成员不存在")
+
+    changed = []
+    all_fields = [
+        "real_name", "gender", "phone", "email", "department", "school",
+        "student_id", "major", "class_name", "enrollment_year",
+        "advisor", "employee_id", "title",
+        "is_school_admin", "is_dept_admin", "is_finance_admin", "is_active",
+    ]
+    for field in all_fields:
+        val = getattr(body, field, None)
+        if val is not None:
+            setattr(target, field, val)
+            changed.append(field)
+
+    if changed:
+        db.add(AdminAuditLog(
+            admin_id=admin.id, action="update_member",
+            target_type="user", target_id=user_id,
+            detail=f"更新成员 {target.username}: {', '.join(changed)}",
+        ))
+        db.commit()
+        log(LogCategory.ADMIN, "info",
+            f"更新成员: {target.username} ({', '.join(changed)})",
+            user_id=admin.id, target_user_id=user_id)
+
+    return UserOut.model_validate(target)
+
+
+# ---- 硬删除成员 ----
+
+@router.delete("/members/{user_id}/hard")
+def hard_delete_member(
+    user_id: int,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """永久删除成员（物理删除，不可恢复）"""
+    target = db.query(User).filter(User.id == user_id, ~User.is_admin).first()
+    if not target:
+        raise HTTPException(404, "成员不存在")
+    if target.is_active:
+        raise HTTPException(400, "请先禁用成员再删除")
+
+    username = target.username
+    # 先删关联数据
+    from models import ApprovalRecord, QuotaLog
+    db.query(QuotaLog).filter(QuotaLog.user_id == user_id).delete()
+    db.query(ApprovalRecord).filter(ApprovalRecord.user_id == user_id).delete()
+    db.delete(target)
+
+    db.add(AdminAuditLog(
+        admin_id=admin.id, action="hard_delete_member",
+        target_type="user", target_id=user_id,
+        detail=f"永久删除成员: {username}",
+    ))
+    db.commit()
+
+    log(LogCategory.ADMIN, "warning",
+        f"永久删除成员: {username}",
+        user_id=admin.id, target_user_id=user_id)
+
+    return {"detail": f"成员 {username} 已永久删除"}
 
 
 # ---- 管理员重置成员密码 ----

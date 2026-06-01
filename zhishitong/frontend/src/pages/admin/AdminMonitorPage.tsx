@@ -27,6 +27,10 @@ interface SystemStats {
   approvals_by_status: Record<string, number>
   errors_24h: number
   inference_uptime_percent: number
+  redis_connected: boolean
+  redis_version: string
+  redis_memory_mb: number
+  redis_clients: number
 }
 
 interface ErrorSummary {
@@ -176,6 +180,18 @@ export default function AdminMonitorPage() {
                   </div>
                 </GlassCard>
               ))}
+              {/* Redis 卡片 */}
+              <GlassCard size="sm" className="stat-card">
+                <div className="stat-card-label">Redis</div>
+                <div className="stat-card-value" style={{ fontSize: 13, color: stats.redis_connected ? 'var(--green)' : 'var(--red)' }}>
+                  {stats.redis_connected ? '已连接' : '未连接'}
+                </div>
+                {stats.redis_connected && (
+                  <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
+                    v{stats.redis_version} · {stats.redis_memory_mb}MB · {stats.redis_clients} 连接
+                  </div>
+                )}
+              </GlassCard>
             </div>
           )}
 

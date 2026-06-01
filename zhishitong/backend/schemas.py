@@ -255,6 +255,10 @@ class SystemStats(BaseModel):
     approvals_by_status: dict   # {"pending": N, "approved": N, "rejected": N, ...}
     errors_24h: int
     inference_uptime_percent: float = 100.0
+    redis_connected: bool = False
+    redis_version: str = ""
+    redis_memory_mb: float = 0
+    redis_clients: int = 0
 
 
 class SystemLogOut(BaseModel):

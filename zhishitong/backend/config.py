@@ -8,12 +8,25 @@ UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", BASE_DIR / "uploads"))
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 # ---- 安全 ----
+_JWT_SECRET_FILE = BASE_DIR / "data" / ".jwt_secret"
 _JWT_SECRET = os.getenv("JWT_SECRET", "")
+
+if not _JWT_SECRET:
+    # 开发环境：从文件持久化读取，避免 --reload 重启导致密钥变更
+    if _JWT_SECRET_FILE.exists():
+        _JWT_SECRET = _JWT_SECRET_FILE.read_text().strip()
+        if _JWT_SECRET:
+            print(f"\033[90m[信息] JWT_SECRET 已从 {_JWT_SECRET_FILE} 加载\033[0m")
+
 if not _JWT_SECRET:
     import secrets
     _JWT_SECRET = secrets.token_urlsafe(48)
-    print("\n\033[93m[安全警告] JWT_SECRET 未设置环境变量，已自动生成随机密钥。")
-    print("生产环境请务必设置 JWT_SECRET 环境变量，否则服务重启后所有用户需重新登录。\033[0m\n")
+    # 持久化写入文件，确保 --reload 重启后密钥不变
+    _JWT_SECRET_FILE.parent.mkdir(parents=True, exist_ok=True)
+    _JWT_SECRET_FILE.write_text(_JWT_SECRET)
+    print("\n\033[93m[安全警告] JWT_SECRET 未设置环境变量，已自动生成随机密钥并持久化到文件。")
+    print(f"密钥文件: {_JWT_SECRET_FILE}")
+    print("生产环境请务必设置 JWT_SECRET 环境变量。\033[0m\n")
 JWT_SECRET = _JWT_SECRET
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_DAYS = int(os.getenv("JWT_EXPIRE_DAYS", "7"))

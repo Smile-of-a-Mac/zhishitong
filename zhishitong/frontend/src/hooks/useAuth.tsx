@@ -7,6 +7,17 @@ axios.defaults.withCredentials = true
 const storedToken = localStorage.getItem('token')
 if (storedToken) axios.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`
 
+/** 从 localStorage 读取 refresh_token（作为 Cookie 不可用时的后备） */
+function getStoredRefreshToken(): string | null {
+  return localStorage.getItem('refresh_token')
+}
+function setStoredRefreshToken(t: string) {
+  localStorage.setItem('refresh_token', t)
+}
+function clearStoredRefreshToken() {
+  localStorage.removeItem('refresh_token')
+}
+
 export interface User {
   id: number; username: string; tier: string
   llm_ocr_quota: number; llm_ocr_used: number
@@ -72,8 +83,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           originalRequest._retry = true
           isRefreshing = true
           try {
-            const res = await axios.post('/api/auth/refresh')
+            // 优先从 Cookie 读取（后端 Set-Cookie），Cookie 不可用时（如 HTTP 环境）回退到 body
+            const storedRt = getStoredRefreshToken()
+            const res = await axios.post('/api/auth/refresh', storedRt ? { refresh_token: storedRt } : {})
             const newToken = res.data.access_token
+            // 如果后端返回了新的 refresh_token（轮转），同步更新
+            if (res.data.refresh_token) {
+              setStoredRefreshToken(res.data.refresh_token)
+            }
             setToken(newToken)
             localStorage.setItem('token', newToken)
             axios.defaults.headers.common['Authorization'] = `Bearer ${newToken}`
@@ -86,6 +103,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setUser(null)
             setToken(null)
             localStorage.removeItem('token')
+            clearStoredRefreshToken()
             delete axios.defaults.headers.common['Authorization']
             return Promise.reject(refreshError)
           } finally {
@@ -110,6 +128,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setToken(null)
         setUser(null)
         localStorage.removeItem('token')
+        clearStoredRefreshToken()
         delete axios.defaults.headers.common['Authorization']
       }
     } finally {
@@ -123,10 +142,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (username: string, password: string) => {
     const res = await axios.post('/api/login', { username, password })
     const at = res.data.access_token
-    // 保留 token 在内存中供 Authorization header 使用（向后兼容移动端）
-    // Cookie 由后端 Set-Cookie 自动管理
+    const rt = res.data.refresh_token
+    // Cookie 由后端 Set-Cookie 自动管理；同步存储 refresh_token 作为 Cookie 不可用时的后备
     axios.defaults.headers.common['Authorization'] = `Bearer ${at}`
     localStorage.setItem('token', at)
+    if (rt) setStoredRefreshToken(rt)
     setToken(at)
     setUser(res.data.user)
   }
@@ -134,8 +154,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const register = async (username: string, password: string) => {
     const res = await axios.post('/api/register', { username, password })
     const at = res.data.access_token
+    const rt = res.data.refresh_token
     axios.defaults.headers.common['Authorization'] = `Bearer ${at}`
     localStorage.setItem('token', at)
+    if (rt) setStoredRefreshToken(rt)
     setToken(at)
     setUser(res.data.user)
   }
@@ -144,6 +166,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try { await axios.post('/api/auth/logout') } catch {}
     delete axios.defaults.headers.common['Authorization']
     localStorage.removeItem('token')
+    clearStoredRefreshToken()
     sessionStorage.clear()
     setToken(null); setUser(null)
   }

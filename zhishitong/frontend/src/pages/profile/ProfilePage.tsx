@@ -71,7 +71,6 @@ export default function ProfilePage() {
 
           {/* ── 基本信息 ── */}
           <SectionTitle label="基本信息" />
-          <div />
 
           <InfoRow label="真实姓名" value={user.real_name || '—'} />
           <InfoRow label="性别" value={user.gender || '—'} />
@@ -84,7 +83,6 @@ export default function ProfilePage() {
           {isStudent && (
             <>
               <SectionTitle label="👨‍🎓 学生信息" />
-              <div />
               <InfoRow label="学号" value={user.student_id || '—'} />
               <InfoRow label="专业" value={user.major || '—'} />
               <InfoRow label="班级" value={user.class_name || '—'} />
@@ -96,7 +94,6 @@ export default function ProfilePage() {
           {isStaff && (
             <>
               <SectionTitle label="👨‍🏫 教职工信息" />
-              <div />
               <InfoRow label="工号" value={user.employee_id || '—'} />
               <InfoRow label="职称" value={user.title || '—'} />
             </>
@@ -105,7 +102,6 @@ export default function ProfilePage() {
           {isSystemAdmin && (
             <>
               <SectionTitle label="⚙️ 管理员信息" />
-              <div />
               <InfoRow label="工号" value={user.employee_id || '—'} />
               <InfoRow label="职称" value={user.title || '—'} />
             </>
@@ -113,7 +109,6 @@ export default function ProfilePage() {
 
           {/* ── 账号信息 ── */}
           <SectionTitle label="⚙️ 账号信息" />
-          <div />
 
           <InfoRow label="订阅层级">
             <span style={{ fontSize: 14, fontWeight: 600, color: TIER_COLORS[user.tier] || 'var(--text-primary)' }}>
