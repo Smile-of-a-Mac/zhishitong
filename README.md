@@ -15,7 +15,7 @@ sito/
 │   │   ├── main.py                     # 应用入口 & 中间件
 │   │   ├── config.py                   # 全局配置（JWT、DB、LLM 等）
 │   │   ├── database.py                 # SQLAlchemy 引擎 & Session
-│   │   ├── seed.py                     # 种子数据（8 校 × 全角色）
+│   │   ├── seed.py                     # 种子数据（2 校 × 全角色）
 │   │   ├── auth.py                     # JWT 认证 + 模拟身份覆盖
 │   │   ├── models.py                   # SQLAlchemy 数据模型（15 张表）
 │   │   ├── schemas.py                  # Pydantic 请求/响应模型
@@ -141,12 +141,12 @@ sito/
 
 | 组件 | 行数 | 职责 |
 |------|:----:|------|
-| `Frame.tsx` | 425 | 玻璃侧边栏 + 角色导航（19 类申请入口 + 管理/审批面板） + 模拟身份横幅 |
+| `Frame.tsx` | 569 | 玻璃侧边栏 + 角色导航（19 类申请入口 + 管理/审批面板） + 模拟身份横幅 |
 | `AIChatPanel.tsx` | 385 | 右下角悬浮政策问答面板，支持多轮对话 + 来源引用 |
-| `AIDecisionPanel.tsx` | 328 | AI 审批决策辅助：合规分析 + 相似案例 + 政策条文 + 缺失信息 |
-| `AuroraBackground.tsx` | 174 | 全屏低饱和流体智能场，blob field + 有机形变 + 微纹理流动，AI 调用时联动 |
+| `AIDecisionPanel.tsx` | 347 | AI 审批决策辅助：合规分析 + 相似案例 + 政策条文 + 缺失信息 |
+| `AuroraBackground.tsx` | 252 | 全屏低饱和流体智能场，blob field + 有机形变 + 微纹理流动，AI 调用时联动 |
 | `GlassCard.tsx` | 38 | 毛玻璃卡片基础组件（强弱样式、尺寸变体、统一圆角/阴影） |
-| `ApprovalProgressBar.tsx` | 35 | 多阶段审批进度条（部门→财务→学校） |
+| `ApprovalProgressBar.tsx` | 37 | 多阶段审批进度条（部门→财务→学校） |
 | `AuthImage.tsx` | 73 | 认证图片加载（axios blob，解决 403 问题） |
 
 ### 页面路由（19 条）
@@ -355,7 +355,16 @@ python train_lora.py      # 训练 + 自动合并 GGUF（一步到位）
 
 ---
 
-## 最近更新 (v0.6.0)
+## 最近更新 (v0.6.1)
+
+- 👥 **成员管理全面升级**：管理员端新增成员信息编辑（姓名/部门/学校/角色/状态）、硬删除功能，全字段表单支持
+- 📊 **监控面板增强**：新增服务状态横幅、层级与状态分布图、日志/错误 Tab 分类筛选，`/api/health` 聚合状态
+- ⚡ **启动脚本优化**：新增 Redis 可用性检测、训练依赖检查、模型存活性验证、依赖缓存机制
+- 🔒 **安全加固**：`.jwt_secret` 自动生成与持久化、JWT 刷新令牌 Cookie HttpOnly 加固、登录失败率限制
+- 🎨 **登录页面打磨**：演示账号展开/收起动画、滚动入场动效
+- 📦 **.gitignore 完善**：新增 `.jwt_secret`、`.agent-skills/`、`.github/` 等规则
+- 🔧 **配置中心化**：新增 `JWT_ACCESS_EXPIRE_MINUTES`、`JWT_REFRESH_EXPIRE_DAYS`、`APP_ENV`、`ALLOWED_ORIGINS` 环境变量
+- 🖥️ **监控前端适配**：`AdminMonitorPage` 全面重构，实时状态标签 + 结构化日志展示
 
 - ⭐ **用户偏好持久化**：新增侧边栏收藏夹功能，用户可收藏常用申请路径（`/apply/*`），数据持久化到后端，跨设备同步
 - 📬 **通知中心**：全新通知管理页面 `/notifications`，支持批量已读、单条删除、按类型筛选、红点角标轮询
