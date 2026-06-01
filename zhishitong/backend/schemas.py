@@ -58,6 +58,14 @@ class UserOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class FavoriteApplyPathsIn(BaseModel):
+    favorites: list[str] = Field(default_factory=list, max_length=20)
+
+
+class FavoriteApplyPathsOut(BaseModel):
+    favorites: list[str]
+
+
 class Token(BaseModel):
     access_token: str
     refresh_token: Optional[str] = None
@@ -74,6 +82,14 @@ class ApprovalStageInfo(BaseModel):
     reviewer: Optional[str] = None     # 审批人用户名
     reason: Optional[str] = None       # 审批意见
     reviewed_at: Optional[str] = None  # 审批时间
+
+
+class CurrentStageInfo(BaseModel):
+    current_stage: Optional[str] = None
+    current_reviewer_name: Optional[str] = None
+    current_reviewer_dept: Optional[str] = None
+    waiting_hours: int = 0
+    avg_hours: int = 24
 
 
 # ===== 管理员 — API Key 管理 =====
@@ -137,6 +153,7 @@ class ApprovalOut(BaseModel):
     missing_info: Optional[str] = None
     original_filename: Optional[str] = None
     image_url: Optional[str] = None
+    stage_info: Optional[CurrentStageInfo] = None
     created_at: datetime
     updated_at: datetime
 
@@ -270,6 +287,7 @@ class ErrorSummary(BaseModel):
 class ApprovalStatusUpdate(BaseModel):
     status: str = Field(..., pattern=r"^(approved|rejected|needs_revision)$")  # 部门管理员手动决定
     reason: str = Field(default="", max_length=256)                             # 审批意见（通过时可选，驳回/需修改时必填）
+    field_annotations: Optional[list[dict]] = None
 
 
 # ===== 审批意见智能建议 =====

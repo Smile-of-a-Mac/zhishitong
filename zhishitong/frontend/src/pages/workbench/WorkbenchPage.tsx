@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import axios from 'axios'
 import { useAuth } from '../../hooks/useAuth'
@@ -40,6 +40,18 @@ interface OcrResult {
 
 // sessionStorage 持久化
 const STORAGE_KEY = 'zhishitong_workbench_v2'
+const ALLOWED_UPLOAD_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp', 'pdf'])
+const ALLOWED_UPLOAD_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'application/pdf'])
+
+function getUploadValidationError(file: File) {
+  const ext = file.name.includes('.') ? file.name.split('.').pop()?.toLowerCase() || '' : ''
+  const allowedExt = ext && ALLOWED_UPLOAD_EXTENSIONS.has(ext)
+  const allowedMime = file.type && ALLOWED_UPLOAD_MIME_TYPES.has(file.type)
+  if (!allowedExt && !allowedMime) {
+    return `不支持「${file.name || '该文件'}」的文件类型，请上传 JPG、PNG、WEBP 或 PDF 文件`
+  }
+  return ''
+}
 
 function saveState(userId: number, data: {
   ocrResult: OcrResult | null
@@ -65,6 +77,15 @@ function clearState() {
 
 // ── 状态机：idle → selected → recognizing → done(success/fail) ──
 type OcrPhase = 'idle' | 'selected' | 'recognizing' | 'success' | 'fail'
+type QueueStatus = 'waiting' | 'recognizing' | 'completed' | 'failed'
+
+interface UploadQueueItem {
+  id: string
+  file: File
+  previewUrl: string
+  status: QueueStatus
+  message?: string
+}
 
 export default function WorkbenchPage() {
   const { user, refreshUser } = useAuth()
@@ -78,6 +99,11 @@ export default function WorkbenchPage() {
   const [ocrResult, setOcrResult] = useState<OcrResult | null>(null)
   const [ocrError, setOcrError] = useState<string>('')
   const [recognizing, setRecognizing] = useState(false)
+  const [isDraggingFile, setIsDraggingFile] = useState(false)
+  const [uploadQueue, setUploadQueue] = useState<UploadQueueItem[]>([])
+  const [queueProcessing, setQueueProcessing] = useState(false)
+  const [queueSummary, setQueueSummary] = useState<{ success: number; failed: number } | null>(null)
+  const uploadQueueRef = useRef<UploadQueueItem[]>([])
 
   // 表单
   const [templates, setTemplates] = useState<Template[]>([])
@@ -248,10 +274,20 @@ export default function WorkbenchPage() {
   }, [ocrResult, formType, formFields, user, phase])
 
   // ── 重置到初始状态 ──
+  const clearUploadQueue = () => {
+    setUploadQueue(prev => {
+      prev.forEach(item => URL.revokeObjectURL(item.previewUrl))
+      return []
+    })
+  }
+
   const resetAll = () => {
     setPhase('idle')
     setFile(null)
     setFilePreviewUrl(null)
+    clearUploadQueue()
+    setQueueSummary(null)
+    setQueueProcessing(false)
     setOcrResult(null)
     setOcrError('')
     setFormType('')
@@ -268,6 +304,17 @@ export default function WorkbenchPage() {
   // ── 选择文件 ──
   const handleFileSelected = (f: File | null) => {
     if (!f) return
+    const validationError = getUploadValidationError(f)
+    if (validationError) {
+      setOcrError(validationError)
+      setPhase('fail')
+      setFile(null)
+      clearUploadQueue()
+      setQueueSummary(null)
+      return
+    }
+    clearUploadQueue()
+    setQueueSummary(null)
     setFile(f)
     setPhase('selected')
     setOcrResult(null)
@@ -277,8 +324,115 @@ export default function WorkbenchPage() {
     clearState()
   }
 
+  const handleFilesSelected = (files: FileList | File[] | null) => {
+    const picked = Array.from(files || [])
+    if (picked.length === 0) return
+    const invalid = picked.map(f => getUploadValidationError(f)).find(Boolean)
+    if (invalid) {
+      setOcrError(invalid)
+      setPhase('fail')
+      setFile(null)
+      clearUploadQueue()
+      setQueueSummary(null)
+      return
+    }
+    if (picked.length === 1) {
+      handleFileSelected(picked[0])
+      return
+    }
+    clearUploadQueue()
+    setQueueSummary(null)
+    const nextQueue = picked.map((pickedFile, index) => ({
+      id: `${Date.now()}-${index}-${pickedFile.name}`,
+      file: pickedFile,
+      previewUrl: URL.createObjectURL(pickedFile),
+      status: 'waiting' as QueueStatus,
+    }))
+    setUploadQueue(nextQueue)
+    setFile(picked[0])
+    setPhase('selected')
+    setOcrResult(null)
+    setOcrError('')
+    setSubmitResult(null)
+    setFormError('')
+    clearState()
+  }
+
+  useEffect(() => { uploadQueueRef.current = uploadQueue }, [uploadQueue])
+  useEffect(() => () => {
+    uploadQueueRef.current.forEach(item => URL.revokeObjectURL(item.previewUrl))
+  }, [])
+
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      if (phase === 'success') return
+      const files = e.clipboardData?.files
+      if (files && files.length > 0) {
+        handleFilesSelected(files)
+        return
+      }
+      const item = Array.from(e.clipboardData?.items || []).find(i => i.type.startsWith('image/'))
+      const pastedFile = item?.getAsFile()
+      if (pastedFile) handleFileSelected(pastedFile)
+    }
+    window.addEventListener('paste', handlePaste)
+    return () => window.removeEventListener('paste', handlePaste)
+  }, [phase])
+
+  useEffect(() => {
+    const preventFileNavigation = (e: DragEvent) => {
+      if (Array.from(e.dataTransfer?.types || []).includes('Files')) {
+        e.preventDefault()
+        if (e.type === 'dragover') setIsDraggingFile(phase !== 'success')
+        if (e.type === 'drop') {
+          setIsDraggingFile(false)
+          if (phase !== 'success') handleFilesSelected(e.dataTransfer?.files || null)
+        }
+      }
+    }
+    window.addEventListener('dragover', preventFileNavigation)
+    window.addEventListener('drop', preventFileNavigation)
+    return () => {
+      window.removeEventListener('dragover', preventFileNavigation)
+      window.removeEventListener('drop', preventFileNavigation)
+    }
+  }, [phase])
+
+  const hasDraggedFile = (e: React.DragEvent) => Array.from(e.dataTransfer.types || []).includes('Files')
+
+  const handleDragOver = (e: React.DragEvent) => {
+    if (!hasDraggedFile(e)) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'copy'
+    if (phase === 'success') return
+    setIsDraggingFile(true)
+  }
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    if (!hasDraggedFile(e)) return
+    e.preventDefault()
+    if (phase === 'success') return
+    setIsDraggingFile(true)
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setIsDraggingFile(false)
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDraggingFile(false)
+    if (phase === 'success') return
+    handleFilesSelected(e.dataTransfer.files)
+  }
+
   // ── 开始识别 ──
   const handleRecognize = async () => {
+    if (uploadQueue.length > 1) {
+      await handleQueueRecognize()
+      return
+    }
     if (!file || recognizing) return
     setRecognizing(true)
     setPhase('recognizing')
@@ -297,6 +451,65 @@ export default function WorkbenchPage() {
     } finally {
       setRecognizing(false)
     }
+  }
+
+  const fieldsFromOcrResult = (result: OcrResult) => {
+    const fields: Record<string, string> = {}
+    if (result.filled_json && typeof result.filled_json === 'object' && !Array.isArray(result.filled_json)) {
+      for (const [k, v] of Object.entries(result.filled_json)) {
+        if (v !== null && v !== undefined) fields[k] = String(v)
+      }
+    }
+    return fields
+  }
+
+  const submitOcrResult = async (result: OcrResult) => {
+    const fields = fieldsFromOcrResult(result)
+    const useType = result.document_type || inferDocTypeFromFields(result.filled_json)
+    if (!useType) throw new Error('未识别出事务类型，请单独处理')
+    await axios.post('/api/approvals/manual', {
+      document_type: useType,
+      fields,
+      storage_path: result.storage_path,
+      raw_ocr_text: result.text,
+      original_filename: result.original_filename,
+      mime_type: result.mime_type,
+      file_size: result.file_size,
+      ocr_provider: result.provider,
+      ocr_model: '',
+    })
+  }
+
+  const handleQueueRecognize = async (onlyItemId?: string) => {
+    const targets = uploadQueue.filter(item => onlyItemId ? item.id === onlyItemId : item.status !== 'completed')
+    if (targets.length === 0 || queueProcessing) return
+    setQueueProcessing(true)
+    setRecognizing(true)
+    setPhase('recognizing')
+    setQueueSummary(null)
+    let success = 0
+    let failed = 0
+    for (const item of targets) {
+      setFile(item.file)
+      setUploadQueue(prev => prev.map(q => q.id === item.id ? { ...q, status: 'recognizing', message: '' } : q))
+      try {
+        const form = new FormData()
+        form.append('file', item.file)
+        const res = await axios.post<OcrResult>('/api/ocr', form)
+        await submitOcrResult(res.data)
+        success += 1
+        setUploadQueue(prev => prev.map(q => q.id === item.id ? { ...q, status: 'completed', message: '已完成' } : q))
+      } catch (e: any) {
+        failed += 1
+        const msg = e?.response?.data?.detail || e?.message || '处理失败'
+        setUploadQueue(prev => prev.map(q => q.id === item.id ? { ...q, status: 'failed', message: msg } : q))
+      }
+    }
+    setQueueSummary({ success, failed })
+    setPhase(failed > 0 ? 'fail' : 'success')
+    setRecognizing(false)
+    setQueueProcessing(false)
+    refreshUser().catch(() => {})
   }
 
   // ── NL 意图识别 ──
@@ -502,21 +715,28 @@ export default function WorkbenchPage() {
           <GlassCard strong style={{
             padding: phase === 'success' ? '12px 16px' : '40px 20px',
             textAlign: 'center',
-            transition: 'padding 0.4s ease',
-          }}>
+            transition: 'padding 0.4s ease, border-color 0.2s ease, background 0.2s ease',
+            border: isDraggingFile ? '1.5px dashed var(--accent)' : undefined,
+            background: isDraggingFile ? 'rgba(0,122,255,0.05)' : undefined,
+          }}
+            onDragOver={handleDragOver}
+            onDragEnter={handleDragEnter}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
             {/* ── idle：大按钮选文件 ── */}
             {phase === 'idle' && (
               <div>
                 <div style={{ fontSize: 48, marginBottom: 12, opacity: 0.5 }}>📄</div>
                 <p style={{ margin: '0 0 16px', color: 'var(--text-secondary)', fontSize: 14 }}>
-                  选择图片或 PDF 文件，自动识别文档内容并填写表单
+                  {isDraggingFile ? '松手上传' : '选择、拖拽或粘贴图片/PDF，自动识别文档内容并填写表单'}
                 </p>
                 <label className="glass-btn glass-btn-lg" style={{ cursor: 'pointer' }}>
                   选择文件上传
-                  <input type="file" accept="image/*,.pdf" style={{ display: 'none' }}
-                    onChange={e => handleFileSelected(e.target.files?.[0] || null)} />
+                  <input type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf" multiple style={{ display: 'none' }}
+                    onChange={e => handleFilesSelected(e.target.files)} />
                 </label>
-                <p style={{ margin: '12px 0 0', fontSize: 12, color: 'var(--text-tertiary)' }}>支持 JPG、PNG、PDF，最大 20MB</p>
+                <p style={{ margin: '12px 0 0', fontSize: 12, color: 'var(--text-tertiary)' }}>支持 JPG、PNG、PDF，最大 20MB；也可直接粘贴截图</p>
               </div>
             )}
 
@@ -547,15 +767,15 @@ export default function WorkbenchPage() {
                   <div className="btn-group" style={{ justifyContent: 'center' }}>
                     <label className="glass-btn glass-btn-outline" style={{ cursor: 'pointer' }}>
                       重新选择
-                      <input type="file" accept="image/*,.pdf" style={{ display: 'none' }}
-                        onChange={e => handleFileSelected(e.target.files?.[0] || null)} />
+                      <input type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf" multiple style={{ display: 'none' }}
+                        onChange={e => handleFilesSelected(e.target.files)} />
                     </label>
                     <button
                       onClick={handleRecognize}
                       disabled={recognizing}
                       className="glass-btn"
                     >
-                      {recognizing ? '识别中…' : '开始识别'}
+                      {recognizing ? '识别中…' : uploadQueue.length > 1 ? `开始识别 ${uploadQueue.length} 个文件` : '开始识别'}
                     </button>
                   </div>
                 </div>
@@ -584,8 +804,8 @@ export default function WorkbenchPage() {
                 </div>
                 <label className="glass-btn glass-btn-outline glass-btn-sm" style={{ cursor: 'pointer', flexShrink: 0 }}>
                   换文件
-                  <input type="file" accept="image/*,.pdf" style={{ display: 'none' }}
-                    onChange={e => handleFileSelected(e.target.files?.[0] || null)} />
+                  <input type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf" multiple style={{ display: 'none' }}
+                    onChange={e => handleFilesSelected(e.target.files)} />
                 </label>
               </div>
             )}
@@ -594,10 +814,10 @@ export default function WorkbenchPage() {
             {phase === 'fail' && (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
                 <div style={{ fontSize: 14, color: 'var(--red)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  {ocrError}
+                  {uploadQueue.length > 1 ? '队列中有文件处理失败，可在下方重试' : ocrError}
                 </div>
                 <div className="btn-group">
-                  <button onClick={() => setPhase('selected')} className="glass-btn glass-btn-sm">重试识别</button>
+                  {file && <button onClick={() => setPhase('selected')} className="glass-btn glass-btn-sm">重试识别</button>}
                   <button onClick={resetAll} className="glass-btn glass-btn-outline glass-btn-sm">重新选文件</button>
                 </div>
               </div>
@@ -610,6 +830,52 @@ export default function WorkbenchPage() {
               </div>
             )}
           </GlassCard>
+          {uploadQueue.length > 1 && (
+            <GlassCard size="sm" style={{ marginTop: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>上传队列</div>
+                {queueSummary && (
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                    成功 {queueSummary.success} 条，失败 {queueSummary.failed} 条
+                  </div>
+                )}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10 }}>
+                {uploadQueue.map(item => (
+                  <div key={item.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 10, padding: 10,
+                    borderRadius: 'var(--radius-sm)', background: 'var(--glass-bg)', border: '1px solid var(--glass-border)',
+                  }}>
+                    <div style={{
+                      width: 44, height: 44, borderRadius: 'var(--radius-xs)', overflow: 'hidden', flexShrink: 0,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.5)',
+                    }}>
+                      {item.file.type.startsWith('image/') ? (
+                        <img src={item.previewUrl} alt="缩略图" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      ) : item.file.type === 'application/pdf' ? '📕' : '📄'}
+                    </div>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.file.name}</div>
+                      <div style={{ fontSize: 12, color: item.status === 'failed' ? 'var(--red)' : 'var(--text-secondary)', marginTop: 2 }}>
+                        {item.status === 'waiting' ? '等待中'
+                          : item.status === 'recognizing' ? '识别中'
+                            : item.status === 'completed' ? '已完成'
+                              : item.message || '失败'}
+                      </div>
+                    </div>
+                    {item.status === 'failed' && (
+                      <button className="glass-btn glass-btn-outline glass-btn-sm" disabled={queueProcessing} onClick={() => handleQueueRecognize(item.id)}>重试</button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {queueSummary && queueSummary.failed === 0 && (
+                <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end' }}>
+                  <button className="glass-btn" onClick={() => nav('/history')}>查看历史</button>
+                </div>
+              )}
+            </GlassCard>
+          )}
         </div>
       )}
 

@@ -1,15 +1,17 @@
 """审批路由 — 提交审批 / 查询 / 状态 / 软删除 / 智能建议 / 手动申报 / 规则检查 / 代理"""
-import json, time, logging
+import csv, io, json, time, logging
 from datetime import datetime
 from typing import Optional
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 import httpx
 
 from database import get_db
-from models import User, ApprovalRecord, ApprovalStatus, DeletedBy
+from models import User, ApprovalRecord, ApprovalStatus, DeletedBy, ApprovalStageHistory
 from schemas import (
     ApprovalSubmit, ApprovalOut, ApprovalListOut,
     ReviewSuggestRequest, ManualSubmit,
@@ -27,6 +29,71 @@ from constants import get_doc_label
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/approvals", tags=["approvals"])
+
+
+def _build_stage_info(db: Session, record: ApprovalRecord) -> dict:
+    applicant = record.user
+    reviewer_query = db.query(User).filter(User.is_active == True)
+    if record.current_stage == "dept_review":
+        reviewer_query = reviewer_query.filter(
+            User.is_dept_admin == True,
+            User.school == applicant.school,
+            User.department == applicant.department,
+        )
+    elif record.current_stage == "finance_review":
+        reviewer_query = reviewer_query.filter(User.is_finance_admin == True, User.school == applicant.school)
+    elif record.current_stage == "school_review":
+        reviewer_query = reviewer_query.filter(User.is_school_admin == True, User.school == applicant.school)
+    else:
+        reviewer_query = reviewer_query.filter(User.id == -1)
+
+    reviewer = reviewer_query.order_by(User.id.asc()).first()
+    last_change = (
+        db.query(ApprovalStageHistory)
+        .filter(ApprovalStageHistory.record_id == record.id)
+        .order_by(ApprovalStageHistory.created_at.desc())
+        .first()
+    )
+    changed_at = last_change.created_at if last_change else (record.updated_at or record.created_at)
+    waiting_hours = max(0, int((datetime.utcnow() - changed_at).total_seconds() // 3600))
+    return {
+        "current_stage": record.current_stage,
+        "current_reviewer_name": (reviewer.real_name or reviewer.username) if reviewer else None,
+        "current_reviewer_dept": reviewer.department if reviewer else applicant.department,
+        "waiting_hours": waiting_hours,
+        "avg_hours": 24,
+    }
+
+
+def _apply_approval_filters(query, q: Optional[str], doc_type: Optional[str], date_from: Optional[str], date_to: Optional[str]):
+    if q:
+        query = query.filter(ApprovalRecord.filled_json.like(f"%{q.strip()}%"))
+    if doc_type:
+        query = query.filter(ApprovalRecord.document_type == doc_type)
+    if date_from:
+        query = query.filter(ApprovalRecord.created_at >= date_from)
+    if date_to:
+        query = query.filter(ApprovalRecord.created_at <= date_to)
+    return query
+
+
+def _parse_record_fields(record: ApprovalRecord) -> dict:
+    try:
+        return json.loads(record.filled_json or "{}")
+    except (json.JSONDecodeError, TypeError):
+        return {}
+
+
+def _decision_text(value: Optional[str]) -> str:
+    if not value:
+        return ""
+    try:
+        parsed = json.loads(value)
+        if isinstance(parsed, dict):
+            return str(parsed.get("reason") or value)
+    except (json.JSONDecodeError, TypeError):
+        pass
+    return value
 
 
 def _notify_dept_admins(db: Session, applicant: User, record: ApprovalRecord):
@@ -55,15 +122,29 @@ def _notify_dept_admins(db: Session, applicant: User, record: ApprovalRecord):
 def list_approvals(
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=50),
+    q: Optional[str] = Query(None),
+    doc_type: Optional[str] = Query(None),
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    q = db.query(ApprovalRecord).filter(
+    query = db.query(ApprovalRecord).filter(
         ApprovalRecord.user_id == user.id,
         ApprovalRecord.is_deleted == False,
     )
-    total = q.count()
-    records = q.order_by(ApprovalRecord.created_at.desc()).offset(
+
+    if q:
+        query = query.filter(ApprovalRecord.filled_json.like(f"%{q.strip()}%"))
+    if doc_type:
+        query = query.filter(ApprovalRecord.document_type == doc_type)
+    if date_from:
+        query = query.filter(ApprovalRecord.created_at >= date_from)
+    if date_to:
+        query = query.filter(ApprovalRecord.created_at <= date_to)
+
+    total = query.count()
+    records = query.order_by(ApprovalRecord.created_at.desc()).offset(
         (page - 1) * page_size
     ).limit(page_size).all()
 
@@ -77,12 +158,54 @@ def list_approvals(
             filled_json=r.filled_json,
             original_filename=r.original_filename,
             image_url=f"/api/files/{r.id}" if r.storage_path and r.storage_path != "manual" else None,
+            stage_info=_build_stage_info(db, r) if (r.status and r.status.value == "pending") else None,
             created_at=r.created_at,
             updated_at=r.updated_at,
         )
         for r in records
     ]
     return ApprovalListOut(items=items, total=total, page=page, page_size=page_size)
+
+
+@router.get("/export")
+def export_approvals(
+    q: Optional[str] = Query(None),
+    doc_type: Optional[str] = Query(None),
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    query = db.query(ApprovalRecord).filter(
+        ApprovalRecord.user_id == user.id,
+        ApprovalRecord.is_deleted == False,
+    )
+    records = _apply_approval_filters(query, q, doc_type, date_from, date_to).order_by(ApprovalRecord.created_at.desc()).all()
+
+    output = io.StringIO()
+    output.write("\ufeff")
+    writer = csv.writer(output)
+    writer.writerow(["序号", "事务类型", "提交时间", "当前状态", "金额", "事由摘要", "审批意见"])
+    for idx, record in enumerate(records, start=1):
+        fields = _parse_record_fields(record)
+        amount = fields.get("amount") or fields.get("total_amount") or fields.get("estimated_cost") or ""
+        summary = fields.get("reason") or fields.get("purpose") or fields.get("description") or fields.get("activity") or ""
+        writer.writerow([
+            idx,
+            get_doc_label(record.document_type),
+            record.created_at.strftime("%Y-%m-%d %H:%M:%S") if record.created_at else "",
+            record.status.value if record.status else "pending",
+            amount,
+            str(summary)[:120],
+            _decision_text(record.decision_reason),
+        ])
+    output.seek(0)
+    filename = f"智审通_记录导出_{datetime.now().strftime('%Y-%m-%d')}.csv"
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"},
+    )
 
 
 @router.post("", response_model=ApprovalOut)
@@ -158,6 +281,7 @@ async def submit_approval(
         missing_info=record.missing_info,
         original_filename=record.original_filename,
         image_url=f"/api/files/{record.id}" if record.storage_path and record.storage_path != "manual" else None,
+        stage_info=_build_stage_info(db, record) if (record.status and record.status.value == "pending") else None,
         created_at=record.created_at,
         updated_at=record.updated_at,
     )

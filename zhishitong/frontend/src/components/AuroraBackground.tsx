@@ -5,7 +5,7 @@ interface BlobNode {
   x: number
   y: number
   size: number
-  color: string
+  colors: [string, string]
   phase: number
   driftX: number
   driftY: number
@@ -14,16 +14,31 @@ interface BlobNode {
 }
 
 const BLOBS: BlobNode[] = [
-  { x: 0.16, y: 0.12, size: 0.52, color: '60, 130, 255', phase: 0.2, driftX: 0.0031, driftY: 0.0022, focusX: 0.42, focusY: 0.3 },
-  { x: 0.84, y: 0.14, size: 0.42, color: '40, 220, 180', phase: 1.4, driftX: 0.0024, driftY: 0.0034, focusX: 0.56, focusY: 0.32 },
-  { x: 0.72, y: 0.78, size: 0.54, color: '150, 80, 255', phase: 2.6, driftX: 0.0035, driftY: 0.0026, focusX: 0.58, focusY: 0.48 },
-  { x: 0.22, y: 0.78, size: 0.46, color: '255, 120, 180', phase: 3.8, driftX: 0.0028, driftY: 0.003, focusX: 0.44, focusY: 0.48 },
-  { x: 0.52, y: 0.04, size: 0.38, color: '255, 200, 100', phase: 5.1, driftX: 0.002, driftY: 0.0027, focusX: 0.5, focusY: 0.24 },
-  { x: 0.5, y: 0.9, size: 0.5, color: '200, 140, 255', phase: 6.0, driftX: 0.0023, driftY: 0.0021, focusX: 0.5, focusY: 0.56 },
+  { x: 0.16, y: 0.12, size: 0.52, colors: ['60, 130, 255', '40, 220, 180'], phase: 0.2, driftX: 0.0031, driftY: 0.0022, focusX: 0.42, focusY: 0.3 },
+  { x: 0.84, y: 0.14, size: 0.42, colors: ['40, 220, 180', '150, 80, 255'], phase: 1.4, driftX: 0.0024, driftY: 0.0034, focusX: 0.56, focusY: 0.32 },
+  { x: 0.72, y: 0.78, size: 0.54, colors: ['150, 80, 255', '200, 140, 255'], phase: 2.6, driftX: 0.0035, driftY: 0.0026, focusX: 0.58, focusY: 0.48 },
+  { x: 0.22, y: 0.78, size: 0.46, colors: ['200, 140, 255', '255, 120, 180'], phase: 3.8, driftX: 0.0028, driftY: 0.003, focusX: 0.44, focusY: 0.48 },
+  { x: 0.52, y: 0.04, size: 0.38, colors: ['255, 200, 100', '255, 255, 255'], phase: 5.1, driftX: 0.002, driftY: 0.0027, focusX: 0.5, focusY: 0.24 },
+  { x: 0.5, y: 0.9, size: 0.5, colors: ['200, 140, 255', '60, 130, 255'], phase: 6.0, driftX: 0.0023, driftY: 0.0021, focusX: 0.5, focusY: 0.56 },
 ]
 
 function mix(a: number, b: number, t: number) {
   return a + (b - a) * t
+}
+
+function smoothstep(t: number) {
+  const x = Math.max(0, Math.min(1, t))
+  return x * x * (3 - 2 * x)
+}
+
+function parseRgb(color: string) {
+  return color.split(',').map(v => Number(v.trim())) as [number, number, number]
+}
+
+function mixColor(a: string, b: string, t: number) {
+  const ca = parseRgb(a)
+  const cb = parseRgb(b)
+  return ca.map((value, i) => Math.round(mix(value, cb[i], t))).join(', ')
 }
 
 function drawBlob(
@@ -36,6 +51,7 @@ function drawBlob(
   tick: number,
   phase: number,
   energy: number,
+  flow: number,
 ) {
   const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius)
   gradient.addColorStop(0, `rgba(${color}, ${alpha})`)
@@ -50,8 +66,8 @@ function drawBlob(
     const organic =
       Math.sin(a * 2 + tick * 0.006 + phase) * 0.025 +
       Math.cos(a * 3 - tick * 0.004 + phase * 1.7) * 0.018 +
-      Math.sin(a * 5 + tick * 0.003 + phase * 0.4) * 0.012
-    const r = radius * (1 + organic * (0.7 + energy * 1.1))
+      Math.sin(a * 5 + tick * 0.003 + phase * 0.4 + flow * 0.35) * 0.012
+    const r = radius * (1 + organic * (0.7 + energy * 1.45))
     const px = x + Math.cos(a) * r
     const py = y + Math.sin(a) * r
     if (i === 0) ctx.moveTo(px, py)
@@ -63,10 +79,10 @@ function drawBlob(
 
 function drawMicroTexture(ctx: CanvasRenderingContext2D, w: number, h: number, tick: number, energy: number) {
   const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-  const alpha = (isDark ? 0.03 : 0.04) + energy * (isDark ? 0.055 : 0.05)
+  const alpha = (isDark ? 0.03 : 0.04) + energy * (isDark ? 0.052 : 0.046)
   const gap = 72
-  const offsetX = Math.sin(tick * (0.002 + energy * 0.004)) * (18 + energy * 34)
-  const offsetY = Math.cos(tick * (0.0017 + energy * 0.003)) * (16 + energy * 28)
+  const offsetX = Math.sin(tick * (0.002 + energy * 0.0032)) * (18 + energy * 30)
+  const offsetY = Math.cos(tick * (0.0017 + energy * 0.0028)) * (16 + energy * 26)
 
   ctx.save()
   ctx.globalCompositeOperation = isDark ? 'screen' : 'source-over'
@@ -77,7 +93,7 @@ function drawMicroTexture(ctx: CanvasRenderingContext2D, w: number, h: number, t
     ctx.beginPath()
     for (let x = -gap; x < w + gap; x += 16) {
       const px = x + offsetX
-      const py = y + offsetY + Math.sin(x * 0.012 + tick * (0.004 + energy * 0.012)) * (4 + energy * 16)
+      const py = y + offsetY + Math.sin(x * 0.012 + tick * (0.004 + energy * 0.01)) * (4 + energy * 14)
       if (x === -gap) ctx.moveTo(px, py)
       else ctx.lineTo(px, py)
     }
@@ -92,10 +108,11 @@ function drawFluidField(
   h: number,
   tick: number,
   energy: number,
+  flow: number,
 ) {
   const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches
   const minSide = Math.min(w, h)
-  const speed = 1 + energy * 3.4
+  const speed = 1 + energy * 2.25
 
   ctx.save()
   ctx.globalCompositeOperation = isDark ? 'screen' : 'multiply'
@@ -103,27 +120,30 @@ function drawFluidField(
   for (const blob of BLOBS) {
     const naturalX =
       blob.x +
-      Math.sin(tick * blob.driftX * speed + blob.phase) * (0.055 + energy * 0.04) +
-      Math.sin(tick * blob.driftY * (0.72 + energy * 1.1) + blob.phase * 1.7) * (0.024 + energy * 0.026)
+      Math.sin(tick * blob.driftX * speed + blob.phase + flow * 0.12) * (0.055 + energy * 0.04) +
+      Math.sin(tick * blob.driftY * (0.72 + energy * 0.9) + blob.phase * 1.7) * (0.024 + energy * 0.024)
     const naturalY =
       blob.y +
-      Math.cos(tick * blob.driftY * speed + blob.phase) * (0.05 + energy * 0.04) +
-      Math.sin(tick * blob.driftX * (0.86 + energy * 1.15) + blob.phase * 0.9) * (0.02 + energy * 0.024)
+      Math.cos(tick * blob.driftY * speed + blob.phase + flow * 0.1) * (0.05 + energy * 0.036) +
+      Math.sin(tick * blob.driftX * (0.86 + energy * 0.95) + blob.phase * 0.9) * (0.02 + energy * 0.022)
 
-    const focusStrength = energy * 0.76
+    const focusStrength = energy * 0.46
     const x = mix(naturalX, blob.focusX, focusStrength) * w
     const y = mix(naturalY, blob.focusY, focusStrength) * h
-    const breathe = 0.94 + Math.sin(tick * (0.006 + energy * 0.018) + blob.phase) * (0.055 + energy * 0.07)
-    const radius = minSide * blob.size * breathe * (1 - energy * 0.1)
-    const alpha = (isDark ? 0.22 : 0.16) + energy * (isDark ? 0.28 : 0.22)
+    const breathe = 0.94 + Math.sin(tick * (0.006 + energy * 0.013) + blob.phase + flow * 0.16) * (0.055 + energy * 0.055)
+    const radius = minSide * blob.size * breathe * (1 - energy * 0.06)
+    const alpha = (isDark ? 0.22 : 0.16) + energy * (isDark ? 0.23 : 0.18)
+    const colorShift = (Math.sin(flow * 0.42 + blob.phase) + 1) / 2
+    const color = mixColor(blob.colors[0], blob.colors[1], colorShift * energy)
 
-    drawBlob(ctx, x, y, radius, blob.color, alpha, tick, blob.phase, energy)
+    drawBlob(ctx, x, y, radius, color, alpha, tick, blob.phase, energy, flow)
   }
 
   const focusX = w * (0.5 + Math.sin(tick * 0.0017) * 0.025)
   const focusY = h * (0.38 + Math.cos(tick * 0.0021) * 0.018)
-  const focusAlpha = (isDark ? 0.15 : 0.25) + energy * 0.32
-  drawBlob(ctx, focusX, focusY, minSide * (0.46 - energy * 0.08), '255, 255, 255', focusAlpha, tick, 4.8, energy)
+  const focusAlpha = (isDark ? 0.15 : 0.25) + energy * 0.26
+  const focusColor = mixColor('255, 255, 255', '120, 190, 255', energy * ((Math.sin(flow * 0.36) + 1) / 2) * 0.55)
+  drawBlob(ctx, focusX, focusY, minSide * (0.46 - energy * 0.045), focusColor, focusAlpha, tick, 4.8, energy, flow)
 
   ctx.restore()
 }
@@ -145,6 +165,8 @@ export default function AuroraBackground() {
     let tick = 0
     let targetEnergy = 0
     let energy = 0
+    let flow = 0
+    let activeSince = 0
 
     function resize() {
       w = window.innerWidth
@@ -158,12 +180,16 @@ export default function AuroraBackground() {
 
     function loop() {
       ctx!.clearRect(0, 0, w, h)
-      energy += (targetEnergy - energy) * 0.085
-      tick += 0.58 + energy * 1.55
+      const ramp = targetEnergy > 0 ? smoothstep((performance.now() - activeSince) / 900) : 1
+      const easedTarget = targetEnergy * ramp
+      const easing = easedTarget > energy ? 0.042 : 0.032
+      energy += (easedTarget - energy) * easing
+      tick += 0.5 + energy * 1.04
+      flow += 0.008 + energy * 0.032
       canvas!.dataset.aiActive = energy > 0.06 ? 'true' : 'false'
 
       drawMicroTexture(ctx!, w, h, tick, energy)
-      drawFluidField(ctx!, w, h, tick, energy)
+      drawFluidField(ctx!, w, h, tick, energy, flow)
 
       animationId = requestAnimationFrame(loop)
     }
@@ -175,7 +201,8 @@ export default function AuroraBackground() {
     window.addEventListener('resize', onResize)
 
     const removeAiActivityListener = addAiActivityListener(active => {
-      targetEnergy = active ? 1 : 0
+      if (active && targetEnergy === 0) activeSince = performance.now()
+      targetEnergy = active ? 0.84 : 0
     })
 
     return () => {

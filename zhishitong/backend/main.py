@@ -79,6 +79,7 @@ from routers.dashboard_router import router as dashboard_router
 from routers.resource_router import router as resource_router
 from routers.announcement_router import router as announcement_router
 from routers.rag_router import router as rag_router
+from routers.user_preference_router import router as user_preference_router
 
 app.include_router(auth_router)
 app.include_router(ocr_router)
@@ -93,6 +94,7 @@ app.include_router(dashboard_router)
 app.include_router(resource_router)
 app.include_router(announcement_router)
 app.include_router(rag_router)
+app.include_router(user_preference_router)
 logger.info("路由已挂载: auth, ocr, approvals, admin, monitor, dept, finance, school, notifications, dashboard, resources, announcements, ai")
 
 # ---- 模板接口 ----

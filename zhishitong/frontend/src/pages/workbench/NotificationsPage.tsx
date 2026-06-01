@@ -53,12 +53,22 @@ const HAS_RECORD_TYPES = new Set([
   'approval_needs_revision', 'approval_urged', 'approval_overdue', 'stage_advanced',
 ])
 
+type NotificationTabKey = 'all' | 'pending' | 'result' | 'system'
+
+const NOTIFICATION_TABS: { key: NotificationTabKey; label: string; types: string[] }[] = [
+  { key: 'all', label: '🔔 全部', types: [] },
+  { key: 'pending', label: '📩 待处理', types: ['approval_submitted', 'approval_urged', 'approval_overdue'] },
+  { key: 'result', label: '📋 审批结果', types: ['approval_approved', 'approval_rejected', 'approval_needs_revision', 'stage_advanced'] },
+  { key: 'system', label: '📢 系统消息', types: ['system_announcement'] },
+]
+
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [errorMsg, setErrorMsg] = useState('')
   const [detail, setDetail] = useState<Notification | null>(null)
+  const [activeTab, setActiveTab] = useState<NotificationTabKey>('all')
   const nav = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const { user } = useAuth()
@@ -123,6 +133,7 @@ export default function NotificationsPage() {
   }, [searchParams, nav])
 
   const markAllRead = async () => {
+    if (!confirm('确认将所有通知标为已读？')) return
     await axios.post('/api/notifications/read-all')
     setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
     setUnreadCount(0)
@@ -142,6 +153,16 @@ export default function NotificationsPage() {
   }
 
   const fullTime = (d: string) => new Date(d).toLocaleString('zh-CN')
+
+  const activeTabConfig = NOTIFICATION_TABS.find(t => t.key === activeTab)
+  const filteredNotifications = activeTab === 'all'
+    ? notifications
+    : notifications.filter(n => activeTabConfig?.types.includes(n.type))
+
+  const unreadByTab = (tab: typeof NOTIFICATION_TABS[number]) => {
+    if (tab.key === 'all') return unreadCount
+    return notifications.filter(n => !n.is_read && tab.types.includes(n.type)).length
+  }
 
   if (loading) {
     return <GlassCard style={{ padding: 30, textAlign: 'center', color: 'var(--text-secondary)' }}>加载中...</GlassCard>
@@ -172,13 +193,44 @@ export default function NotificationsPage() {
         )}
       </div>
 
-      {notifications.length === 0 ? (
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+        {NOTIFICATION_TABS.map(tab => {
+          const isActive = activeTab === tab.key
+          const unread = unreadByTab(tab)
+          return (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className="glass-btn glass-btn-sm"
+              style={{
+                background: isActive ? 'var(--accent)' : 'var(--glass-bg)',
+                color: isActive ? '#fff' : 'var(--text-secondary)',
+                boxShadow: isActive ? '0 2px 12px rgba(0,122,255,0.3)' : 'none',
+                position: 'relative',
+                paddingRight: unread > 0 ? 34 : undefined,
+              }}
+            >
+              {tab.label}
+              {unread > 0 && (
+                <span style={{
+                  position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+                  minWidth: 18, height: 18, padding: '0 5px', borderRadius: 9,
+                  background: 'var(--red)', color: '#fff', fontSize: 11, lineHeight: '18px',
+                  fontWeight: 700,
+                }}>{unread}</span>
+              )}
+            </button>
+          )
+        })}
+      </div>
+
+      {filteredNotifications.length === 0 ? (
         <GlassCard style={{ padding: 40, textAlign: 'center', color: 'var(--text-secondary)' }}>
-          暂无通知
+          {notifications.length === 0 ? '暂无通知' : '当前分类暂无通知'}
         </GlassCard>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {notifications.map(n => (
+          {filteredNotifications.map(n => (
             <GlassCard
               key={n.id}
               strong={!n.is_read}

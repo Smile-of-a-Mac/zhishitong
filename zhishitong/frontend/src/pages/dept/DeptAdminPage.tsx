@@ -36,6 +36,11 @@ interface DeptStats {
   today_new: number
 }
 
+interface FieldAnnotation {
+  field_key: string
+  issue: string
+}
+
 export default function DeptAdminPage() {
   const [records, setRecords] = useState<DeptRecord[]>([])
   const [stats, setStats] = useState<DeptStats | null>(null)
@@ -47,6 +52,7 @@ export default function DeptAdminPage() {
   const [reviewId, setReviewId] = useState<number | null>(null)
   const [reviewAction, setReviewAction] = useState<'approved' | 'rejected' | 'needs_revision'>('approved')
   const [reviewReason, setReviewReason] = useState('')
+  const [fieldAnnotations, setFieldAnnotations] = useState<FieldAnnotation[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [selectedRecord, setSelectedRecord] = useState<DeptRecord | null>(null)
   const [suggesting, setSuggesting] = useState(false)
@@ -166,7 +172,20 @@ export default function DeptAdminPage() {
     setReviewId(record.id)
     setReviewAction(action)
     setReviewReason('')
+    setFieldAnnotations([])
     setSelectedRecord(record)
+  }
+
+  const getFieldAnnotation = (key: string) => fieldAnnotations.find(a => a.field_key === key)?.issue || ''
+
+  const setFieldAnnotation = (fieldKey: string) => {
+    const current = getFieldAnnotation(fieldKey)
+    const issue = prompt(`标注「${getFieldLabel(fieldKey)}」的问题`, current)
+    if (issue === null) return
+    setFieldAnnotations(prev => {
+      const rest = prev.filter(a => a.field_key !== fieldKey)
+      return issue.trim() ? [...rest, { field_key: fieldKey, issue: issue.trim() }] : rest
+    })
   }
 
   const submitReview = async () => {
@@ -179,8 +198,9 @@ export default function DeptAdminPage() {
       await axios.put(`/api/dept/records/${reviewId}/status`, {
         status: reviewAction,
         reason: reviewReason,
+        field_annotations: reviewAction === 'needs_revision' ? fieldAnnotations : undefined,
       })
-      setReviewId(null); setReviewReason(''); setSelectedRecord(null)
+      setReviewId(null); setReviewReason(''); setFieldAnnotations([]); setSelectedRecord(null)
       fetchRecords(); fetchStats()
     } catch (e: any) {
       alert(e?.response?.data?.detail || '操作失败')
@@ -387,7 +407,7 @@ export default function DeptAdminPage() {
             position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
             display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
           }}
-          onClick={() => { setSelectedRecord(null); setReviewId(null) }}>
+          onClick={() => { setSelectedRecord(null); setReviewId(null); setFieldAnnotations([]) }}>
           <GlassCard strong className="modal-card" style={{ width: 560, maxWidth: '90vw', maxHeight: '90vh', overflow: 'auto' }}
             onClick={e => e.stopPropagation()}>
             <h3 style={{ margin: '0 0 16px', fontSize: 17 }}>
@@ -412,7 +432,7 @@ export default function DeptAdminPage() {
             {/* ---- 图片 ---- */}
             {selectedRecord.image_url && (
               <div style={{ marginBottom: 12, textAlign: 'center' }}>
-                <AuthImage src={selectedRecord.image_url} alt="文件" style={{
+                <AuthImage className="approval-attachment-preview" src={selectedRecord.image_url} alt="文件" style={{
                   maxWidth: '100%', maxHeight: 240, borderRadius: 'var(--radius-xs)',
                   border: '1px solid var(--glass-border)', cursor: 'pointer', objectFit: 'contain',
                 }} onClick={() => window.open(selectedRecord.image_url, '_blank')} />
@@ -427,12 +447,24 @@ export default function DeptAdminPage() {
                 if (entries.length > 0) return (
                   <GlassCard size="xs" style={{ background: 'rgba(0,122,255,0.06)', border: '1px solid rgba(0,122,255,0.15)', marginBottom: 12 }}>
                     <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--accent)', marginBottom: 6 }}>📋 事务详情</div>
-                    <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
+                    <table className="mobile-field-table" style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
                       <tbody>
                         {entries.map(([k, v]) => (
-                          <tr key={k} style={{ borderBottom: '1px solid var(--divider)' }}>
+                          <tr key={k} style={{
+                            borderBottom: '1px solid var(--divider)',
+                            outline: getFieldAnnotation(k) ? '1px dashed var(--red)' : undefined,
+                            background: getFieldAnnotation(k) ? 'rgba(255,59,48,0.06)' : undefined,
+                          }}>
                             <td style={{ padding: '4px 8px', color: 'var(--text-secondary)', width: 120 }}>{getFieldLabel(k)}</td>
-                            <td style={{ padding: '4px 8px', color: 'var(--text-primary)' }}>{String(v ?? '')}</td>
+                            <td style={{ padding: '4px 8px', color: 'var(--text-primary)' }}>
+                              <span>{String(v ?? '')}</span>
+                              {reviewAction === 'needs_revision' && reviewId === selectedRecord.id && (
+                                <button type="button" onClick={() => setFieldAnnotation(k)}
+                                  style={{ marginLeft: 8, border: 'none', background: 'transparent', cursor: 'pointer' }}
+                                  title={getFieldAnnotation(k) || '标注字段问题'}>🚩</button>
+                              )}
+                              {getFieldAnnotation(k) && <div style={{ marginTop: 4, color: 'var(--red)', fontSize: 12 }}>{getFieldAnnotation(k)}</div>}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -474,7 +506,7 @@ export default function DeptAdminPage() {
                 <h4 style={{ margin: '0 0 8px', fontSize: 14 }}>✍️ 审批操作</h4>
 
                 {/* 操作按钮 */}
-                <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                <div className="mobile-review-action-bar">
                   {[
                     { action: 'approved' as const, label: '通过', color: 'var(--green)' },
                     { action: 'needs_revision' as const, label: '需修改', color: 'var(--orange)' },
@@ -484,6 +516,7 @@ export default function DeptAdminPage() {
                       setReviewId(selectedRecord.id)
                       setReviewAction(btn.action)
                       setReviewReason(reviewId === selectedRecord.id && reviewAction === btn.action ? reviewReason : '')
+                      if (btn.action !== 'needs_revision') setFieldAnnotations([])
                     }} style={{
                       flex: 1, padding: '10px 0', border: `1.5px solid ${btn.color}`,
                       background: reviewId === selectedRecord.id && reviewAction === btn.action ? btn.color : 'transparent',
@@ -524,7 +557,7 @@ export default function DeptAdminPage() {
             )}
 
             <div style={{ marginTop: 16, textAlign: 'right' }}>
-              <button onClick={() => { setSelectedRecord(null); setReviewId(null) }}
+              <button onClick={() => { setSelectedRecord(null); setReviewId(null); setFieldAnnotations([]) }}
                 className="glass-btn glass-btn-outline">关闭</button>
             </div>
           </GlassCard>

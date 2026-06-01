@@ -4,9 +4,10 @@ import { WORKFLOW_STAGES, FALLBACK_STAGES } from '../utils/constants'
 interface Props {
   currentStage: string
   documentType?: string | null
+  avgHours?: number
 }
 
-export default function ApprovalProgressBar({ currentStage, documentType }: Props) {
+export default function ApprovalProgressBar({ currentStage, documentType, avgHours }: Props) {
   const stages = (documentType && WORKFLOW_STAGES[documentType]) || FALLBACK_STAGES
   const currentIdx = stages.findIndex(s => s.key === currentStage)
 
@@ -19,9 +20,10 @@ export default function ApprovalProgressBar({ currentStage, documentType }: Prop
         else if (i === currentIdx) { bg = 'var(--accent-color)'; color = 'var(--accent-color)' }
         return (
           <React.Fragment key={s.key}>
-            <span style={{
+            <span title={i === currentIdx && avgHours ? `预计还需 ${avgHours} 小时` : undefined} style={{
               width: 8, height: 8, borderRadius: '50%', background: bg,
               display: 'inline-block', flexShrink: 0,
+              animation: i === currentIdx ? 'approvalPulse 1.4s ease-in-out infinite' : undefined,
             }} />
             <span style={{ color, fontWeight: i === currentIdx ? 600 : 400 }}>{s.label}</span>
             {i < stages.length - 1 && (

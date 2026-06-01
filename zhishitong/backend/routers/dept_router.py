@@ -152,7 +152,14 @@ def update_record_status(
             notify_review_result(db, record_id, record.user_id, "通过", reason, get_doc_label(record.document_type))
     elif new_status == "needs_revision":
         record.status = ApprovalStatus.needs_revision
-        record.decision_reason = f"[部门标记需修改] {reason}"
+        annotations = [a for a in (body.field_annotations or []) if a.get("field_key") and a.get("issue")]
+        if annotations:
+            record.decision_reason = json.dumps({
+                "reason": f"[部门标记需修改] {reason}",
+                "field_annotations": annotations,
+            }, ensure_ascii=False)
+        else:
+            record.decision_reason = f"[部门标记需修改] {reason}"
         # 通知申请人：需修改
         notify_review_result(db, record_id, record.user_id, "需修改", reason, get_doc_label(record.document_type))
     else:

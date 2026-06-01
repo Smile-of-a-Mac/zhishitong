@@ -30,7 +30,7 @@ export default function FinanceAdminPage() {
   const [loading, setLoading] = useState(true)
   const [selectedRecord, setSelectedRecord] = useState<FinanceRecord | null>(null)
   const [reviewId, setReviewId] = useState<number | null>(null)
-  const [reviewAction, setReviewAction] = useState<'approved' | 'rejected'>('approved')
+  const [reviewAction, setReviewAction] = useState<'approved' | 'rejected' | 'needs_revision'>('approved')
   const [reviewReason, setReviewReason] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [suggesting, setSuggesting] = useState(false)
@@ -70,8 +70,8 @@ export default function FinanceAdminPage() {
 
   const submitReview = async () => {
     if (!reviewId) return
-    if (reviewAction === 'rejected' && !reviewReason.trim()) {
-      alert('驳回时请填写审批理由'); return
+    if ((reviewAction === 'rejected' || reviewAction === 'needs_revision') && !reviewReason.trim()) {
+      alert('驳回或需修改时请填写审批理由'); return
     }
     setSubmitting(true)
     try {
@@ -195,7 +195,7 @@ export default function FinanceAdminPage() {
 
             {selectedRecord.image_url && (
               <div style={{ marginBottom: 12, textAlign: 'center' }}>
-                <AuthImage src={selectedRecord.image_url} alt="文件" style={{ maxWidth: '100%', maxHeight: 240, borderRadius: 6, border: '1px solid #e8e8e8', cursor: 'pointer', objectFit: 'contain' }}
+                <AuthImage className="approval-attachment-preview" src={selectedRecord.image_url} alt="文件" style={{ maxWidth: '100%', maxHeight: 240, borderRadius: 6, border: '1px solid #e8e8e8', cursor: 'pointer', objectFit: 'contain' }}
                   onClick={() => window.open(selectedRecord.image_url, '_blank')} />
               </div>
             )}
@@ -207,7 +207,7 @@ export default function FinanceAdminPage() {
                 if (entries.length > 0) return (
                   <div style={{ padding: 12, background: '#f0f5ff', borderRadius: 6, marginBottom: 12 }}>
                     <div style={{ fontWeight: 600, fontSize: 13, color: '#1677ff', marginBottom: 6 }}>📋 提取数据</div>
-                    <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
+                    <table className="mobile-field-table" style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
                       <tbody>{entries.map(([k, v]) => (
                         <tr key={k} style={{ borderBottom: '1px solid #e8e8e8' }}>
                           <td style={{ padding: '4px 8px', color: '#888', width: 120 }}>{getFieldLabel(k)}</td>
@@ -246,9 +246,10 @@ export default function FinanceAdminPage() {
               <>
                 <hr className="glass-divider" />
                 <h4 style={{ margin: '0 0 8px', fontSize: 14 }}>✍️ 财务审批</h4>
-                <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                <div className="mobile-review-action-bar">
                   {[
                     { action: 'approved' as const, label: '通过', color: 'var(--green)' },
+                    { action: 'needs_revision' as const, label: '需修改', color: 'var(--orange)' },
                     { action: 'rejected' as const, label: '驳回', color: 'var(--red)' },
                   ].map(btn => (
                     <button key={btn.action} onClick={() => {
@@ -267,7 +268,7 @@ export default function FinanceAdminPage() {
                 {reviewId === selectedRecord.id && (
                   <>
                     <textarea value={reviewReason} onChange={e => setReviewReason(e.target.value)}
-                      placeholder="请填写审批理由（必填）" className="glass-input" style={{ minHeight: 70 }} />
+                      placeholder={reviewAction === 'approved' ? '审批意见（选填，无需可留空）' : '请填写审批理由'} className="glass-input" style={{ minHeight: 70 }} />
                     <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                       <button onClick={getAiSuggestion} disabled={suggesting}
                         className="glass-btn glass-btn-outline glass-btn-sm" style={{ borderColor: 'var(--purple)', color: 'var(--purple)' }}>
@@ -276,7 +277,7 @@ export default function FinanceAdminPage() {
                       <span style={{ flex: 1 }} />
                       <button onClick={submitReview} disabled={submitting}
                         className="glass-btn glass-btn-lg"
-                        style={{ background: reviewAction === 'approved' ? 'var(--green)' : 'var(--red)' }}>
+                         style={{ background: reviewAction === 'approved' ? 'var(--green)' : reviewAction === 'needs_revision' ? 'var(--orange)' : 'var(--red)' }}>
                         {submitting ? '提交中…' : '确认审批'}
                       </button>
                     </div>

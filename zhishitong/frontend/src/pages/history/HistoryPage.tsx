@@ -11,6 +11,29 @@ import { parseApiError } from '../../utils/api'
 
 type TabKey = 'all' | 'pending' | 'approved' | 'rejected'
 
+interface TemplateOption {
+  key: string
+  label: string
+  icon?: string
+}
+
+const parseDecisionReason = (value: string | null | undefined): { text: string; annotations: Record<string, string> } => {
+  if (!value) return { text: '', annotations: {} }
+  try {
+    const parsed = JSON.parse(value)
+    if (!parsed || typeof parsed !== 'object') return { text: value, annotations: {} }
+    const annotations: Record<string, string> = {}
+    if (Array.isArray(parsed.field_annotations)) {
+      parsed.field_annotations.forEach((item: any) => {
+        if (item?.field_key && item?.issue) annotations[item.field_key] = item.issue
+      })
+    }
+    return { text: parsed.reason || value, annotations }
+  } catch {
+    return { text: value, annotations: {} }
+  }
+}
+
 const TAB_CONFIG: { key: TabKey; label: string; icon: string; statuses: string[] }[] = [
   { key: 'all', label: '全部', icon: '📋', statuses: [] },
   { key: 'pending', label: '审批中', icon: '⏳', statuses: ['pending', 'needs_revision'] },
@@ -26,21 +49,43 @@ export default function HistoryPage() {
   const [fieldsOpen, setFieldsOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<TabKey>('all')
   const [errorMsg, setErrorMsg] = useState('')
+  const [templates, setTemplates] = useState<TemplateOption[]>([])
+  const [searchText, setSearchText] = useState('')
+  const [debouncedSearchText, setDebouncedSearchText] = useState('')
+  const [docTypeFilter, setDocTypeFilter] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const nav = useNavigate()
   const [searchParams] = useSearchParams()
 
-  const fetch = async () => {
+  useEffect(() => {
+    axios.get('/api/templates').then(res => setTemplates(res.data || [])).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearchText(searchText.trim()), 300)
+    return () => window.clearTimeout(timer)
+  }, [searchText])
+
+  const fetch = useCallback(async () => {
     setLoading(true)
     setErrorMsg('')
     try {
-      const res = await axios.get('/api/approvals?page_size=50')
+      const params: Record<string, string | number> = { page_size: 50 }
+      if (debouncedSearchText) params.q = debouncedSearchText
+      if (docTypeFilter) params.doc_type = docTypeFilter
+      if (dateFrom) params.date_from = dateFrom
+      if (dateTo) params.date_to = dateTo
+      const res = await axios.get('/api/approvals', { params })
       setRecords(res.data.items || [])
     } catch (e: any) {
       setRecords([])
       setErrorMsg(parseApiError(e, '加载历史记录失败'))
     } finally { setLoading(false) }
-  }
-  useEffect(() => { fetch() }, [])
+  }, [debouncedSearchText, docTypeFilter, dateFrom, dateTo])
+
+  useEffect(() => { fetch() }, [fetch])
 
   // 支持 ?detail=recordId 从通知页面跳转来自动打开详情
   const detailFetchedRef = React.useRef<number | null>(null)
@@ -64,6 +109,7 @@ export default function HistoryPage() {
   }, [searchParams, records, loading])
 
   const activeTabConfig = TAB_CONFIG.find(t => t.key === activeTab)
+  const detailDecision = parseDecisionReason(detail?.decision_reason)
   const filteredRecords = activeTab === 'all'
     ? records
     : records.filter(r => (activeTabConfig?.statuses || []).includes(r.status))
@@ -89,6 +135,34 @@ export default function HistoryPage() {
 
   const handleResubmit = (id: number) => { nav(`/?resubmit=${id}`) }
 
+  const currentFilterParams = () => {
+    const params: Record<string, string> = {}
+    if (debouncedSearchText) params.q = debouncedSearchText
+    if (docTypeFilter) params.doc_type = docTypeFilter
+    if (dateFrom) params.date_from = dateFrom
+    if (dateTo) params.date_to = dateTo
+    return params
+  }
+
+  const handleExport = async () => {
+    try {
+      const res = await axios.get('/api/approvals/export', {
+        params: currentFilterParams(),
+        responseType: 'blob',
+      })
+      const url = URL.createObjectURL(res.data)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `智审通_记录导出_${new Date().toISOString().slice(0, 10)}.csv`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+    } catch (e: any) {
+      alert(parseApiError(e, '导出失败'))
+    }
+  }
+
   const showDetail = async (id: number) => {
     try {
       const res = await axios.get(`/api/approvals/${id}`)
@@ -108,8 +182,6 @@ export default function HistoryPage() {
     }, 250)
   }
 
-  if (loading) return <GlassCard className="state-panel state-panel-loading">加载中...</GlassCard>
-
   const statusLabel = (s: string) => STATUS_LABELS[s] || s
 
   const isConcluded = (s: string) => ['approved', 'rejected', 'cancelled'].includes(s)
@@ -117,6 +189,11 @@ export default function HistoryPage() {
   const stageLabel = (stage: string | undefined) => {
     if (!stage) return '—'
     return STAGE_LABELS[stage] || stage
+  }
+
+  const waitingLabel = (hours: number) => {
+    if (hours < 24) return `${hours} 小时`
+    return `${Math.floor(hours / 24)} 天`
   }
 
   // 统计各状态数量
@@ -170,6 +247,56 @@ export default function HistoryPage() {
         })}
       </div>
 
+      <GlassCard size="xs" style={{ marginBottom: 16, padding: '12px 14px' }}>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ position: 'relative', flex: '1 1 260px' }}>
+            <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 14, opacity: 0.65 }}>🔍</span>
+            <input
+              className="glass-input"
+              type="search"
+              value={searchText}
+              onChange={e => setSearchText(e.target.value)}
+              placeholder="搜索事由、金额、发票号…"
+              aria-label="搜索历史记录"
+              style={{ width: '100%', paddingLeft: 36 }}
+            />
+          </div>
+          <button
+            className="glass-btn glass-btn-outline glass-btn-sm"
+            onClick={() => setFiltersOpen(v => !v)}
+            aria-expanded={filtersOpen}
+          >
+            筛选{(docTypeFilter || dateFrom || dateTo) ? ' · 已启用' : ''}
+          </button>
+          <button className="glass-btn glass-btn-outline glass-btn-sm" onClick={handleExport}>📥 导出</button>
+        </div>
+        {filtersOpen && (
+          <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: 'minmax(180px, 1.2fr) repeat(2, minmax(150px, 1fr)) auto', gap: 10, alignItems: 'end' }}>
+            <label style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+              事务类型
+              <select className="glass-input" value={docTypeFilter} onChange={e => setDocTypeFilter(e.target.value)} style={{ marginTop: 4 }}>
+                <option value="">全部类型</option>
+                {templates.map(t => <option key={t.key} value={t.key}>{t.icon || ''} {t.label}</option>)}
+              </select>
+            </label>
+            <label style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+              开始日期
+              <input className="glass-input" type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ marginTop: 4 }} />
+            </label>
+            <label style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+              截止日期
+              <input className="glass-input" type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{ marginTop: 4 }} />
+            </label>
+            <button
+              className="glass-btn glass-btn-outline glass-btn-sm"
+              onClick={() => { setSearchText(''); setDocTypeFilter(''); setDateFrom(''); setDateTo('') }}
+            >
+              重置
+            </button>
+          </div>
+        )}
+      </GlassCard>
+
       {errorMsg && (
         <GlassCard size="xs" style={{ marginBottom: 12, background: 'rgba(255,59,48,0.08)', border: '1px solid rgba(255,59,48,0.2)' }}>
           <div style={{ color: 'var(--red)', fontSize: 13, marginBottom: 8 }}>⚠️ {errorMsg}</div>
@@ -177,7 +304,9 @@ export default function HistoryPage() {
         </GlassCard>
       )}
 
-      {filteredRecords.length === 0 ? (
+      {loading ? (
+        <GlassCard className="state-panel state-panel-loading">加载中...</GlassCard>
+      ) : filteredRecords.length === 0 ? (
         <GlassCard className="state-panel state-panel-empty">
           暂无记录
         </GlassCard>
@@ -204,13 +333,26 @@ export default function HistoryPage() {
                   <td>{statusLabel(r.status)}</td>
                   <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
                     {r.status === 'pending' ? (
-                      <ApprovalProgressBar currentStage={r.current_stage || 'dept_review'} documentType={r.document_type} />
+                      <div>
+                        <ApprovalProgressBar currentStage={r.current_stage || 'dept_review'} documentType={r.document_type} avgHours={r.stage_info?.avg_hours} />
+                        {r.stage_info && (
+                          <div style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 6,
+                            padding: '3px 8px', borderRadius: 999,
+                            background: 'rgba(255,149,0,0.12)', color: 'var(--orange)',
+                            fontSize: 11, fontWeight: 600,
+                          }}>
+                            ⏳ 待 <strong>{r.stage_info.current_reviewer_name || '审批人'}</strong>
+                            {r.stage_info.current_reviewer_dept ? `（${r.stage_info.current_reviewer_dept}）` : ''}审批 · 已等待 {waitingLabel(r.stage_info.waiting_hours || 0)}
+                          </div>
+                        )}
+                      </div>
                     ) : (
                       stageLabel(r.current_stage)
                     )}
                   </td>
                   <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}>
-                    {r.decision_reason || '—'}</td>
+                    {parseDecisionReason(r.decision_reason).text || '—'}</td>
                   <td style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
                     {new Date(r.created_at).toLocaleDateString('zh-CN')}</td>
                   <td style={{ whiteSpace: 'nowrap' }}>
@@ -300,7 +442,7 @@ export default function HistoryPage() {
               {detail.decision_reason && (
                 <GlassCard size="xs" style={{ marginBottom: 8 }}>
                   <strong>分析/决策理由：</strong>
-                  <div style={{ marginTop: 4, color: 'var(--text-primary)' }}>{detail.decision_reason}</div>
+                  <div style={{ marginTop: 4, color: 'var(--text-primary)' }}>{detailDecision.text}</div>
                 </GlassCard>
               )}
 
@@ -356,12 +498,21 @@ export default function HistoryPage() {
                           {(() => {
                             try {
                               const data = typeof detail.filled_json === 'string' ? JSON.parse(detail.filled_json) : detail.filled_json;
-                              return Object.entries(data).map(([k, v]) => (
-                                <div key={k} style={{ padding: '4px 0', borderBottom: '1px solid var(--divider)', display: 'flex' }}>
+                              return Object.entries(data).map(([k, v]) => {
+                                const issue = detailDecision.annotations[k]
+                                return (
+                                <div key={k} style={{
+                                  padding: '4px 0', borderBottom: '1px solid var(--divider)', display: 'flex',
+                                  outline: issue ? '1px dashed var(--red)' : undefined,
+                                  background: issue ? 'rgba(255,59,48,0.06)' : undefined,
+                                }}>
                                   <span style={{ color: 'var(--text-secondary)', minWidth: 100 }}>{getFieldLabel(k)}</span>
-                                  <span style={{ color: 'var(--text-primary)' }}>{String(v ?? '')}</span>
+                                  <span style={{ color: 'var(--text-primary)' }}>
+                                    {String(v ?? '')}
+                                    {issue && <div style={{ color: 'var(--red)', fontSize: 12, marginTop: 3 }}>🚩 {issue}</div>}
+                                  </span>
                                 </div>
-                              ));
+                              )});
                             } catch { return <div>无法解析</div>; }
                           })()}
                         </GlassCard>

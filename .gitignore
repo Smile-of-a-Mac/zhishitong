@@ -24,6 +24,9 @@ dist/
 uploads/
 zhishitong/uploads/
 
+# ===== Agent Skills 源仓库（已部署到 .github/） =====
+.agent-skills/
+
 # ===== 安全密钥（禁止提交到版本库） =====
 .encryption_key
 **/.encryption_key
@@ -33,18 +36,12 @@ models/
 lora_output/
 lora_output_merged/
 *.gguf
-
-# ===== 模型文件 =====
-models/*.gguf
-*.gguf
 *.bin
 *.onnx
 *.pt
 *.pth
 
 # ===== 训练/推理产物（大文件，禁止提交） =====
-lora_output/
-lora_output_merged/
 training/checkpoints/
 training/output/
 

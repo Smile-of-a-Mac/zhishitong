@@ -4,7 +4,7 @@ import axios from 'axios'
 import { useAuth } from '../hooks/useAuth'
 
 type NavItem = { to: string; label: string }
-type NavSection = { header?: string; items: NavItem[] }
+type NavSection = { header?: string; items: NavItem[]; previewCount?: number; collapsed?: boolean; onToggle?: () => void }
 
 const APPLY_NAV: NavItem[] = [
   { to: '/apply/reimbursement', label: '💰 报销申请' },
@@ -52,7 +52,14 @@ const SCHOOL_NAV: NavItem[] = [
   { to: '/dashboard', label: '📊 数据看板' },
 ]
 
-function NavLink({ to, label, currentPath, onClick }: { to: string; label: string; currentPath: string; onClick?: () => void }) {
+function NavLink({ to, label, currentPath, onClick, favorite, onToggleFavorite }: {
+  to: string
+  label: string
+  currentPath: string
+  onClick?: () => void
+  favorite?: boolean
+  onToggleFavorite?: () => void
+}) {
   const isActive = currentPath === to || (to !== '/profile' && to !== '/' && currentPath.startsWith(to))
   return (
     <Link
@@ -78,7 +85,20 @@ function NavLink({ to, label, currentPath, onClick }: { to: string; label: strin
       onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.background = 'rgba(128,128,128,0.07)' }}
       onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLElement).style.background = 'transparent' }}
     >
-      {label}
+      <span style={{ flex: 1, minWidth: 0 }}>{label}</span>
+      {onToggleFavorite && (
+        <button
+          type="button"
+          aria-label={favorite ? '取消收藏' : '收藏'}
+          onClick={e => { e.preventDefault(); e.stopPropagation(); onToggleFavorite() }}
+          style={{
+            border: 'none', background: 'transparent', color: favorite ? 'var(--orange)' : 'var(--text-tertiary)',
+            cursor: 'pointer', padding: '2px 0 2px 6px', fontSize: 14, lineHeight: 1,
+          }}
+        >
+          {favorite ? '★' : '☆'}
+        </button>
+      )}
     </Link>
   )
 }
@@ -91,6 +111,9 @@ export default function Frame({ children }: { children: React.ReactNode }) {
   // ── 移动端侧边栏开关 ──
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
+  const [favoriteApplyPaths, setFavoriteApplyPaths] = useState<string[]>([])
+  const [allApplyOpen, setAllApplyOpen] = useState(true)
+  const [applyMoreAnimating, setApplyMoreAnimating] = useState(false)
   // 点击导航后自动关闭（移动端）
   const closeSidebar = () => setSidebarOpen(false)
 
@@ -101,6 +124,59 @@ export default function Frame({ children }: { children: React.ReactNode }) {
     mq.addEventListener('change', handler)
     return () => mq.removeEventListener('change', handler)
   }, [])
+
+  const allApplyOpenKey = user?.id ? `zhishitong_apply_all_open_${user.id}` : ''
+  useEffect(() => {
+    if (!user?.id) {
+      setFavoriteApplyPaths([])
+      return
+    }
+    let cancelled = false
+    axios.get('/api/user/preferences/favorites')
+      .then(res => {
+        if (cancelled) return
+        const favorites = Array.isArray(res.data?.favorites) ? res.data.favorites : []
+        setFavoriteApplyPaths(favorites.filter((v: unknown): v is string => typeof v === 'string'))
+      })
+      .catch(() => {
+        if (!cancelled) setFavoriteApplyPaths([])
+      })
+    return () => { cancelled = true }
+  }, [user?.id])
+
+  useEffect(() => {
+    if (!allApplyOpenKey) { setAllApplyOpen(true); return }
+    const saved = localStorage.getItem(allApplyOpenKey)
+    if (saved === 'true' || saved === 'false') {
+      setAllApplyOpen(saved === 'true')
+      return
+    }
+    setAllApplyOpen(favoriteApplyPaths.length === 0)
+  }, [allApplyOpenKey, favoriteApplyPaths.length])
+
+  const toggleFavoriteApply = (to: string) => {
+    if (!user?.id) return
+    setFavoriteApplyPaths(prev => {
+      const next = prev.includes(to) ? prev.filter(p => p !== to) : [...prev, to]
+      axios.put('/api/user/preferences/favorites', { favorites: next })
+        .then(res => {
+          const saved = Array.isArray(res.data?.favorites) ? res.data.favorites : next
+          setFavoriteApplyPaths(saved.filter((v: unknown): v is string => typeof v === 'string'))
+        })
+        .catch(() => setFavoriteApplyPaths(prev))
+      return next
+    })
+  }
+
+  const toggleAllApplyOpen = () => {
+    setApplyMoreAnimating(true)
+    setAllApplyOpen(prev => {
+      const next = !prev
+      if (allApplyOpenKey) localStorage.setItem(allApplyOpenKey, String(next))
+      return next
+    })
+    window.setTimeout(() => setApplyMoreAnimating(false), 260)
+  }
 
   // ── 未读通知数 ──
   const [unreadCount, setUnreadCount] = useState(0)
@@ -170,7 +246,17 @@ export default function Frame({ children }: { children: React.ReactNode }) {
     const applyItems = user?.is_dept_admin
       ? [{ to: '/apply/reimbursement', label: '💰 报销申请' }]
       : APPLY_NAV
-    sections.push({ header: '申请', items: applyItems })
+    const favoriteItems = applyItems.filter(item => favoriteApplyPaths.includes(item.to)).slice(0, 5)
+    const regularItems = applyItems.filter(item => !favoriteItems.some(f => f.to === item.to))
+    if (favoriteItems.length > 0) sections.push({ header: '⭐ 常用', items: favoriteItems })
+    const regularHasActive = regularItems.some(item => loc.pathname === item.to || loc.pathname.startsWith(item.to))
+    sections.push({
+      header: '📋 全部事务',
+      items: regularItems,
+      previewCount: user?.is_dept_admin ? undefined : 3,
+      collapsed: !allApplyOpen && !regularHasActive,
+      onToggle: toggleAllApplyOpen,
+    })
 
     sections.push({ header: '工具', items: TOOL_NAV })
     sections.push({ header: '社区', items: COMMUNITY_NAV })
@@ -298,15 +384,60 @@ export default function Frame({ children }: { children: React.ReactNode }) {
               ) : (
                 si > 0 && <div style={{ height: 1, background: 'var(--divider)', margin: '8px 12px 10px' }} />
               )}
-              {section.items.map(item => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  label={item.label}
-                  currentPath={loc.pathname}
-                  onClick={closeSidebar}
-                />
-              ))}
+              {(() => {
+                const previewCount = section.previewCount || section.items.length
+                const visibleItems = section.items.slice(0, previewCount)
+                const hiddenItems = section.items.slice(previewCount)
+                const renderItem = (item: NavItem) => (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    label={item.label}
+                    currentPath={loc.pathname}
+                    onClick={closeSidebar}
+                    favorite={favoriteApplyPaths.includes(item.to)}
+                    onToggleFavorite={APPLY_NAV.some(apply => apply.to === item.to) ? () => toggleFavoriteApply(item.to) : undefined}
+                  />
+                )
+                return (
+                  <>
+                    {visibleItems.map(renderItem)}
+                    {hiddenItems.length > 0 && (
+                      <>
+                        <div style={{
+                          display: section.collapsed && !applyMoreAnimating ? 'none' : 'grid',
+                          gridTemplateRows: section.collapsed ? '0fr' : '1fr',
+                          opacity: section.collapsed ? 0 : 1,
+                          overflow: 'hidden',
+                          transition: applyMoreAnimating ? 'grid-template-rows 0.24s cubic-bezier(0.2, 0.85, 0.2, 1), opacity 0.18s ease' : 'none',
+                        }}>
+                          <div style={{ minHeight: 0 }}>
+                          {hiddenItems.map(renderItem)}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={section.onToggle}
+                          aria-expanded={!section.collapsed}
+                          style={{
+                            width: 'calc(100% - 24px)', margin: '6px 12px 2px', padding: '8px 10px',
+                            border: '1px solid var(--glass-border)', borderRadius: 999,
+                            background: section.collapsed ? 'rgba(0,122,255,0.06)' : 'var(--glass-bg)',
+                            color: section.collapsed ? 'var(--accent)' : 'var(--text-secondary)',
+                            cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                            fontFamily: 'var(--font-stack)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                            transition: 'background 0.2s ease, color 0.2s ease, transform 0.2s ease',
+                          }}
+                        >
+                          <span>{section.collapsed ? `展开其余 ${hiddenItems.length} 项` : '收起更多事务'}</span>
+                          <span style={{ transform: `rotate(${section.collapsed ? 0 : 180}deg)`, transition: 'transform 0.2s ease' }}>⌄</span>
+                        </button>
+                      </>
+                    )}
+                  </>
+                )
+              })()}
             </div>
           ))}
         </nav>

@@ -98,6 +98,19 @@ class User(Base):
 
     approvals = relationship("ApprovalRecord", back_populates="user")
     quota_logs = relationship("QuotaLog", back_populates="user", order_by="QuotaLog.created_at.desc()")
+    preferences = relationship("UserPreference", back_populates="user", uselist=False, cascade="all, delete-orphan")
+
+
+class UserPreference(Base):
+    __tablename__ = "user_preferences"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False, index=True)
+    favorite_apply_paths = Column(Text, default="[]", nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+    user = relationship("User", back_populates="preferences")
 
 
 # ===== 配额流水 =====

@@ -1,6 +1,6 @@
 # 智审通 — 运维与故障排查手册
 
-> 适用版本: v0.5.2+  
+> 适用版本: v0.6.0+  
 > 目标读者: 系统管理员、运维工程师、技术支持人员
 
 ---
@@ -362,4 +362,4 @@ cp -r uploads/ ./
 tar -czf lora_backup.tar.gz lora_output/ lora_output_merged/ models/qwen3-4b-lora.gguf
 ```
 
-*文档版本: 2.1 | 最后更新: 2026-05-30*
+*文档版本: 2.2 | 最后更新: 2026-06-01*
