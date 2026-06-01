@@ -405,10 +405,12 @@ export default function Frame({ children }: { children: React.ReactNode }) {
                     {hiddenItems.length > 0 && (
                       <>
                         <div style={{
-                          display: section.collapsed && !applyMoreAnimating ? 'none' : 'grid',
+                          display: 'grid',
                           gridTemplateRows: section.collapsed ? '0fr' : '1fr',
                           opacity: section.collapsed ? 0 : 1,
                           overflow: 'hidden',
+                          visibility: section.collapsed && !applyMoreAnimating ? 'hidden' : 'visible',
+                          pointerEvents: section.collapsed ? 'none' : 'auto',
                           transition: applyMoreAnimating ? 'grid-template-rows 0.24s cubic-bezier(0.2, 0.85, 0.2, 1), opacity 0.18s ease' : 'none',
                         }}>
                           <div style={{ minHeight: 0 }}>

@@ -65,16 +65,17 @@ def _build_stage_info(db: Session, record: ApprovalRecord) -> dict:
     }
 
 
-def _apply_approval_filters(query, q: Optional[str], doc_type: Optional[str], date_from: Optional[str], date_to: Optional[str]):
-    if q:
-        query = query.filter(ApprovalRecord.filled_json.like(f"%{q.strip()}%"))
+def _filter_approval_query(base_query, keyword: Optional[str], doc_type: Optional[str], date_from: Optional[str], date_to: Optional[str]):
+    filtered_query = base_query
+    if keyword:
+        filtered_query = filtered_query.filter(ApprovalRecord.filled_json.like(f"%{keyword.strip()}%"))
     if doc_type:
-        query = query.filter(ApprovalRecord.document_type == doc_type)
+        filtered_query = filtered_query.filter(ApprovalRecord.document_type == doc_type)
     if date_from:
-        query = query.filter(ApprovalRecord.created_at >= date_from)
+        filtered_query = filtered_query.filter(ApprovalRecord.created_at >= date_from)
     if date_to:
-        query = query.filter(ApprovalRecord.created_at <= date_to)
-    return query
+        filtered_query = filtered_query.filter(ApprovalRecord.created_at <= date_to)
+    return filtered_query
 
 
 def _parse_record_fields(record: ApprovalRecord) -> dict:
@@ -133,15 +134,7 @@ def list_approvals(
         ApprovalRecord.user_id == user.id,
         ApprovalRecord.is_deleted == False,
     )
-
-    if q:
-        query = query.filter(ApprovalRecord.filled_json.like(f"%{q.strip()}%"))
-    if doc_type:
-        query = query.filter(ApprovalRecord.document_type == doc_type)
-    if date_from:
-        query = query.filter(ApprovalRecord.created_at >= date_from)
-    if date_to:
-        query = query.filter(ApprovalRecord.created_at <= date_to)
+    query = _filter_approval_query(query, q, doc_type, date_from, date_to)
 
     total = query.count()
     records = query.order_by(ApprovalRecord.created_at.desc()).offset(
@@ -180,7 +173,7 @@ def export_approvals(
         ApprovalRecord.user_id == user.id,
         ApprovalRecord.is_deleted == False,
     )
-    records = _apply_approval_filters(query, q, doc_type, date_from, date_to).order_by(ApprovalRecord.created_at.desc()).all()
+    records = _filter_approval_query(query, q, doc_type, date_from, date_to).order_by(ApprovalRecord.created_at.desc()).all()
 
     output = io.StringIO()
     output.write("\ufeff")

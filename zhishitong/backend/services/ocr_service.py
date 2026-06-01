@@ -180,6 +180,95 @@ def _normalize_json_keys(data: dict) -> dict:
     return normalized
 
 
+def _normalize_leave_type(value: Optional[str]) -> Optional[str]:
+    """Normalize leave_type into three categories: 病假 / 事假 / 公假."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+
+    if any(k in text for k in ["病假", "就医", "看病", "住院", "发热", "生病"]):
+        return "病假"
+    if any(k in text for k in ["公假", "公务", "实习", "竞赛", "比赛", "考试", "答辩", "会议", "活动"]):
+        return "公假"
+    if "事假" in text:
+        return "事假"
+
+    return "事假"
+
+
+def _infer_leave_type_from_text(text: str) -> Optional[str]:
+    """Infer leave_type from raw OCR text and normalize it to the three allowed categories."""
+    if not text:
+        return None
+    if re.search(r"病假|就医|看病|住院|发热|生病", text):
+        return "病假"
+    if re.search(r"公假|公务|实习|竞赛|比赛|考试|答辩|会议|活动", text):
+        return "公假"
+    if re.search(r"事假|婚假|丧假|产假|陪产假|调休|请假类型", text):
+        return "事假"
+    return None
+
+
+def _extract_json_dict_from_text(text: str) -> Optional[dict]:
+    """从 LLM 回复中提取 JSON 对象；优先完整 JSON/代码块，再做平衡括号兜底。"""
+    if not text or not text.strip():
+        return None
+
+    candidates: list[str] = [text.strip()]
+    json_blocks = re.findall(r"```(?:json)?\s*\n?(.*?)\n?```", text, re.DOTALL)
+    candidates = [block.strip() for block in json_blocks if block.strip()] + candidates
+
+    def _try_load(candidate: str) -> Optional[dict]:
+        candidate = candidate.strip()
+        candidate = re.sub(r",\s*}", "}", candidate)
+        candidate = re.sub(r",\s*]", "]", candidate)
+        candidate = re.sub(r":\s*,", ": null,", candidate)
+        candidate = re.sub(r":\s*}", ": null}", candidate)
+        candidate = re.sub(r":\s*]", ": []", candidate)
+        candidate = re.sub(r",\s*,", ", null,", candidate)
+        try:
+            parsed = json.loads(candidate)
+        except json.JSONDecodeError:
+            return None
+        return parsed if isinstance(parsed, dict) else None
+
+    for candidate in candidates:
+        parsed = _try_load(candidate)
+        if parsed is not None:
+            return parsed
+
+    positions = [i for i, ch in enumerate(text) if ch == "{"]
+    for start in positions:
+        depth = 0
+        in_string = False
+        escape = False
+        for i in range(start, len(text)):
+            ch = text[i]
+            if escape:
+                escape = False
+                continue
+            if ch == "\\" and in_string:
+                escape = True
+                continue
+            if ch == '"':
+                in_string = not in_string
+                continue
+            if in_string:
+                continue
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    parsed = _try_load(text[start:i + 1])
+                    if parsed is not None:
+                        return parsed
+                    break
+    return None
+
+
 def _fallback_extract(raw_text: str, document_type: Optional[str] = None) -> dict:
     """纯正则兜底：从原文直接提取关键字段"""
     from services.template_service import get_template
@@ -201,12 +290,13 @@ def _fallback_extract(raw_text: str, document_type: Optional[str] = None) -> dic
 
     # 请假类型自动检测
     if document_type == "leave" and "leave_type" not in result:
-        if re.search(r"事假", text):
-            result["leave_type"] = "事假"
-        elif re.search(r"病假", text):
-            result["leave_type"] = "病假"
-        elif re.search(r"公假", text):
-            result["leave_type"] = "公假"
+        inferred_leave_type = _infer_leave_type_from_text(text)
+        if inferred_leave_type:
+            result["leave_type"] = inferred_leave_type
+    if document_type == "leave":
+        normalized = _normalize_leave_type(result.get("leave_type"))
+        if normalized:
+            result["leave_type"] = normalized
 
     # 日期自动提取
     if document_type == "leave":
@@ -379,10 +469,12 @@ def _postprocess_leave_fields(data: dict, raw_text: str) -> dict:
 
     # ── 请假类型 ──
     if not fixed.get("leave_type"):
-        for lt in ["事假", "病假", "公假"]:
-            if lt in (raw_text or ""):
-                fixed["leave_type"] = lt
-                break
+        inferred_leave_type = _infer_leave_type_from_text(raw_text or "")
+        if inferred_leave_type:
+            fixed["leave_type"] = inferred_leave_type
+    normalized_leave_type = _normalize_leave_type(fixed.get("leave_type"))
+    if normalized_leave_type:
+        fixed["leave_type"] = normalized_leave_type
 
     # ── duration 拆分 ──
     duration_val = fixed.pop("duration", None) or fixed.pop("leave_period", None)
@@ -469,6 +561,9 @@ async def local_model_fill_json(raw_text: str, document_type: Optional[str] = No
             f"  - \"{f['key']}\": {f['label']} (类型: {f['type']})"
             for f in tpl.get("fields", [])
         ])
+    leave_type_hint = ""
+    if document_type == "leave":
+        leave_type_hint = "\n6. 请假类型 leave_type 只能是：病假、事假、公假；其他任何类型统一填 事假"
 
     prompt = f"""你是一个审批表单自动填写助手。根据 OCR 文本提取信息。
 
@@ -485,6 +580,7 @@ OCR 文本:
 3. 日期统一 YYYY-MM-DD，数字只保留数值不要单位
 4. 无法确定的字段填 null
 5. JSON key 必须用上面字段定义中的英文名
+{leave_type_hint}
 
 立即输出纯 JSON："""
 
@@ -505,57 +601,16 @@ OCR 文本:
             content = (msg.get("content") or "").strip()
             reasoning = (msg.get("reasoning_content") or "").strip()
             stop_reason = data["choices"][0].get("finish_reason", "")
-            # 推理模型：content 可能是思考过程，reasoning_content 含 JSON，优先用后者
-            if reasoning:
-                content = reasoning
             # 如果模型输出被截断，尝试恢复
             if stop_reason == "length":
                 logger.warning("本地模型输出可能被截断 (finish_reason=length)，尝试恢复 JSON")
-            if "```json" in content:
-                content = content.split("```json")[1].split("```")[0].strip()
-            elif "```" in content:
-                content = content.split("```")[1].split("```")[0].strip()
-            if not content:
+            if not content and not reasoning:
                 raise ValueError("本地模型返回内容为空")
 
-            # 尝试解析 JSON，如果截断则尝试修复
-            try:
-                result = json.loads(content)
-            except json.JSONDecodeError as je:
-                logger.warning(f"JSON 解析失败 (pos={je.pos})，尝试修复截断: {je}")
-                # 在错误位置截断，尝试闭合未配对的括号
-                fixed = content[:je.pos]
-                # 去掉尾部不完整的 key-value（找到最后一个完整的逗号）
-                last_comma = fixed.rfind(',')
-                if last_comma > 0:
-                    fixed = fixed[:last_comma]
-
-                # 统计未闭合的括号
-                open_braces = fixed.count('{') - fixed.count('}')
-                open_brackets = fixed.count('[') - fixed.count(']')
-                # 闭合适配的括号
-                if open_brackets > 0:
-                    fixed += '\n' + ']' * open_brackets
-                if open_braces > 0:
-                    fixed += '\n' + '}' * open_braces
-
-                # 尝试多次修复（最多 3 次）
-                for attempt in range(3):
-                    try:
-                        result = json.loads(fixed)
-                        logger.info(f"JSON 修复成功 (尝试 {attempt + 1})")
-                        break
-                    except json.JSONDecodeError as e2:
-                        if attempt == 0:
-                            # 第二次尝试：移除尾部可能残留的逗号
-                            fixed = fixed.rstrip().rstrip(',').rstrip()
-                        elif attempt == 1:
-                            # 第三次尝试：尝试包裹在一层大括号中
-                            fixed = '{' + fixed + '}'
-                        else:
-                            raise je
-                else:
-                    raise je
+            # reasoning_content 常是思考过程；优先解析 content，失败再尝试 reasoning。
+            result = _extract_json_dict_from_text(content) or _extract_json_dict_from_text(reasoning)
+            if result is None:
+                raise ValueError("本地模型返回了无效 JSON")
 
             # 兜底归一化：如果模型仍然输出了中文字段名，映射为英文
             result = _normalize_json_keys(result)
@@ -615,6 +670,9 @@ async def llm_multimodal_ocr(
             + (f' (选项: {",".join(f["options"])})' if f.get("options") else "")
             for f in tpl.get("fields", [])
         ])
+    leave_type_hint = ""
+    if document_type == "leave":
+        leave_type_hint = "\n7. 请假类型 leave_type 只能是：病假、事假、公假；其他任何类型统一填 事假"
 
     # 构建字段提取的字段描述和示例
     example_json = '{"applicant": "张三", "college": "计算机学院"}'
@@ -638,6 +696,7 @@ async def llm_multimodal_ocr(
 4. 数字只保留数值，不要单位（如 500 而不是 500元）
 5. 找不到的字段填 null，不要编造
 6. 值必须从图片中真实提取
+{leave_type_hint}
 
 输出示例：
 {example_json}
@@ -671,116 +730,11 @@ async def llm_multimodal_ocr(
             f"MiMo 响应: content_len={len(content)}, reasoning_len={len(reasoning)}, "
             f"content_preview={content[:150]}, reasoning_preview={reasoning[:150]}"
         )
-        # 推理模型（MiMo/DeepSeek-R1 等）可能把真实答案放在 reasoning_content 中，
-        # content 只放了推理过程。优先取 reasoning_content 中能解析成 JSON 的部分
+        # reasoning_content 常是思考过程；优先从 content 解析最终 JSON，失败再尝试 reasoning。
         raw_text = content if content else reasoning  # 默认
-        filled: dict = {}
-        candidates_texts = [content, reasoning]  # 两个都试
-
-        # 辅助函数：修复 MiMo 常见的 JSON 语法错误
-        def _repair_json(text: str) -> str:
-            """修复 LLM 输出中常见的 JSON 格式错误。"""
-            # 1. 移除尾随逗号（在 } 或 ] 之前）
-            text = re.sub(r',\s*}', '}', text)
-            text = re.sub(r',\s*]', ']', text)
-            # 2. 修复 "key": , → "key": null
-            text = re.sub(r':\s*,', ': null,', text)
-            text = re.sub(r':\s*}', ': null}', text)
-            # 3. 修复 "key": ] → "key": []
-            text = re.sub(r':\s*]', ': []', text)
-            # 4. 修复连续逗号
-            text = re.sub(r',\s*,', ', null,', text)
-            # 5. 修复缺少引号的 key（简单情况）
-            # 6. 修复截断的字符串：如果最后一个 " 后面没有闭合
-            return text
-
-        # 辅助函数：从文本中提取最后一个完整 JSON 对象（支持嵌套）
-        def _extract_last_json(text: str) -> dict | None:
-            if not text:
-                return None
-            # 优先：查找 ```json ... ``` 代码块（取最后一个）
-            json_blocks = list(re.finditer(r'```(?:json)?\s*\n?(.*?)\n?```', text, re.DOTALL))
-            for m in reversed(json_blocks):
-                try:
-                    parsed = json.loads(m.group(1).strip())
-                    if isinstance(parsed, dict) and len(parsed) >= 1:
-                        return parsed
-                except json.JSONDecodeError:
-                    continue
-            # 兜底：平衡括号匹配，从最后一个 { 开始找配对的 }
-            # 从后往前扫，找到第一个有效 JSON 对象
-            braces = [(i, c) for i, c in enumerate(text) if c in '{}']
-            # 从最后一个 { 开始尝试
-            open_positions = [i for i, c in braces if c == '{']
-            for start_pos in reversed(open_positions):
-                depth = 0
-                end_pos = -1
-                for i, c in braces:
-                    if i < start_pos:
-                        continue
-                    if c == '{':
-                        depth += 1
-                    elif c == '}':
-                        depth -= 1
-                        if depth == 0:
-                            end_pos = i
-                            break
-                if end_pos > start_pos:
-                    candidate = text[start_pos:end_pos + 1]
-                    # 先尝试原始解析，失败则修复后重试
-                    for cand in [candidate, _repair_json(candidate)]:
-                        try:
-                            parsed = json.loads(cand)
-                            if isinstance(parsed, dict) and len(parsed) >= 1:
-                                return parsed
-                        except json.JSONDecodeError:
-                            continue
-            return None
-
-        # 尝试从两个候选文本中提取
-        for ct in candidates_texts:
-            if not ct:
-                continue
-            # Step 1: 去掉 markdown 代码块标记后直接解析
-            cleaned = ct.strip()
-            if "```json" in cleaned:
-                cleaned = cleaned.split("```json")[1].split("```")[0]
-            elif "```" in cleaned:
-                cleaned = cleaned.split("```")[1].split("```")[0]
-
-            # Step 2: 尝试直接解析完整文本（含 JSON 修复）
-            for attempt in [cleaned.strip(), ct.strip()]:
-                if not attempt:
-                    continue
-                # 先尝试原始解析
-                try:
-                    parsed = json.loads(attempt)
-                    if isinstance(parsed, dict):
-                        filled = parsed
-                        raw_text = ct
-                        break
-                except json.JSONDecodeError:
-                    pass
-                # 修复后再试
-                repaired = _repair_json(attempt)
-                try:
-                    parsed = json.loads(repaired)
-                    if isinstance(parsed, dict):
-                        logger.info(f"JSON 修复成功: 原始错误已自动修正")
-                        filled = parsed
-                        raw_text = ct
-                        break
-                except json.JSONDecodeError:
-                    pass
-            if filled:
-                break
-
-            # Step 3: 使用平衡括号提取最后一个 JSON（兜底）
-            parsed = _extract_last_json(ct)
-            if parsed and len(parsed) >= 1:
-                filled = parsed
-                raw_text = ct
-                break
+        filled = _extract_json_dict_from_text(content) or _extract_json_dict_from_text(reasoning) or {}
+        if filled:
+            raw_text = content if _extract_json_dict_from_text(content) else reasoning
 
     # 归一化字段名
     filled = _normalize_json_keys(filled)
@@ -821,6 +775,9 @@ async def llm_api_fill_json(raw_text: str, api_base: str, api_key: str, model: s
             f"  - \"{f['key']}\": {f['label']} (类型: {f['type']})"
             for f in tpl.get("fields", [])
         ])
+    leave_type_hint = ""
+    if document_type == "leave":
+        leave_type_hint = "\n6. 请假类型 leave_type 只能是：病假、事假、公假；其他任何类型统一填 事假"
 
     prompt = f"""你是一个审批表单自动填写助手。根据 OCR 文本提取信息。
 
@@ -837,6 +794,7 @@ OCR 文本:
 3. 日期统一 YYYY-MM-DD，数字只保留数值不要单位
 4. 无法确定的字段填 null
 5. JSON key 必须用上面字段定义中的英文名
+{leave_type_hint}
 
 立即输出纯 JSON："""
 
@@ -856,30 +814,17 @@ OCR 文本:
         msg = data["choices"][0]["message"]
         content = (msg.get("content") or "").strip()
         reasoning = (msg.get("reasoning_content") or "").strip()
-        # 推理模型 JSON 通常在 reasoning_content，优先用它
-        if reasoning:
-            content = reasoning
-        # 清理代码块标记
-        if "```json" in content:
-            content = content.split("```json")[1].split("```")[0]
-        elif "```" in content:
-            content = content.split("```")[1].split("```")[0]
-        content = content.strip()
-        if not content:
+        if not content and not reasoning:
             raise ValueError("LLM 返回内容为空")
-        try:
-            result = json.loads(content)
-        except json.JSONDecodeError as je:
-            logger.warning(f"外部 LLM JSON 填充解析失败: {je}，content={content[:200]}")
-            # 尝试从 content 中提取 JSON 片段
-            m = re.search(r'\{[^{}]*\}', content)
-            if m:
-                try:
-                    result = json.loads(m.group(0))
-                except json.JSONDecodeError:
-                    raise ValueError(f"LLM 返回了无效 JSON: {je}")
-            else:
-                raise ValueError(f"LLM 返回了无效 JSON: {je}")
+
+        # reasoning_content 常是思考过程，优先解析正式 content；content 不可用时再尝试 reasoning。
+        result = _extract_json_dict_from_text(content) or _extract_json_dict_from_text(reasoning)
+        if result is None:
+            logger.warning(
+                "外部 LLM JSON 填充解析失败: 未找到合法 JSON，"
+                f"content={content[:200]} reasoning={reasoning[:200]}"
+            )
+            raise ValueError("LLM 返回了无效 JSON")
         result = _normalize_json_keys(result)
         
         # 检测遮蔽输出

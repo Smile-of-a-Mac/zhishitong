@@ -24,8 +24,10 @@ dist/
 uploads/
 zhishitong/uploads/
 
-# ===== Agent Skills 源仓库（已部署到 .github/） =====
+# ===== Agent Skills / Copilot / OpenCode 配置（非项目代码） =====
 .agent-skills/
+.opencode/
+.github/
 
 # ===== 安全密钥（禁止提交到版本库） =====
 .encryption_key

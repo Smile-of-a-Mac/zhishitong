@@ -10,7 +10,7 @@ from schemas import OCRResult
 from auth import get_current_user
 from config import LLM_API_BASE, LLM_API_KEY, LLM_MODEL, LLM_FILL_MODEL
 from services.file_service import validate_file, store_file
-from services.ocr_service import ocr_with_tier, OCRProvider
+from services.ocr_service import ocr_with_tier, OCRProvider, _postprocess_leave_fields
 from services.template_service import detect_document_type
 from services.crypto_service import decrypt
 from services.logging_service import LogCategory, log, log_error
@@ -149,6 +149,13 @@ def _resolve_llm_config(db: Session) -> tuple:
     return ocr_resolved, fill_resolved
 
 
+def _model_used_for_provider(provider: OCRProvider, ocr_cfg: ResolvedKey, fill_cfg: ResolvedKey) -> str:
+    """Return the model that was actually used for the reported OCR provider."""
+    if provider == OCRProvider.PDF_TEXT:
+        return fill_cfg.model
+    return ocr_cfg.model
+
+
 @router.post("/ocr", response_model=OCRResult)
 async def ocr_upload(
     file: UploadFile = File(...),
@@ -232,6 +239,9 @@ async def ocr_upload(
     if provider == OCRProvider.LLM:
         record_success(db, ocr_cfg.key_id)
         # 多模态一步完成时，fill key 未使用，不记录
+    elif provider == OCRProvider.PDF_TEXT:
+        # 文本型 PDF 使用文本抽取 + JSON LLM 填充，不消耗多模态 OCR Key
+        record_success(db, fill_cfg.key_id)
     elif provider == OCRProvider.LOCAL:
         # EasyOCR 降级时，可能用了外部 fill key；但此处不追踪 fill key 的成功
         pass
@@ -245,8 +255,10 @@ async def ocr_upload(
     doc_type = detect_document_type(text)
     if not doc_type:
         doc_type = _infer_doc_type_from_filled(filled_json)
+    if doc_type == "leave" and filled_json:
+        filled_json = _postprocess_leave_fields(filled_json, text)
 
-    # 6. 扣减配额（Pro 层 LLM OCR）
+    # 6. 扣减配额（Pro 层多模态 LLM OCR；文本型 PDF 只走 JSON 填充，不扣 OCR 配额）
     if provider == OCRProvider.LLM and user.tier == TierEnum.pro:
         locked_user = db.query(User).filter(User.id == user.id).with_for_update().first()
         locked_user.llm_ocr_used += 1
@@ -259,7 +271,8 @@ async def ocr_upload(
     remaining = max(0, user.llm_ocr_quota - user.llm_ocr_used)
 
     # 7. 结构化日志（不创建审批记录，等用户确认后再提交）
-    ocr_tool = f"{provider.value}({ocr_cfg.model})"
+    used_model = _model_used_for_provider(provider, ocr_cfg, fill_cfg)
+    ocr_tool = f"{provider.value}({used_model})"
     log(
         LogCategory.OCR,
         "info",
@@ -268,7 +281,7 @@ async def ocr_upload(
         duration_ms=duration_ms,
         tier=user.tier.value,
         provider=provider.value,
-        model=ocr_cfg.model,
+        model=used_model,
         doc_type=doc_type or "unknown",
         text_len=len(text),
     )
