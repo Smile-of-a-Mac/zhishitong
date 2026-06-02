@@ -11,6 +11,7 @@ let installed = false
 const AI_ENDPOINTS = [
   // 政策问答 /api/ai/chat 不触发背景动画（只在 OCR 和审批时触发）
   /^\/api\/ocr(?:\?|$)/,
+  /^\/api\/ai\/(?:intent|manual-compliance|compliance\/\d+|opinion)(?:\?|$)/,
   /^\/api\/approvals\/suggest-review(?:\?|$)/,
   /^\/api\/approvals\/manual(?:\?|$)/,
   /^\/api\/approvals\/\d+\/resubmit(?:\?|$)/,

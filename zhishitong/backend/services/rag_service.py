@@ -572,52 +572,198 @@ _INTENT_KEYWORDS: dict[str, list[str]] = {
 }
 
 
-async def parse_intent(text: str, db: Optional[Session] = None) -> dict:
-    """识别用户意图，返回推荐文档类型及可预填字段"""
+def _account_context_for_intent(user) -> dict:
+    """Return non-sensitive applicant fields that may be used to prefill forms."""
+    if not user:
+        return {}
+    pairs = {
+        "applicant": getattr(user, "real_name", None) or getattr(user, "username", None),
+        "username": getattr(user, "username", None),
+        "student_id": getattr(user, "student_id", None),
+        "employee_id": getattr(user, "employee_id", None),
+        "school": getattr(user, "school", None),
+        "college": getattr(user, "department", None),
+        "department": getattr(user, "department", None),
+        "major": getattr(user, "major", None),
+        "class_name": getattr(user, "class_name", None),
+        "phone": getattr(user, "phone", None),
+        "email": getattr(user, "email", None),
+        "advisor": getattr(user, "advisor", None),
+        "title": getattr(user, "title", None),
+    }
+    return {k: str(v) for k, v in pairs.items() if v not in (None, "")}
+
+
+def _intent_template_fields(doc_type: str) -> set[str]:
+    try:
+        path = Path(__file__).resolve().parent.parent / "templates.json"
+        with open(path, "r", encoding="utf-8") as f:
+            templates = json.load(f).get("templates", {})
+        fields = templates.get(doc_type, {}).get("fields", [])
+        return {str(item.get("key")) for item in fields if item.get("key")}
+    except Exception:
+        return set()
+
+
+def _intent_templates_context(keyword_type: str = "") -> str:
+    """Return a compact form field contract for the most relevant templates."""
+    try:
+        path = Path(__file__).resolve().parent.parent / "templates.json"
+        with open(path, "r", encoding="utf-8") as f:
+            templates = json.load(f).get("templates", {})
+    except Exception:
+        return "{}"
+
+    priority_keys = [keyword_type] if keyword_type in templates else []
+    for fallback in ["leave", "reimbursement", "business_trip"]:
+        if fallback not in priority_keys and fallback in templates:
+            priority_keys.append(fallback)
+            if len(priority_keys) >= 3:
+                break
+
+    compact = {}
+    for key in priority_keys:
+        tpl = templates.get(key)
+        if not tpl:
+            continue
+        compact[key] = {
+            "label": tpl.get("label", key),
+            "fields": [
+                {
+                    "key": field.get("key"),
+                    "label": field.get("label", ""),
+                    "type": field.get("type", "text"),
+                    "required": bool(field.get("required", False)),
+                    **({"options": field.get("options")} if field.get("options") else {}),
+                }
+                for field in tpl.get("fields", [])
+                if field.get("key")
+            ],
+        }
+    return json.dumps(compact, ensure_ascii=False)
+
+
+def _intent_regex_fill(text: str, fields: dict, doc_type: str) -> dict:
+    filled = dict(fields or {})
+    if doc_type == "reimbursement":
+        if not filled.get("amount"):
+            m = re.search(r"(\d+(?:\.\d{1,2})?)\s*元", text)
+            if m:
+                filled["amount"] = m.group(1)
+        if filled.get("amount") and not filled.get("reason"):
+            reason = re.sub(r"\d+\.?\d*\s*元", "", text).strip().lstrip("报销").strip()
+            if reason:
+                filled["reason"] = reason
+        reason = filled.get("reason", "")
+        if reason and not filled.get("category"):
+            if any(kw in reason for kw in ["会议", "餐饮", "招待", "宴请", "聚餐", "茶歇", "工作餐"]):
+                filled["category"] = "会议费"
+            elif any(kw in reason for kw in ["差旅", "交通", "机票", "火车", "打车", "高铁", "路费"]):
+                filled["category"] = "差旅交通"
+            elif any(kw in reason for kw in ["办公", "文具", "纸张", "耗材"]):
+                filled["category"] = "办公用品"
+            elif any(kw in reason for kw in ["印刷", "复印", "资料"]):
+                filled["category"] = "印刷资料"
+            elif any(kw in reason for kw in ["实验", "试剂"]):
+                filled["category"] = "实验耗材"
+            elif any(kw in reason for kw in ["图书", "书", "教材"]):
+                filled["category"] = "图书资料"
+            elif any(kw in reason for kw in ["维修", "修理", "维护"]):
+                filled["category"] = "维修"
+            else:
+                filled.setdefault("category", "其他")
+    if not filled.get("date") and doc_type in ("reimbursement", "leave"):
+        m = re.search(r"(\d{4}[-/]\d{1,2}[-/]\d{1,2})", text)
+        if m:
+            filled["date"] = m.group(1).replace("/", "-")
+    return filled
+
+
+def _is_self_application_text(text: str) -> bool:
+    return any(token in text for token in ["我", "本人", "自己", "我的", "给我", "帮我"])
+
+
+def _merge_account_prefill(prefill: dict, account_ctx: dict, doc_type: str = "", use_account_defaults: bool = False) -> dict:
+    """Keep only template fields; optionally use account fields as self-application defaults."""
+    allowed_fields = _intent_template_fields(doc_type) if doc_type else set()
+    merged = dict(prefill or {})
+    if use_account_defaults:
+        for key, value in account_ctx.items():
+            if key in {"username", "school", "email"}:
+                continue
+            if allowed_fields and key not in allowed_fields:
+                continue
+            merged.setdefault(key, value)
+    if allowed_fields:
+        merged = {k: v for k, v in merged.items() if k in allowed_fields}
+    return merged
+
+
+async def parse_intent(text: str, db: Optional[Session] = None, current_user=None) -> dict:
+    import re as _re
     keyword_type = _keyword_intent(text)
     doc_name = get_doc_label(keyword_type)
 
-    prompt = f"""你是智能表单助手。根据用户描述识别申请意图并提取可预填字段。
+    account_ctx = _account_context_for_intent(current_user)
+    account_context_text = json.dumps(account_ctx, ensure_ascii=False) if account_ctx else "{}"
+    use_account_defaults = _is_self_application_text(text)
+    doc_type_keys = json.dumps(list(_INTENT_KEYWORDS.keys()), ensure_ascii=False)
+
+    prompt = f"""你是智能表单助手。根据用户描述判断事务类型并提取所有可填字段。
 
 用户输入：{text}
 
-可选类型与可填字段：
-- reimbursement(报销): applicant, amount, reason, date, category, destination
-- leave(请假): applicant, reason, start_date, end_date, destination, leave_type
-- business_trip(出差): applicant, purpose, destination, start_date, end_date, estimated_cost
-- club_application(社团活动): activity, purpose, venue, date, participants, budget
-- classroom_booking(教室借用): applicant, purpose, room_no, date, start_time, end_time, participants
-- seal_application(用章): applicant, purpose, seal_type, document_name, copies, date
-- scholarship(奖学金): applicant, scholarship_type, achievements, gpa
-- dorm_change(换宿舍): applicant, current_building, current_room, preferred_building, preferred_room, reason, phone
+当前登录账号（仅作参考，不一定是申请人）：{account_context_text}
 
-输出严格 JSON：
+合法事务类型 key（必须选一个）：{doc_type_keys}
+
+输出纯 JSON（不要加解释或代码块）：
 {{
-  "document_type": "类型 key",
+  "document_type": "上述合法 key 之一",
   "confidence": 0.0~1.0,
-  "prefill_fields": {{
-    "字段名": "提取值"
-  }}
+  "prefill_fields": {{ "字段名": "提取值" }}
 }}
-仅包含有值的字段。从描述中精确提取数字/日期/名称，日期格式 YYYY-MM-DD。"""
+仅输出有值的字段。金额只保留数字去掉单位。日期格式 YYYY-MM-DD。
+若是第一人称"我/本人/自己/帮我"申请，可用当前登录账号补基础字段（姓名、学号、学院、专业、班级、电话、辅导员）。
+若是帮别人填写，基础字段以用户描述为准，不要用当前账号冒充。"""
 
     try:
-        raw = await _call_llm(prompt, max_tokens=300, db=db)
+        raw = await _call_llm(prompt, max_tokens=800, db=db)
         result = _extract_json(raw)
-        pf = {k: v for k, v in result.get("prefill_fields", {}).items()
-              if v and v != "null"}
-        result["prefill_fields"] = pf
-        if not result.get("document_type"):
+        if not result.get("document_type") or result["document_type"] not in _INTENT_KEYWORDS:
             result["document_type"] = keyword_type
+        pf = {k: str(v) for k, v in (result.get("prefill_fields") or {}).items()
+              if v not in (None, "", "null")}
+
+        resolved_type = result["document_type"]
+        try:
+            from services.ocr_service import _normalize_json_keys
+            pf = _normalize_json_keys(pf)
+        except Exception:
+            pass
+
+        pf = _intent_regex_fill(text, pf, resolved_type)
+
+        result["prefill_fields"] = _merge_account_prefill(
+            pf, account_ctx, resolved_type, use_account_defaults=use_account_defaults,
+        )
         result["doc_label"] = get_doc_label(result["document_type"])
         result["confidence"] = float(result.get("confidence", 0.65))
         return result
     except Exception as e:
         logger.warning(f"意图识别 LLM 失败: {e}")
+        fallback_fields = _intent_regex_fill(text, {}, keyword_type)
+        try:
+            from services.ocr_service import _normalize_json_keys
+            fallback_fields = _normalize_json_keys(fallback_fields)
+        except Exception:
+            pass
         return {
             "document_type": keyword_type,
             "confidence": 0.6,
-            "prefill_fields": {},
+            "prefill_fields": _merge_account_prefill(
+                fallback_fields, account_ctx, keyword_type, use_account_defaults=use_account_defaults,
+            ),
             "doc_label": doc_name,
         }
 

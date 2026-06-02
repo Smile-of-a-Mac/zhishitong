@@ -100,17 +100,21 @@ body::before {
   background:
     radial-gradient(circle at 50% 28%, rgba(255, 255, 255, 0.68), transparent 34%),
     radial-gradient(circle at 16% 12%, rgba(66, 133, 244, 0.12), transparent 30%),
+    radial-gradient(circle at 24% 88%, rgba(255, 105, 180, 0.10), transparent 28%),
+    radial-gradient(circle at 72% 82%, rgba(255, 214, 102, 0.13), transparent 28%),
     radial-gradient(circle at 86% 16%, rgba(52, 168, 83, 0.10), transparent 28%),
-    linear-gradient(135deg, rgba(249, 251, 255, 0.58), rgba(241, 245, 252, 0.24));
+    linear-gradient(135deg, rgba(249, 251, 255, 0.58), rgba(241, 245, 252, 0.24) 44%, rgba(255, 244, 214, 0.12));
 }
 
 @media (prefers-color-scheme: dark) {
   body::before {
     background:
       radial-gradient(circle at 50% 24%, rgba(68, 92, 140, 0.20), transparent 34%),
-      radial-gradient(circle at 16% 12%, rgba(66, 133, 244, 0.18), transparent 30%),
-      radial-gradient(circle at 86% 16%, rgba(52, 168, 83, 0.12), transparent 28%),
-      linear-gradient(135deg, rgba(10, 16, 26, 0.88), rgba(0, 0, 0, 0.46));
+      radial-gradient(circle at 16% 12%, rgba(66, 133, 244, 0.28), transparent 30%),
+      radial-gradient(circle at 24% 88%, rgba(255, 55, 145, 0.20), transparent 28%),
+      radial-gradient(circle at 72% 82%, rgba(255, 204, 64, 0.17), transparent 28%),
+      radial-gradient(circle at 86% 16%, rgba(52, 199, 89, 0.18), transparent 28%),
+      linear-gradient(135deg, rgba(10, 16, 26, 0.88), rgba(10, 18, 34, 0.58) 44%, rgba(34, 18, 8, 0.34));
   }
 }
 
@@ -155,12 +159,12 @@ body::before {
 @media (prefers-color-scheme: dark) {
   #aurora-canvas {
     opacity: 0.62;
-    filter: blur(36px) saturate(0.8) contrast(0.96);
+    filter: blur(36px) saturate(1.12) contrast(1.02);
   }
 
   #aurora-canvas[data-ai-active='true'] {
     opacity: 0.9;
-    filter: blur(20px) saturate(1.08) contrast(1.05);
+    filter: blur(20px) saturate(1.42) contrast(1.08);
   }
 }
 
@@ -446,6 +450,110 @@ textarea.glass-input {
   min-height: 60px;
   max-height: 120px;
   overflow-y: auto;
+}
+
+/* AI/Agent 输出容器：低透明多色渐变，保持正文可读性 */
+.ai-generated-panel {
+  position: relative;
+  overflow: hidden;
+  border-color: rgba(90, 200, 250, 0.26) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.34), 0 10px 28px rgba(37, 99, 235, 0.08);
+}
+
+.ai-generated-panel.ai-reveal {
+  animation: aiPanelCascadeIn 0.46s cubic-bezier(0.2, 0.85, 0.2, 1) both;
+}
+
+.ai-chat-assistant-bubble {
+  position: relative;
+  overflow: hidden;
+  background: rgba(248, 250, 255, 0.96) !important;
+  color: #1d1d1f !important;
+  border: 1px solid rgba(90, 200, 250, 0.18);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), 0 8px 20px rgba(37, 99, 235, 0.08);
+  animation: aiPanelCascadeIn 0.34s cubic-bezier(0.2, 0.85, 0.2, 1) both;
+}
+
+.ai-chat-assistant-bubble::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(10, 132, 255, 0.09), transparent 42%),
+    radial-gradient(circle at 100% 12%, rgba(255, 105, 180, 0.08), transparent 38%),
+    radial-gradient(circle at 82% 100%, rgba(255, 214, 102, 0.08), transparent 36%);
+}
+
+.ai-chat-assistant-bubble > * {
+  position: relative;
+  z-index: 1;
+}
+
+.ai-generated-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 12% 18%, rgba(10, 132, 255, 0.18), transparent 34%),
+    radial-gradient(circle at 86% 10%, rgba(191, 90, 242, 0.16), transparent 34%),
+    radial-gradient(circle at 24% 92%, rgba(255, 105, 180, 0.13), transparent 30%),
+    radial-gradient(circle at 78% 84%, rgba(255, 214, 102, 0.16), transparent 28%),
+    radial-gradient(circle at 72% 92%, rgba(48, 209, 88, 0.11), transparent 32%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.56), rgba(90, 200, 250, 0.10) 38%, rgba(255, 105, 180, 0.08) 64%, rgba(255, 214, 102, 0.09));
+}
+
+.ai-generated-panel > * {
+  position: relative;
+  z-index: 1;
+}
+
+@media (prefers-color-scheme: dark) {
+  .ai-chat-assistant-bubble {
+    background: rgba(23, 29, 52, 0.96) !important;
+    color: #ffffff !important;
+    border-color: rgba(120, 190, 255, 0.24);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10), 0 10px 24px rgba(10, 132, 255, 0.14);
+  }
+
+  .ai-chat-assistant-bubble::before {
+    background:
+      radial-gradient(circle at 0% 0%, rgba(10, 132, 255, 0.18), transparent 42%),
+      radial-gradient(circle at 100% 12%, rgba(255, 55, 145, 0.14), transparent 38%),
+      radial-gradient(circle at 82% 100%, rgba(255, 204, 64, 0.12), transparent 36%);
+  }
+
+  .ai-generated-panel {
+    --text-primary: #ffffff;
+    --text-secondary: #ffffff;
+    --text-tertiary: rgba(255, 255, 255, 0.82);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 10px 30px rgba(10, 132, 255, 0.10);
+  }
+
+  .ai-generated-panel::before {
+    background:
+      radial-gradient(circle at 12% 18%, rgba(10, 132, 255, 0.30), transparent 34%),
+      radial-gradient(circle at 86% 10%, rgba(191, 90, 242, 0.28), transparent 34%),
+      radial-gradient(circle at 24% 92%, rgba(255, 55, 145, 0.24), transparent 30%),
+      radial-gradient(circle at 78% 84%, rgba(255, 204, 64, 0.22), transparent 28%),
+      radial-gradient(circle at 72% 92%, rgba(48, 209, 88, 0.20), transparent 32%),
+      linear-gradient(135deg, rgba(8, 16, 28, 0.76), rgba(10, 132, 255, 0.18) 34%, rgba(191, 90, 242, 0.16) 60%, rgba(255, 204, 64, 0.10));
+  }
+}
+
+@keyframes aiPanelCascadeIn {
+  0% {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.992);
+    clip-path: inset(0 0 100% 0 round var(--radius-xs));
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    clip-path: inset(0 0 0 0 round var(--radius-xs));
+  }
 }
 
 /* --- 9. 按钮 --- */
@@ -1002,7 +1110,8 @@ nav a, nav button {
 .collapsible-section {
   display: grid;
   grid-template-rows: 0fr;
-  transition: grid-template-rows 0.58s cubic-bezier(0.2, 0.85, 0.2, 1);
+  transition: grid-template-rows 0.58s cubic-bezier(0.2, 0.85, 0.2, 1), opacity 0.3s ease;
+  opacity: 0;
 }
 
 .collapsible-section > div {
@@ -1011,14 +1120,19 @@ nav a, nav button {
 
 .collapsible-section.open {
   grid-template-rows: 1fr;
+  opacity: 1;
 }
 
 .collapsible-inner {
   transform-origin: top center;
+  opacity: 0;
+  transform: translateY(-6px) scale(0.992);
+  transition: opacity 0.32s ease, transform 0.42s cubic-bezier(0.2, 0.85, 0.2, 1);
 }
 
 .collapsible-section.open .collapsible-inner {
-  animation: loginSectionSpringIn 0.56s cubic-bezier(0.2, 0.85, 0.2, 1) both;
+  opacity: 1;
+  transform: translateY(0) scale(1);
 }
 
 /* 原生 details 动画增强 */

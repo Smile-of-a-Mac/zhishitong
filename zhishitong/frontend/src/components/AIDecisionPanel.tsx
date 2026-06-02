@@ -122,6 +122,7 @@ export default function AIDecisionPanel({ recordId, decision, onFillOpinion }: P
 
   return (
     <div
+      className="ai-generated-panel ai-reveal"
       style={{
         marginTop: 12,
         borderRadius: 12,

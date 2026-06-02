@@ -16,10 +16,10 @@ interface BlobNode {
 const BLOBS: BlobNode[] = [
   { x: 0.16, y: 0.12, size: 0.52, colors: ['60, 130, 255', '40, 220, 180'], phase: 0.2, driftX: 0.0031, driftY: 0.0022, focusX: 0.42, focusY: 0.3 },
   { x: 0.84, y: 0.14, size: 0.42, colors: ['40, 220, 180', '150, 80, 255'], phase: 1.4, driftX: 0.0024, driftY: 0.0034, focusX: 0.56, focusY: 0.32 },
-  { x: 0.72, y: 0.78, size: 0.54, colors: ['150, 80, 255', '200, 140, 255'], phase: 2.6, driftX: 0.0035, driftY: 0.0026, focusX: 0.58, focusY: 0.48 },
-  { x: 0.22, y: 0.78, size: 0.46, colors: ['200, 140, 255', '255, 120, 180'], phase: 3.8, driftX: 0.0028, driftY: 0.003, focusX: 0.44, focusY: 0.48 },
-  { x: 0.52, y: 0.04, size: 0.38, colors: ['255, 200, 100', '255, 255, 255'], phase: 5.1, driftX: 0.002, driftY: 0.0027, focusX: 0.5, focusY: 0.24 },
-  { x: 0.5, y: 0.9, size: 0.5, colors: ['200, 140, 255', '60, 130, 255'], phase: 6.0, driftX: 0.0023, driftY: 0.0021, focusX: 0.5, focusY: 0.56 },
+  { x: 0.72, y: 0.78, size: 0.54, colors: ['150, 80, 255', '255, 105, 180'], phase: 2.6, driftX: 0.0035, driftY: 0.0026, focusX: 0.58, focusY: 0.48 },
+  { x: 0.22, y: 0.78, size: 0.46, colors: ['255, 105, 180', '255, 214, 102'], phase: 3.8, driftX: 0.0028, driftY: 0.003, focusX: 0.44, focusY: 0.48 },
+  { x: 0.52, y: 0.04, size: 0.38, colors: ['255, 214, 102', '255, 255, 255'], phase: 5.1, driftX: 0.002, driftY: 0.0027, focusX: 0.5, focusY: 0.24 },
+  { x: 0.5, y: 0.9, size: 0.5, colors: ['255, 105, 180', '60, 130, 255'], phase: 6.0, driftX: 0.0023, driftY: 0.0021, focusX: 0.5, focusY: 0.56 },
 ]
 
 function mix(a: number, b: number, t: number) {
@@ -140,7 +140,7 @@ function drawFluidField(
     const y = mix(naturalY, blob.focusY, focusStrength) * h
     const breathe = 0.94 + Math.sin(tick * (0.006 + energy * 0.004) + blob.phase + flow * 0.11) * (0.055 + visualEnergy * 0.055)
     const radius = minSide * blob.size * breathe * (1 - visualEnergy * 0.06)
-    const alpha = (isDark ? 0.22 : 0.16) + visualEnergy * (isDark ? 0.23 : 0.18)
+    const alpha = (isDark ? 0.28 : 0.16) + visualEnergy * (isDark ? 0.30 : 0.18)
     const colorShift = (Math.sin(flow * 0.42 + blob.phase) + 1) / 2
     const color = mixColor(blob.colors[0], blob.colors[1], colorShift * visualEnergy)
 

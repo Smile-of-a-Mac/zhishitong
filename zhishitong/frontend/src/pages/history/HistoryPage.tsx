@@ -440,7 +440,7 @@ export default function HistoryPage() {
                 </div>
               )}
               {detail.decision_reason && (
-                <GlassCard size="xs" style={{ marginBottom: 8 }}>
+                <GlassCard className="ai-generated-panel ai-reveal" size="xs" style={{ marginBottom: 8 }}>
                   <strong>分析/决策理由：</strong>
                   <div style={{ marginTop: 4, color: 'var(--text-primary)' }}>{detailDecision.text}</div>
                 </GlassCard>
@@ -452,7 +452,7 @@ export default function HistoryPage() {
                   const sug = JSON.parse(detail.suggestions);
                   if (Array.isArray(sug) && sug.length > 0) {
                     return (
-                      <GlassCard size="xs" style={{ background: 'rgba(255,149,0,0.08)', border: '1px solid rgba(255,149,0,0.2)', marginBottom: 8 }}>
+                      <GlassCard className="ai-generated-panel ai-reveal" size="xs" style={{ background: 'rgba(255,149,0,0.08)', border: '1px solid rgba(255,149,0,0.2)', marginBottom: 8 }}>
                         <div style={{ fontWeight: 600, fontSize: 12, color: 'var(--orange)', marginBottom: 4 }}>智能建议</div>
                         {sug.map((s: string, i: number) => (
                           <div key={i} style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 2 }}>• {s}</div>

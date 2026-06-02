@@ -251,6 +251,7 @@ export default function AIChatPanel() {
                 }}
               >
                 <div
+                  className={msg.role === 'assistant' ? 'ai-chat-assistant-bubble' : undefined}
                   style={{
                     maxWidth: '88%',
                     padding: '8px 12px',

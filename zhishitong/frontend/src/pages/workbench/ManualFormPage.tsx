@@ -227,7 +227,7 @@ export default function ManualFormPage() {
           </div>
 
           {(checkingCompliance || complianceError || compliance) && (
-            <GlassCard size="xs" style={{ marginTop: 12, background: 'rgba(0,122,255,0.05)', border: '1px solid rgba(0,122,255,0.16)' }}>
+            <GlassCard className="ai-generated-panel ai-reveal" size="xs" style={{ marginTop: 12, background: 'rgba(0,122,255,0.05)', border: '1px solid rgba(0,122,255,0.16)' }}>
               {checkingCompliance && !compliance ? (
                 <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>🔍 正在检索政策知识库并生成合规建议...</div>
               ) : complianceError ? (
@@ -266,12 +266,18 @@ export default function ManualFormPage() {
                       <button type="button" onClick={() => setPolicyOpen(o => !o)} className="glass-btn glass-btn-sm" style={{ marginBottom: policyOpen ? 6 : 0 }}>
                         {policyOpen ? '收起引用政策' : `查看引用政策（${compliance.policy_hits.length} 条）`}
                       </button>
-                      {policyOpen && compliance.policy_hits.map((h, i) => (
-                        <div key={i} style={{ fontSize: 11, padding: '6px 8px', borderRadius: 8, background: 'rgba(0,122,255,0.06)', border: '1px solid rgba(0,122,255,0.1)', marginTop: 4 }}>
-                          <div style={{ fontWeight: 700, color: 'var(--accent)', marginBottom: 2 }}>{h.doc_title}</div>
-                          <div style={{ color: 'var(--text-secondary)', lineHeight: 1.45 }}>{h.text}</div>
+                      <div className={`collapsible-section${policyOpen ? ' open' : ''}`}>
+                        <div>
+                          <div className="collapsible-inner" style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 6 }}>
+                            {compliance.policy_hits.map((h, i) => (
+                              <div key={i} style={{ fontSize: 11, padding: '6px 8px', borderRadius: 8, background: 'rgba(0,122,255,0.06)', border: '1px solid rgba(0,122,255,0.1)' }}>
+                                <div style={{ fontWeight: 700, color: 'var(--accent)', marginBottom: 2 }}>{h.doc_title}</div>
+                                <div style={{ color: 'var(--text-secondary)', lineHeight: 1.45 }}>{h.text}</div>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                      ))}
+                      </div>
                     </div>
                   )}
                 </div>

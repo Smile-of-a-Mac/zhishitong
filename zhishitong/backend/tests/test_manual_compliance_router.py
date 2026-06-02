@@ -4,10 +4,104 @@ from unittest.mock import AsyncMock, patch
 
 from fastapi import HTTPException
 
-from routers.rag_router import ManualComplianceRequest, manual_compliance
+from routers.rag_router import IntentRequest, ManualComplianceRequest, manual_compliance, parse_intent
+from services.rag_service import parse_intent as svc_parse_intent
 
 
 class ManualComplianceRouterTest(unittest.IsolatedAsyncioTestCase):
+    async def test_intent_passes_current_user_as_account_context(self):
+        user = SimpleNamespace(
+            id=7,
+            username="sdu_student_a",
+            real_name="王小明",
+            student_id="20240001",
+            department="计算机学院",
+            school="山东科技大学",
+            major="软件工程",
+            class_name="软工2401",
+            phone="13800000000",
+            advisor="李老师",
+        )
+        db = object()
+        expected = {
+            "document_type": "leave",
+            "doc_label": "请假申请",
+            "confidence": 0.9,
+            "prefill_fields": {"applicant": "王小明"},
+        }
+
+        with patch("services.rag_service.parse_intent", AsyncMock(return_value=expected)) as mocked:
+            result = await parse_intent(IntentRequest(text="我明天请一天病假"), current_user=user, db=db)
+
+        self.assertEqual(result, expected)
+        mocked.assert_awaited_once_with("我明天请一天病假", db, current_user=user)
+
+    async def test_intent_prefill_uses_only_target_template_fields(self):
+        user = SimpleNamespace(
+            username="sdu_student_a",
+            real_name="王小明",
+            student_id="20240001",
+            department="计算机学院",
+            school="山东科技大学",
+            major="软件工程",
+            class_name="软工2401",
+            phone="13800000000",
+            email="student@example.com",
+            advisor="李老师",
+        )
+        raw = '{"document_type":"leave","confidence":0.9,"prefill_fields":{"reason":"病假"}}'
+
+        with patch("services.rag_service._call_llm", AsyncMock(return_value=raw)):
+            result = await svc_parse_intent("我要请病假", current_user=user)
+
+        fields = result["prefill_fields"]
+        self.assertEqual(fields["applicant"], "王小明")
+        self.assertEqual(fields["student_id"], "20240001")
+        self.assertEqual(fields["college"], "计算机学院")
+        self.assertEqual(fields["class_name"], "软工2401")
+        self.assertEqual(fields["phone"], "13800000000")
+        self.assertEqual(fields["advisor"], "李老师")
+        self.assertEqual(fields["reason"], "病假")
+        self.assertNotIn("department", fields)
+        self.assertNotIn("school", fields)
+        self.assertNotIn("email", fields)
+
+    async def test_intent_does_not_use_current_account_for_other_applicant(self):
+        user = SimpleNamespace(
+            username="sdu_student_a",
+            real_name="王小明",
+            student_id="20240001",
+            department="计算机学院",
+            class_name="软工2401",
+            phone="13800000000",
+        )
+        raw = '{"document_type":"leave","confidence":0.9,"prefill_fields":{"applicant":"李四","reason":"病假"}}'
+
+        with patch("services.rag_service._call_llm", AsyncMock(return_value=raw)):
+            result = await svc_parse_intent("帮李四填一个明天病假的请假申请", current_user=user)
+
+        fields = result["prefill_fields"]
+        self.assertEqual(fields["applicant"], "李四")
+        self.assertEqual(fields["reason"], "病假")
+        self.assertNotIn("student_id", fields)
+        self.assertNotIn("phone", fields)
+
+    async def test_intent_prompt_includes_real_template_field_contract(self):
+        captured = {}
+
+        async def fake_llm(prompt, *args, **kwargs):
+            captured["prompt"] = prompt
+            return '{"document_type":"leave","confidence":0.8,"prefill_fields":{}}'
+
+        with patch("services.rag_service._call_llm", fake_llm):
+            await svc_parse_intent("我要请假")
+
+        prompt = captured["prompt"]
+        self.assertIn('"leave"', prompt)
+        self.assertIn("合法事务类型 key", prompt)
+        self.assertIn("reimbursement", prompt)
+        self.assertIn("prefill_fields", prompt)
+
     async def test_checks_manual_fields_without_creating_approval_record(self):
         user = SimpleNamespace(
             id=7,

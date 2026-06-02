@@ -491,7 +491,7 @@ export default function DeptAdminPage() {
               try {
                 const sug = JSON.parse(selectedRecord.suggestions);
                 if (Array.isArray(sug) && sug.length > 0) return (
-                  <GlassCard size="xs" style={{ background: 'rgba(255,149,0,0.08)', border: '1px solid rgba(255,149,0,0.2)', marginBottom: 12 }}>
+                  <GlassCard className="ai-generated-panel ai-reveal" size="xs" style={{ background: 'rgba(255,149,0,0.08)', border: '1px solid rgba(255,149,0,0.2)', marginBottom: 12 }}>
                     <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--orange)', marginBottom: 4 }}>💡 智能建议</div>
                     {sug.map((s: string, i: number) => <div key={i} style={{ fontSize: 13, color: 'var(--text-secondary)' }}>• {s}</div>)}
                   </GlassCard>

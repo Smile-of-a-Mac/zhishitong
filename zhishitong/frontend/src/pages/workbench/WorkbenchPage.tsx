@@ -13,8 +13,30 @@ interface IntentResult {
   confidence: number
   prefill_fields: Record<string, string>
 }
+interface ComplianceItem {
+  item: string
+  status: 'ok' | 'warning' | 'error'
+  detail: string
+}
+interface ComplianceResult {
+  risk_level: 'low' | 'medium' | 'high'
+  compliance_summary: string
+  compliance_items: ComplianceItem[]
+  suggestions: string[]
+  policy_hits: { doc_title: string; text: string }[]
+}
 
 const TIER_LABEL: Record<string, string> = { free: '免费版', pro: '专业版', pro_plus: '企业版' }
+const RISK_COLOR: Record<ComplianceResult['risk_level'], string> = {
+  low: 'var(--green)',
+  medium: 'var(--orange)',
+  high: 'var(--red)',
+}
+const RISK_LABEL: Record<ComplianceResult['risk_level'], string> = {
+  low: '低风险',
+  medium: '中等风险',
+  high: '高风险',
+}
 
 interface TemplateField {
   key: string; label: string; type: string
@@ -124,6 +146,12 @@ export default function WorkbenchPage() {
   const [nlError, setNlError] = useState('')
   const [showNlForm, setShowNlForm] = useState(false)
   const [ocrTextOpen, setOcrTextOpen] = useState(false)
+  const [nlComplianceLoading, setNlComplianceLoading] = useState(false)
+  const [nlCompliance, setNlCompliance] = useState<ComplianceResult | null>(null)
+  const [nlComplianceError, setNlComplianceError] = useState('')
+  const [nlComplianceSnapshot, setNlComplianceSnapshot] = useState('')
+  const [nlPolicyOpen, setNlPolicyOpen] = useState(false)
+  const isAdminUser = !!(user?.is_admin || user?.is_school_admin || user?.is_dept_admin)
 
   // ── 加载模板 ──
   useEffect(() => {
@@ -297,6 +325,10 @@ export default function WorkbenchPage() {
     setShowNlForm(false)
     setNlResult(null)
     setNlInput('')
+    setNlCompliance(null)
+    setNlComplianceError('')
+    setNlComplianceSnapshot('')
+    setNlPolicyOpen(false)
     setOcrTextOpen(false)
     clearState()
   }
@@ -512,44 +544,73 @@ export default function WorkbenchPage() {
     refreshUser().catch(() => {})
   }
 
+  const normalizeIntentFields = (prefill: Record<string, string>) => {
+    const fields: Record<string, string> = {}
+    for (const [k, v] of Object.entries(prefill || {})) {
+      if (!v) continue
+      const val = String(v)
+      // 字段名映射（兜底：LLM 返回的通用名 → 模板键名）
+      if (k === 'current_dorm') {
+        const m = val.match(/^([A-Za-z]+\d*)[- ](\d{2,4})$/)
+        if (m) { fields.current_building = m[1]; fields.current_room = m[2] }
+        else fields.current_building = val
+      } else if (k === 'target_dorm') {
+        const m = val.match(/^([A-Za-z]+\d*)[- ](\d{2,4})$/)
+        if (m) { fields.preferred_building = m[1]; fields.preferred_room = m[2] }
+        else fields.preferred_building = val
+      } else if (k === 'participant_count') {
+        fields.participants = val
+      } else if (k === 'activity_name') {
+        fields.activity = val
+      } else {
+        fields[k] = val
+      }
+    }
+    return fields
+  }
+
+  const runNlCompliance = async (documentType: string, fields: Record<string, string>) => {
+    if (!documentType || isAdminUser) return
+    setNlComplianceLoading(true)
+    setNlComplianceError('')
+    setNlCompliance(null)
+    setNlPolicyOpen(false)
+    const snapshot = JSON.stringify(fields)
+    try {
+      const res = await axios.post('/api/ai/manual-compliance', {
+        document_type: documentType,
+        fields,
+      })
+      setNlCompliance(res.data)
+      setNlComplianceSnapshot(snapshot)
+    } catch (e: any) {
+      setNlComplianceError(e?.response?.data?.detail || '合规分析失败，请稍后重试')
+    } finally {
+      setNlComplianceLoading(false)
+    }
+  }
+
   // ── NL 意图识别 ──
   const handleNlIntent = async () => {
     if (!nlInput.trim() || nlLoading) return
     setNlLoading(true)
     setNlError('')
+    setNlCompliance(null)
+    setNlComplianceError('')
+    setNlComplianceSnapshot('')
     try {
       const res = await axios.post('/api/ai/intent', { text: nlInput.trim() })
       const data: IntentResult = res.data
       setNlResult(data)
       if (data.document_type) {
         setFormType(data.document_type)
+        let fields: Record<string, string> = {}
         if (data.prefill_fields && Object.keys(data.prefill_fields).length > 0) {
-          const fields: Record<string, string> = {}
-          for (const [k, v] of Object.entries(data.prefill_fields)) {
-            if (!v) continue
-            const val = String(v)
-            // 字段名映射（兜底：LLM 返回的通用名 → 模板键名）
-            // 宿舍号拆分：B6-605 → building B6, room 605
-            if (k === 'current_dorm') {
-              const m = val.match(/^([A-Za-z]+\d*)[- ](\d{2,4})$/)
-              if (m) { fields.current_building = m[1]; fields.current_room = m[2] }
-              else fields.current_building = val
-            } else if (k === 'target_dorm') {
-              const m = val.match(/^([A-Za-z]+\d*)[- ](\d{2,4})$/)
-              if (m) { fields.preferred_building = m[1]; fields.preferred_room = m[2] }
-              else fields.preferred_building = val
-            } else if (k === 'participant_count') {
-              fields.participants = val
-            } else if (k === 'activity_name') {
-              fields.activity = val
-            } else {
-              // 直接透传（与模板 key 一致或模板本就有该 key）
-              fields[k] = val
-            }
-          }
+          fields = normalizeIntentFields(data.prefill_fields)
           setFormFields(fields)
         }
         setShowNlForm(true)
+        runNlCompliance(data.document_type, fields)
       }
     } catch {
       setNlError('识别失败，请重试或手动选择申请类型')
@@ -608,8 +669,6 @@ export default function WorkbenchPage() {
     }
   }
 
-  const isAdminUser = !!(user?.is_admin || user?.is_school_admin || user?.is_dept_admin)
-
   // 已识别到的有效字段（至少一个非空值）
   const hasFilledFields = !!(
     ocrResult?.filled_json &&
@@ -620,6 +679,7 @@ export default function WorkbenchPage() {
 
   // 当前选中的模板
   const selectedTemplate = templates.find(t => t.key === (ocrResult?.document_type || formType))
+  const nlComplianceStale = !!(nlCompliance && JSON.stringify(formFields) !== nlComplianceSnapshot)
 
   // 表单区可见：OCR 成功 OR NL 识别成功且有选模板
   const showForm = phase === 'success' || (showNlForm && !!formType)
@@ -676,6 +736,61 @@ export default function WorkbenchPage() {
               <span style={{ marginLeft: 'auto', opacity: 0.7 }}>
                 置信度 {Math.round(nlResult.confidence * 100)}%
               </span>
+            </div>
+          )}
+          {(nlComplianceLoading || nlCompliance || nlComplianceError) && (
+            <div className="ai-generated-panel ai-reveal" style={{
+              marginTop: 8, padding: '8px 10px', borderRadius: 10,
+              background: 'rgba(0,122,255,0.05)', border: '1px solid rgba(0,122,255,0.16)',
+              fontSize: 12,
+            }}>
+              {nlComplianceLoading && !nlCompliance ? (
+                <div style={{ color: 'var(--text-secondary)' }}>🔍 表格已预填，正在独立生成合规分析...</div>
+              ) : nlComplianceError ? (
+                <div style={{ color: 'var(--red)' }}>❌ {nlComplianceError}</div>
+              ) : nlCompliance && (
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                    <span style={{ fontWeight: 700, color: RISK_COLOR[nlCompliance.risk_level] }}>
+                      📋 合规分析：{RISK_LABEL[nlCompliance.risk_level]}
+                    </span>
+                    {nlComplianceStale && <span style={{ color: 'var(--orange)', fontSize: 11 }}>表单已修改，请重新分析</span>}
+                  </div>
+                  <div style={{ color: 'var(--text-secondary)', marginBottom: 6 }}>{nlCompliance.compliance_summary}</div>
+                  {nlCompliance.compliance_items?.slice(0, 3).map((item, i) => (
+                    <div key={i} style={{ color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                      {item.status === 'ok' ? '✅' : item.status === 'warning' ? '⚠️' : '❌'} {item.item}：{item.detail}
+                    </div>
+                  ))}
+                  {nlCompliance.suggestions?.length > 0 && (
+                    <div style={{ marginTop: 6 }}>
+                      <div style={{ fontWeight: 700, color: 'var(--orange)', marginBottom: 2 }}>💡 建议</div>
+                      {nlCompliance.suggestions.slice(0, 3).map((s, i) => (
+                        <div key={i} style={{ color: 'var(--text-secondary)', lineHeight: 1.5 }}>• {s}</div>
+                      ))}
+                    </div>
+                  )}
+                  {nlCompliance.policy_hits?.length > 0 && (
+                    <div style={{ marginTop: 6 }}>
+                      <button type="button" onClick={() => setNlPolicyOpen(o => !o)} className="glass-btn glass-btn-sm">
+                        {nlPolicyOpen ? '收起引用政策' : `查看引用政策（${nlCompliance.policy_hits.length} 条）`}
+                      </button>
+                      <div className={`collapsible-section${nlPolicyOpen ? ' open' : ''}`}>
+                        <div>
+                          <div className="collapsible-inner" style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            {nlCompliance.policy_hits.map((h, i) => (
+                              <div key={i} style={{ padding: '6px 8px', borderRadius: 8, background: 'rgba(0,122,255,0.06)', border: '1px solid rgba(0,122,255,0.1)' }}>
+                                <div style={{ color: 'var(--accent)', fontWeight: 700 }}>{h.doc_title}</div>
+                                <div style={{ color: 'var(--text-secondary)', lineHeight: 1.45 }}>{h.text}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
           {nlError && (
@@ -1050,7 +1165,7 @@ export default function WorkbenchPage() {
                       try {
                         const sug = JSON.parse(submitResult.suggestions)
                         if (Array.isArray(sug) && sug.length > 0) return (
-                          <div className="glass-card glass-card-xs" style={{ background: 'rgba(255,149,0,0.1)', border: 'none', marginBottom: 8 }}>
+                            <div className="glass-card glass-card-xs ai-generated-panel ai-reveal" style={{ background: 'rgba(255,149,0,0.1)', border: 'none', marginBottom: 8 }}>
                             <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--orange)', marginBottom: 4 }}>💡 系统建议</div>
                             {sug.map((s: string, i: number) => <div key={i} style={{ fontSize: 13, color: 'var(--text-secondary)' }}>• {s}</div>)}
                           </div>
