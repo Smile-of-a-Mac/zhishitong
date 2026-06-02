@@ -1,6 +1,6 @@
 # 智审通 — 运维与故障排查手册
 
-> 适用版本: v0.6.1+  
+> 适用版本: v0.6.2+
 > 目标读者: 系统管理员、运维工程师、技术支持人员
 
 ---
@@ -344,7 +344,83 @@ htop        # 更友好的界面（需安装）
 
 ---
 
-## 8. 备份与恢复
+## 8. OCR 速度排查
+
+v0.6.2 起，图片型 OCR 会在后端自动进行 EXIF 方向修正、最大边 1800px 缩放和 JPEG 85 压缩；扫描件 PDF 转为首页图片后同样压缩。
+
+**如果 OCR 仍然很慢：**
+
+| 场景 | 排查方向 |
+|------|----------|
+| 首次免费 OCR 慢 | EasyOCR 首次加载模型，首次请求会慢；后续应明显变快 |
+| 免费 OCR 始终慢 | 检查图片是否包含大量小字/复杂表格；EasyOCR CPU 识别本身耗时较高 |
+| Pro OCR 慢 | 检查多模态 API 网络延迟、模型响应速度和 Key 池是否频繁失败降级 |
+| Pro 失败后特别慢 | 多模态失败会降级为 EasyOCR + JSON 填充，属于双流程耗时 |
+| 重复上传仍慢 | 检查 Redis 是否可用，OCR 缓存不可用会导致重复识别 |
+
+**设计说明：** 多模态 OCR 暂未降低 `max_tokens`。部分模型会把最终 JSON 放在 `reasoning_content`，直接压低 token 可能截断 JSON，造成字段丢失。
+
+---
+
+## 9. 安装脚本排查
+
+v0.6.2 起提供跨平台安装脚本：macOS/Linux 使用 `bash setup/setup.sh`，Windows 使用 `.\setup\setup.ps1`。脚本会先检查本机依赖和硬件条件，最后输出哪些已安装、哪些跳过、跳过原因。
+
+### 9.1 模型没有下载
+
+| 可能原因 | 排查方式 | 处理 |
+|----------|----------|------|
+| RAM 不足 | `python setup/_download_model.py --check` | 低于 4GB 时使用外部 LLM API，或升级硬件 |
+| 磁盘不足 | 查看安装报告中的空闲磁盘 | 保留至少 8GB 可用空间 |
+| HuggingFace 不可达 | `python setup/_download_model.py --check` | 检查网络、代理或稍后重试 |
+| HuggingFace 需要认证 | 下载时报 401/403 | 设置 `HF_TOKEN` 或 `HUGGINGFACE_TOKEN` 后重试 |
+| 已存在模型 | 检查 `models/qwen3-4b.gguf` | 脚本会跳过已有模型，这是正常行为 |
+
+### 9.2 下载进度条不显示或卡住
+
+模型下载脚本使用 `requests` + `tqdm` 显示进度条。正常输出包含百分比、已下载大小、总大小和速度。
+
+```bash
+Qwen3-4B GGUF (q4_k_m):  45%|████████        | 1.1G/2.5G  [52MB/s]
+```
+
+如果进度条停在 0%，优先检查网络代理和 HuggingFace 认证；如果总大小显示为未知，通常是服务端没有返回 `content-length`，只要已下载大小持续增长即可继续等待。
+
+### 9.3 Windows VRAM 检测异常
+
+Windows 脚本通过 `nvidia-smi` 检测 NVIDIA 显存。若未安装 NVIDIA 驱动、驱动未加入 PATH、或使用非 NVIDIA GPU，脚本会按 CPU 路径评估。
+
+```powershell
+nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
+```
+
+如果这条命令无法运行，先安装或更新 NVIDIA 驱动；不需要 GPU 训练时可忽略，CPU 推理仍可按 RAM 门槛运行。
+
+### 9.4 训练依赖被跳过
+
+这是预期行为。脚本只在满足 LoRA 训练条件时安装 `torch/transformers/peft`：GPU 训练需要 RAM ≥ 8GB 且 VRAM ≥ 6GB；纯 CPU 训练需要 RAM ≥ 12GB。不满足时不会影响后端、前端或 OCR 基础功能。
+
+### 9.5 后端依赖安装失败
+
+优先确认虚拟环境 Python 版本和 pip 可用：
+
+```bash
+.venv/bin/python --version
+.venv/bin/python -m pip --version
+```
+
+Windows：
+
+```powershell
+.venv\Scripts\python.exe --version
+.venv\Scripts\python.exe -m pip --version
+```
+
+如果使用 Python 3.13 遇到部分第三方包 wheel 不可用，建议改用 Python 3.11 或 3.12 后重新创建 `.venv`。
+
+---
+
+## 10. 备份与恢复
 
 ```bash
 # 备份数据库和上传文件
@@ -362,4 +438,4 @@ cp -r uploads/ ./
 tar -czf lora_backup.tar.gz lora_output/ lora_output_merged/ models/qwen3-4b-lora.gguf
 ```
 
-*文档版本: 2.2 | 最后更新: 2026-06-02*
+*文档版本: 2.4 | 最后更新: 2026-06-02*

@@ -10,7 +10,7 @@ import base64, io, json, logging, re
 from enum import Enum
 from typing import Optional
 import httpx
-from PIL import Image
+from PIL import Image, ImageOps
 from config import LLAMA_SERVER_URL, EASYOCR_LANGS, EASYOCR_GPU
 from services.template_service import detect_document_type
 
@@ -25,6 +25,25 @@ class OCRProvider(str, Enum):
 
 # ========== EasyOCR（懒加载，ARM/x86 通用） ==========
 _easy_reader = None
+
+
+def _optimize_image_for_ocr(image_bytes: bytes, max_side: int = 1800, quality: int = 85) -> tuple[bytes, str]:
+    """Downscale and JPEG-compress image input before OCR to reduce CPU/API latency."""
+    img = Image.open(io.BytesIO(image_bytes))
+    img = ImageOps.exif_transpose(img)
+    if max(img.size) > max_side:
+        img.thumbnail((max_side, max_side), Image.Resampling.LANCZOS)
+
+    if img.mode in ("RGBA", "LA"):
+        bg = Image.new("RGB", img.size, "white")
+        bg.paste(img, mask=img.getchannel("A"))
+        img = bg
+    elif img.mode != "RGB":
+        img = img.convert("RGB")
+
+    out = io.BytesIO()
+    img.save(out, format="JPEG", quality=quality, optimize=True)
+    return out.getvalue(), "image/jpeg"
 
 def _get_easyocr():
     global _easy_reader
@@ -655,12 +674,13 @@ def _is_masked_output(text: str, filled: dict | None = None) -> bool:
 async def llm_multimodal_ocr(
     image_bytes: bytes, api_base: str, api_key: str, model: str,
     document_type: Optional[str] = None,
+    image_mime: str = "image/jpeg",
 ) -> tuple[str, dict]:
     """多模态大模型：一步完成文字提取 + 结构化字段提取。
     返回 (raw_text, filled_dict)。"""
     from services.template_service import get_template
     b64 = base64.b64encode(image_bytes).decode("utf-8")
-    data_uri = f"data:image/png;base64,{b64}"
+    data_uri = f"data:{image_mime};base64,{b64}"
 
     tpl = get_template(document_type) if document_type else None
     fields_desc = ""
@@ -861,11 +881,19 @@ async def ocr_with_tier(
         logger.info("PDF 为扫描件，提取首页图片进行 OCR")
         try:
             image_bytes = pdf_page_to_image(image_bytes, page_index=0)
+            mime_type = "image/png"
         except Exception as e:
             logger.error(f"PDF 转图片失败: {e}")
             raise ValueError("无法处理此 PDF：文本层为空且转图片失败") from e
 
         # 扫描件继续走下面的图片 OCR 逻辑（不 return）
+
+    image_mime = mime_type if mime_type.startswith("image/") else "image/jpeg"
+    if mime_type.startswith("image/"):
+        try:
+            image_bytes, image_mime = _optimize_image_for_ocr(image_bytes)
+        except Exception as e:
+            logger.warning(f"图片预处理失败，使用原图继续 OCR: {e}")
 
     if tier == "free":
         raw = local_easyocr(image_bytes)
@@ -891,7 +919,7 @@ async def ocr_with_tier(
             # 直接交给多模态 LLM，无需 EasyOCR 预扫（多模态模型自己能识别文档类型）
             try:
                 raw, filled = await llm_multimodal_ocr(
-                    image_bytes, api_base, api_key, model, document_type=None,
+                    image_bytes, api_base, api_key, model, document_type=None, image_mime=image_mime,
                 )
                 doc_type = detect_document_type(raw)
                 if not doc_type:

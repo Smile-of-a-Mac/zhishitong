@@ -190,8 +190,8 @@ sito/
 ### 🧠 AI 能力
 | 模块 | 功能 |
 |------|------|
-| 📷 **智能 OCR** | 多模态 LLM 一步到位（Pro）→ 字段名映射归一化 + 正则兜底提取 → EasyOCR 降级 + PDF 文本直接提取（pypdf） + 扫描件自动转图片（pymupdf） |
-| 📚 **RAG 政策检索** | TF-IDF 向量检索 + LLM 生成，6 个 AI 端点 |
+| 📷 **智能 OCR** | 多模态 LLM 一步到位（Pro）→ 图片自动缩放压缩 → 字段名映射归一化 + 正则兜底提取 → EasyOCR 降级 + PDF 文本直接提取（pypdf） + 扫描件自动转图片（pymupdf） |
+| 📚 **RAG 政策检索** | TF-IDF 向量检索 + LLM 生成，7 个 AI 端点，支持手动填表提交前合规自查 |
 | 🎯 **意图识别** | 自然语言描述 → 自动推荐文档类型 + 预填字段 |
 | ⚖️ **合规性分析** | 自动检索相关政策条文，逐条核对申请合规性 |
 | 🔍 **相似案例** | 检索历史审批记录，辅助审批人决策 |
@@ -233,7 +233,7 @@ sito/
 |----|------|
 | **前端** | React 18 + TypeScript + Vite + 玻璃拟态设计系统（Ant Design 5 目前用于 ConfigProvider/主题基础能力） |
 | **后端** | FastAPI + SQLAlchemy + SQLite + LangGraph + Redis |
-| **AI/OCR** | EasyOCR + 多模态 LLM API（MiMo/DeepSeek/Qwen-VL）+ llama.cpp 本地推理 + 字段名映射归一化 + 正则兜底提取 + pypdf 文本提取 + pymupdf 扫描件转图片 |
+| **AI/OCR** | EasyOCR + 多模态 LLM API（MiMo/DeepSeek/Qwen-VL）+ OCR 图片预处理（EXIF 修正、最大边 1800px、JPEG 85）+ llama.cpp 本地推理 + 字段名映射归一化 + 正则兜底提取 + pypdf 文本提取 + pymupdf 扫描件转图片 |
 | **RAG** | TF-IDF (scikit-learn) + 自定义 JSON 知识库（policy_kb.json） |
 | **LoRA** | PEFT + Transformers + PyTorch（Apple MPS / CUDA / CPU） |
 | **缓存/限流** | Redis（OCR 缓存、Key 池原子计数、速率限制） |
@@ -248,6 +248,26 @@ sito/
 
 - Python 3.11+, Node.js 18+
 - 虚拟环境：`python -m venv .venv`
+
+### 一键安装环境（v0.6.2 新增）
+
+安装脚本会先检查本机已有环境，已安装的依赖会跳过，不满足本地推理或 LoRA 训练条件时不会强行下载模型或训练依赖。
+
+```bash
+# macOS / Linux
+bash setup/setup.sh
+```
+
+```powershell
+# Windows PowerShell 5.1+ / PowerShell 7+
+.\setup\setup.ps1
+```
+
+脚本会执行：Python/Node/Git 预检 → RAM/磁盘/GPU/VRAM/网络检测 → 创建 `.venv` → 按需安装后端、推理、训练和前端依赖 → 按条件下载 `models/qwen3-4b.gguf` → 初始化数据库 → 输出安装报告。
+
+模型下载由 `setup/_download_model.py` 负责，下载 Qwen3-4B GGUF 时会显示百分比、下载速度、已下载大小和总大小的进度条。若 HuggingFace 仓库需要认证，请先设置 `HF_TOKEN` 或 `HUGGINGFACE_TOKEN`。
+
+硬件门槛：本地推理至少 4GB RAM；模型下载还需要 8GB 可用磁盘和 HuggingFace 网络连通；GPU LoRA 训练建议 8GB RAM + 6GB VRAM；纯 CPU LoRA 训练建议 12GB RAM。Windows 会通过 `nvidia-smi` 检测 NVIDIA VRAM，Apple Silicon 使用统一内存估算。
 
 ### 一键启动
 
@@ -355,6 +375,18 @@ python train_lora.py      # 训练 + 自动合并 GGUF（一步到位）
 - 🔧 [运维排查手册](docs/TROUBLESHOOTING.md) — 系统架构、常见问题排查、日志格式参考
 
 ---
+
+## 最近更新 (v0.6.2)
+
+- 🧰 **跨平台安装脚本**：新增 `setup/setup.sh`、`setup/setup.ps1`、`setup/_download_model.py`，支持 macOS/Linux/Windows 预检、按需安装和安装报告
+- 📊 **硬件能力检测**：安装前检查 RAM、磁盘、GPU/VRAM、网络；不满足本地推理或训练条件时跳过模型/训练依赖并说明原因
+- ⬇️ **模型下载进度条**：Qwen3-4B GGUF 下载显示百分比、速度和大小，支持 `HF_TOKEN`/`HUGGINGFACE_TOKEN` 认证
+- ⚖️ **学生端提交前合规自查**：手动填表页新增蓝色「提交前合规自查」按钮，调用 RAG 政策检索生成风险等级、逐项检查、建议和引用政策
+- 🧠 **合规自查不触发审批**：新增 `/api/ai/manual-compliance`，只分析草稿字段，不创建审批记录、不运行智能审批流程
+- ⚡ **OCR 图片预处理加速**：图片 OCR 前统一做 EXIF 方向修正、最大边缩放至 1800px、JPEG 85 压缩；扫描件 PDF 转图片后同样压缩
+- 🖼️ **多模态上传体积优化**：多模态 OCR 的 data URI 从固定 `image/png` 改为使用压缩后的 `image/jpeg`，降低外部 LLM 请求体积
+- 🛡️ **保留 OCR 输出完整性**：暂不下调多模态 `max_tokens`，避免模型把 JSON 放在 `reasoning_content` 时被截断；后续可做「低 token 首试 + 解析失败高 token 重试」
+- 🧪 **测试覆盖**：新增手动合规接口测试和 OCR 图片预处理测试，后端测试扩展至 12 个
 
 ## 最近更新 (v0.6.1 & v0.6.0)
 

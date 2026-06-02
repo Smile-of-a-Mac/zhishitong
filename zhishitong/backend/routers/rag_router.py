@@ -3,6 +3,7 @@ AI 增强功能路由
 
 端点：
   POST /api/ai/intent         — 自然语言意图识别
+  POST /api/ai/manual-compliance — 手动填表草稿合规建议
   POST /api/ai/compliance/{id} — 合规性 RAG 分析
   POST /api/ai/similar/{id}   — 相似历史案例检索
   POST /api/ai/opinion        — 审批意见草稿生成
@@ -44,6 +45,10 @@ class ChatRequest(BaseModel):
 class NlSearchRequest(BaseModel):
     query: str
 
+class ManualComplianceRequest(BaseModel):
+    document_type: str
+    fields: dict
+
 
 # ============================================================
 #  1. 自然语言意图识别
@@ -64,7 +69,37 @@ async def parse_intent(body: IntentRequest, current_user: User = Depends(get_cur
 
 
 # ============================================================
-#  2. 合规性 RAG 分析
+#  2. 手动填表草稿合规建议
+# ============================================================
+
+@router.post("/manual-compliance")
+async def manual_compliance(
+    body: ManualComplianceRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """对学生端手动填写的草稿做 RAG 合规建议，不创建审批记录、不触发审批流。"""
+    if current_user.is_admin or current_user.is_school_admin or current_user.is_dept_admin or current_user.is_finance_admin:
+        raise HTTPException(status_code=403, detail="管理员账号不能提交事务合规自查")
+
+    if not body.document_type or not body.document_type.strip():
+        raise HTTPException(status_code=400, detail="document_type 不能为空")
+    if not isinstance(body.fields, dict):
+        raise HTTPException(status_code=400, detail="fields 必须是对象")
+
+    from services.ocr_service import _normalize_json_keys
+    from services.rag_service import check_compliance as svc_compliance
+
+    try:
+        fields = _normalize_json_keys(dict(body.fields))
+        return await svc_compliance(fields, body.document_type.strip(), db)
+    except Exception as e:
+        logger.error(f"手动填表合规建议失败 doc_type={body.document_type}: {e}")
+        raise HTTPException(status_code=500, detail="合规建议服务暂时不可用")
+
+
+# ============================================================
+#  3. 合规性 RAG 分析
 # ============================================================
 
 @router.post("/compliance/{record_id}")

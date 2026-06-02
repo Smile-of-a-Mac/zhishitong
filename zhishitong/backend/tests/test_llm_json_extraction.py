@@ -1,6 +1,9 @@
 import unittest
+import io
 
-from services.ocr_service import _extract_json_dict_from_text, _postprocess_leave_fields
+from PIL import Image
+
+from services.ocr_service import _extract_json_dict_from_text, _optimize_image_for_ocr, _postprocess_leave_fields
 
 
 class LlmJsonExtractionTest(unittest.TestCase):
@@ -30,6 +33,17 @@ class LlmJsonExtractionTest(unittest.TestCase):
     def test_leave_type_keeps_public_leave(self):
         fixed = _postprocess_leave_fields({'leave_type': '公假'}, '请假申请')
         self.assertEqual(fixed.get('leave_type'), '公假')
+
+    def test_optimizes_large_image_for_ocr(self):
+        image = Image.new('RGB', (4000, 2400), 'white')
+        buf = io.BytesIO()
+        image.save(buf, format='PNG')
+
+        optimized, mime = _optimize_image_for_ocr(buf.getvalue(), max_side=1600)
+
+        self.assertEqual(mime, 'image/jpeg')
+        out = Image.open(io.BytesIO(optimized))
+        self.assertLessEqual(max(out.size), 1600)
 
 
 if __name__ == '__main__':

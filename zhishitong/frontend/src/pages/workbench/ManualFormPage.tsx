@@ -13,6 +13,34 @@ interface TemplateField {
 interface Template {
   key: string; label: string; icon: string; fields: TemplateField[]
 }
+interface ComplianceItem {
+  item: string
+  status: 'ok' | 'warning' | 'error'
+  detail: string
+}
+interface ComplianceResult {
+  risk_level: 'low' | 'medium' | 'high'
+  compliance_summary: string
+  compliance_items: ComplianceItem[]
+  suggestions: string[]
+  policy_hits: { doc_title: string; text: string }[]
+}
+
+const RISK_COLOR: Record<ComplianceResult['risk_level'], string> = {
+  low: 'var(--green)',
+  medium: 'var(--orange)',
+  high: 'var(--red)',
+}
+const RISK_LABEL: Record<ComplianceResult['risk_level'], string> = {
+  low: '低风险',
+  medium: '中等风险',
+  high: '高风险',
+}
+const STATUS_ICON: Record<ComplianceItem['status'], string> = {
+  ok: '✅',
+  warning: '⚠️',
+  error: '❌',
+}
 
 export default function ManualFormPage() {
   const { docType } = useParams<{ docType: string }>()
@@ -23,6 +51,11 @@ export default function ManualFormPage() {
     user?.id, `manual_${docType}`, {}
   )
   const [submitting, setSubmitting] = useState(false)
+  const [checkingCompliance, setCheckingCompliance] = useState(false)
+  const [compliance, setCompliance] = useState<ComplianceResult | null>(null)
+  const [complianceError, setComplianceError] = useState('')
+  const [complianceSnapshot, setComplianceSnapshot] = useState('')
+  const [policyOpen, setPolicyOpen] = useState(false)
   const [result, setResult] = useState<any>(null)
 
   useEffect(() => {
@@ -46,6 +79,32 @@ export default function ManualFormPage() {
     return null
   })()
 
+  const buildSubmitData = () => {
+    const submitData = { ...formFields }
+    if (computedDays !== null) submitData['days'] = String(computedDays)
+    return submitData
+  }
+
+  const handleComplianceCheck = async () => {
+    if (!docType || !tpl) { alert('无效的事务类型'); return }
+    const submitData = buildSubmitData()
+    setCheckingCompliance(true)
+    setComplianceError('')
+    setPolicyOpen(false)
+    try {
+      const res = await axios.post('/api/ai/manual-compliance', {
+        document_type: docType,
+        fields: submitData,
+      })
+      setCompliance(res.data)
+      setComplianceSnapshot(JSON.stringify(submitData))
+    } catch (e: any) {
+      setComplianceError(e?.response?.data?.detail || '合规自查失败，请稍后重试')
+    } finally {
+      setCheckingCompliance(false)
+    }
+  }
+
   const handleSubmit = async () => {
     if (!docType || !tpl) { alert('无效的事务类型'); return }
     const missing = tpl.fields.filter(f => f.required && !formFields[f.key])
@@ -55,8 +114,7 @@ export default function ManualFormPage() {
     }
     setSubmitting(true); setResult(null)
     try {
-      const submitData = { ...formFields }
-      if (computedDays !== null) submitData['days'] = String(computedDays)
+      const submitData = buildSubmitData()
       const res = await axios.post('/api/approvals/manual', {
         document_type: docType,
         fields: submitData,
@@ -70,6 +128,7 @@ export default function ManualFormPage() {
 
   const icon = getDocIcon(docType)
   const title = getDocLabel(docType)
+  const complianceStale = compliance && JSON.stringify(buildSubmitData()) !== complianceSnapshot
 
   if (!docType || !VALID_DOC_TYPES.includes(docType)) {
     return <GlassCard style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>未知的事务类型</GlassCard>
@@ -90,7 +149,7 @@ export default function ManualFormPage() {
   return (
     <div>
       <h1 className="page-title" style={{ marginBottom: 4 }}>{icon} {title}</h1>
-      <p className="page-subtitle">手动填写信息后提交审批</p>
+      <p className="page-subtitle">手动填写信息后可先合规自查，确认无误再提交审批</p>
 
       {!tpl ? <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-secondary)' }}>加载中...</div> : (
         <GlassCard strong>
@@ -152,9 +211,73 @@ export default function ManualFormPage() {
             )
           })()}
 
-          <button onClick={handleSubmit} disabled={submitting} className="glass-btn glass-btn-success glass-btn-lg" style={{ width: '100%' }}>
-            {submitting ? '提交中…' : '提交申报'}
-          </button>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10, marginTop: 8 }}>
+            <button
+              type="button"
+              onClick={handleComplianceCheck}
+              disabled={checkingCompliance || submitting}
+              className="glass-btn glass-btn-lg"
+              style={{ width: '100%' }}
+            >
+              {checkingCompliance ? '自查中…' : '提交前合规自查'}
+            </button>
+            <button onClick={handleSubmit} disabled={submitting || checkingCompliance} className="glass-btn glass-btn-success glass-btn-lg" style={{ width: '100%' }}>
+              {submitting ? '提交中…' : '提交申报'}
+            </button>
+          </div>
+
+          {(checkingCompliance || complianceError || compliance) && (
+            <GlassCard size="xs" style={{ marginTop: 12, background: 'rgba(0,122,255,0.05)', border: '1px solid rgba(0,122,255,0.16)' }}>
+              {checkingCompliance && !compliance ? (
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>🔍 正在检索政策知识库并生成合规建议...</div>
+              ) : complianceError ? (
+                <div style={{ color: 'var(--red)' }}>❌ {complianceError}</div>
+              ) : compliance && (
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <span style={{ fontWeight: 700, color: RISK_COLOR[compliance.risk_level] }}>📋 合规自查：{RISK_LABEL[compliance.risk_level]}</span>
+                    {complianceStale && <span style={{ fontSize: 11, color: 'var(--orange)' }}>表单已修改，请重新自查</span>}
+                  </div>
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 8 }}>{compliance.compliance_summary}</div>
+
+                  {compliance.compliance_items?.length > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
+                      {compliance.compliance_items.map((item, i) => (
+                        <div key={i} style={{ display: 'flex', gap: 8, fontSize: 12, padding: '6px 8px', borderRadius: 10, background: item.status === 'error' ? 'rgba(255,59,48,0.08)' : item.status === 'warning' ? 'rgba(255,149,0,0.08)' : 'rgba(52,199,89,0.07)' }}>
+                          <span>{STATUS_ICON[item.status]}</span>
+                          <span style={{ fontWeight: 600 }}>{item.item}：</span>
+                          <span style={{ color: 'var(--text-secondary)' }}>{item.detail}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {compliance.suggestions?.length > 0 && (
+                    <div style={{ marginBottom: 10 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--orange)', marginBottom: 4 }}>💡 合规建议</div>
+                      {compliance.suggestions.map((s, i) => (
+                        <div key={i} style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>• {s}</div>
+                      ))}
+                    </div>
+                  )}
+
+                  {compliance.policy_hits?.length > 0 && (
+                    <div>
+                      <button type="button" onClick={() => setPolicyOpen(o => !o)} className="glass-btn glass-btn-sm" style={{ marginBottom: policyOpen ? 6 : 0 }}>
+                        {policyOpen ? '收起引用政策' : `查看引用政策（${compliance.policy_hits.length} 条）`}
+                      </button>
+                      {policyOpen && compliance.policy_hits.map((h, i) => (
+                        <div key={i} style={{ fontSize: 11, padding: '6px 8px', borderRadius: 8, background: 'rgba(0,122,255,0.06)', border: '1px solid rgba(0,122,255,0.1)', marginTop: 4 }}>
+                          <div style={{ fontWeight: 700, color: 'var(--accent)', marginBottom: 2 }}>{h.doc_title}</div>
+                          <div style={{ color: 'var(--text-secondary)', lineHeight: 1.45 }}>{h.text}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </GlassCard>
+          )}
 
           {result && (
             <GlassCard size="xs" style={{ marginTop: 12, background: result.error ? 'rgba(255,59,48,0.08)' : 'rgba(52,199,89,0.08)', border: `1px solid ${result.error ? 'var(--red)' : 'var(--green)'}` }}>
