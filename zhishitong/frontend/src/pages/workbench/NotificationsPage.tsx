@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import axios from 'axios'
 import { useAuth } from '../../hooks/useAuth'
 import GlassCard from '../../components/GlassCard'
+import { notifyNotificationsChanged } from '../../utils/notifications'
 
 interface Notification {
   id: number
@@ -63,6 +64,7 @@ const NOTIFICATION_TABS: { key: NotificationTabKey; label: string; types: string
 ]
 
 const PAGE_SIZE = 10
+const REFRESH_INTERVAL_MS = 10000
 
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([])
@@ -76,11 +78,12 @@ export default function NotificationsPage() {
   const nav = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const { user } = useAuth()
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const isReviewer = user?.is_dept_admin || user?.is_finance_admin || user?.is_school_admin
 
-  const fetchNotifications = async (nextPage = page, nextTab = activeTab) => {
-    setLoading(true)
+  const fetchNotifications = useCallback(async (nextPage = page, nextTab = activeTab, showLoading = true) => {
+    if (showLoading) setLoading(true)
     setErrorMsg('')
     try {
       const tab = NOTIFICATION_TABS.find(t => t.key === nextTab)
@@ -91,18 +94,54 @@ export default function NotificationsPage() {
       setNotifications(data.items || [])
       setTotal(data.total || 0)
       setUnreadCount(data.unread_count || 0)
+      notifyNotificationsChanged()
     } catch (e: any) {
+      if (!showLoading) return
       const status = e?.response?.status
       if (status) setErrorMsg(`请求失败 (${status})`)
       else setErrorMsg('网络错误，无法获取通知')
       setNotifications([])
       setTotal(0)
     } finally {
-      setLoading(false)
+      if (showLoading) setLoading(false)
     }
-  }
+  }, [activeTab, page])
 
   useEffect(() => { fetchNotifications(page, activeTab) }, [page, activeTab])
+
+  useEffect(() => {
+    const refreshCurrentPage = () => fetchNotifications(page, activeTab, false)
+
+    const startInterval = () => {
+      if (intervalRef.current) return
+      intervalRef.current = setInterval(() => {
+        if (document.visibilityState === 'visible') refreshCurrentPage()
+      }, REFRESH_INTERVAL_MS)
+    }
+
+    const stopInterval = () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+        intervalRef.current = null
+      }
+    }
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        refreshCurrentPage()
+        startInterval()
+      } else {
+        stopInterval()
+      }
+    }
+
+    startInterval()
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => {
+      stopInterval()
+      document.removeEventListener('visibilitychange', handleVisibility)
+    }
+  }, [activeTab, fetchNotifications, page])
 
   const markRead = async (id: number) => {
     await axios.post(`/api/notifications/${id}/read`)
@@ -110,6 +149,7 @@ export default function NotificationsPage() {
     setUnreadCount(prev => Math.max(0, prev - 1))
     // 同步更新详情弹窗中的已读状态
     setDetail(prev => prev && prev.id === id ? { ...prev, is_read: true } : prev)
+    notifyNotificationsChanged()
   }
 
   const openDetail = (n: Notification) => {
@@ -146,6 +186,7 @@ export default function NotificationsPage() {
     await axios.post('/api/notifications/read-all')
     setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
     setUnreadCount(0)
+    notifyNotificationsChanged()
   }
 
   const typeLabel = (t: string) => TYPE_LABEL[t] || t

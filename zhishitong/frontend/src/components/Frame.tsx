@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { useAuth } from '../hooks/useAuth'
+import { NOTIFICATIONS_REFRESH_EVENT } from '../utils/notifications'
 
 type NavItem = { to: string; label: string }
 type NavSection = { header?: string; items: NavItem[]; previewCount?: number; collapsed?: boolean; onToggle?: () => void }
@@ -197,7 +198,7 @@ export default function Frame({ children }: { children: React.ReactNode }) {
 
     const startInterval = () => {
       if (intervalRef.current) return
-      intervalRef.current = setInterval(fetchUnread, 30000)
+      intervalRef.current = setInterval(fetchUnread, 10000)
     }
 
     const stopInterval = () => {
@@ -218,9 +219,11 @@ export default function Frame({ children }: { children: React.ReactNode }) {
 
     startInterval()
     document.addEventListener('visibilitychange', handleVisibility)
+    window.addEventListener(NOTIFICATIONS_REFRESH_EVENT, fetchUnread)
     return () => {
       stopInterval()
       document.removeEventListener('visibilitychange', handleVisibility)
+      window.removeEventListener(NOTIFICATIONS_REFRESH_EVENT, fetchUnread)
     }
   }, [fetchUnread])
 
