@@ -33,8 +33,8 @@ node "推理容器 (llama.cpp)" as Inference {
 }
 
 node "训练环境 (本地)" as Training {
-  component "train_lora.py" as Train
-  component "merge_lora.py" as Merge
+  component "train_lora_mlx.py\nMLX 14B 主线" as Train
+  component "train_lora.py + merge_lora.py\nPEFT 跨平台备选" as Merge
 }
 
 database "SQLite\nzhishitong.db" as DB

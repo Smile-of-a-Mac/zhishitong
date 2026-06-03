@@ -97,26 +97,17 @@ sito/
 │   ├── uploads/                        # 上传文件存储（按 user_id 隔离）
 │   ├── start.sh                        # 一键启动（自动检测微调模型）
 │   └── shutdown.sh                     # 一键停止所有服务
-├── training/                           # LoRA 微调管线
-│   ├── train_lora.py                   #   训练脚本（Qwen3-4B）
-│   ├── merge_lora.py                   #   合并 adapter → 完整模型
-│   └── train_requirements.txt
-├── lora_output/                        # LoRA 训练产出
-│   ├── checkpoint-50/                  #   中间检查点
-│   ├── checkpoint-100/                 #   最终检查点
-│   └── final/                          #   最终 LoRA adapter
-├── lora_output_merged/                 # 合并后的完整模型（HF 格式）
+├── training/                           # LoRA 微调管线（MLX + PEFT 备选）
+│   ├── train_lora_mlx.py               #   训练 + 融合 + GGUF（Qwen3-14B）
+│   ├── train_lora.py                   #   PEFT 训练备选（Windows/CUDA/CPU）
+│   └── merge_lora.py                   #   PEFT 合并备选
+├── lora_output_mlx/                    # MLX 训练产出（本地生成，不提交）
 ├── models/                             # 模型文件
-│   ├── qwen3-4b.gguf                   #   推理用 GGUF（Q4_K_M 量化，~2.5GB）
-│   ├── qwen3-4b-lora.gguf              #   微调后 GGUF
-│   └── Qwen3-4B/                       #   HuggingFace 基座模型缓存
+│   ├── Qwen3-14B/                      #   MLX 基座模型（~7.8GB）
+│   └── qwen3-14b-lora.gguf            #   微调后 GGUF（~28GB）
 ├── data/                               # 训练数据 & 语料
-│   ├── build_corpus_local.py           #   语料构建脚本
-│   ├── sdust_process_corpus_lora.jsonl #   LoRA 训练数据
-│   ├── sdust_process_corpus_raw.jsonl  #   原始语料
-│   └── pages/                          #   爬取的山科大原始页面
-│       ├── jwc.sdust.edu.cn/           #     教务处
-│       └── yjsy.sdust.edu.cn/          #     研究生院
+│   ├── sdust_classification.jsonl      #   分类语料（100 条，10 类）
+│   ├── build_classification_corpus.py  #   分类语料构建脚本
 └── docs/
     ├── DESIGN.md                       #   产品设计文档（29 章）
     └── TROUBLESHOOTING.md              #   运维排查手册
@@ -192,8 +183,8 @@ sito/
 |------|------|
 | 📷 **智能 OCR** | 多模态 LLM 一步到位（Pro）→ 图片自动缩放压缩 → 字段名映射归一化 + 正则兜底提取 → EasyOCR 降级 + PDF 文本直接提取（pypdf） + 扫描件自动转图片（pymupdf） |
 | 📚 **RAG 政策检索** | TF-IDF 向量检索 + LLM 生成，7 个 AI 端点，支持手动填表提交前合规自查 |
-| 🎯 **意图识别** | 自然语言描述 → 自动推荐文档类型 + 预填字段 |
-| ⚖️ **合规性分析** | 自动检索相关政策条文，逐条核对申请合规性 |
+| 🎯 **意图识别** | 自然语言描述 → 云端 LLM 抽取表单字段，本地规则兜底补相对日期/地点/交通 |
+| ⚖️ **合规性分析** | 本地 Qwen3-14B + RAG 检索相关政策条文，逐条核对申请合规性 |
 | 🔍 **相似案例** | 检索历史审批记录，辅助审批人决策 |
 | 💬 **政策问答 ChatBot** | 右下角悬浮面板，多轮对话 + 引用来源 |
 | 📏 **预审规则引擎** | 硬性规则检查（必填/范围/查重），拦截不合规申请 |
@@ -209,8 +200,8 @@ sito/
 ### 🔔 协作 & 资源
 | 模块 | 功能 |
 |------|------|
-| 📬 **站内信通知** | 8 种通知类型 + 红点角标 + 快捷跳转 |
-| 📋 **资源预约** | 会议室 + 公车预约，时间冲突检测 |
+| 📬 **站内信通知** | 8 种通知类型 + 红点角标 + 分类筛选 + 服务端分页 + 快捷跳转 |
+| 📋 **资源预约** | 会议室 + 公车预约，管理员维护资源，时间冲突检测 |
 | 📝 **审批意见模板** | 预设常用批语，一键填入 |
 | 🔄 **审批代理** | 审批人休假时可委托他人代为审批 |
 
@@ -223,7 +214,7 @@ sito/
 | 📋 **系统监控** | 概览/日志/错误 三面板 + 审计日志 |
 | 🔍 **OCR 工具链追踪** | 监控日志显示 provider/model/tier/doc_type 完整调用链 |
 | 🔗 **英文字段映射** | 多模态模型输出字段自动归一化为模板英文 key（invoice_number→invoice_no 等） |
-| 🧪 **LoRA 微调** | 山科大实际流程数据 → 微调 Qwen3-4B → 自动合并输出 GGUF |
+| 🧪 **LoRA 微调** | 山科大实际流程数据 → MLX 微调 Qwen3-14B → 自动融合并输出 GGUF；PEFT 管线保留为跨平台备选 |
 
 ### 架构总览：Human-in-the-Loop
 
@@ -261,9 +252,9 @@ sito/
 |----|------|
 | **前端** | React 18 + TypeScript + Vite + 玻璃拟态设计系统（Ant Design 5 目前用于 ConfigProvider/主题基础能力） |
 | **后端** | FastAPI + SQLAlchemy + SQLite + LangGraph + Redis |
-| **AI/OCR** | EasyOCR + 多模态 LLM API（MiMo/DeepSeek/Qwen-VL）+ OCR 图片预处理（EXIF 修正、最大边 1800px、JPEG 85）+ llama.cpp 本地推理 + 字段名映射归一化 + 正则兜底提取 + pypdf 文本提取 + pymupdf 扫描件转图片 |
+| **AI/OCR** | EasyOCR + 多模态 LLM API（MiMo/DeepSeek/Qwen-VL）+ 云端自然语言填表 + OCR 图片预处理（EXIF 修正、最大边 1800px、JPEG 85）+ llama.cpp 本地 Qwen3-14B 推理 + 字段名映射归一化 + 正则兜底提取 + pypdf 文本提取 + pymupdf 扫描件转图片 |
 | **RAG** | TF-IDF (scikit-learn) + 自定义 JSON 知识库（policy_kb.json） |
-| **LoRA** | PEFT + Transformers + PyTorch（Apple MPS / CUDA / CPU） |
+| **LoRA** | MLX / mlx-lm（Apple Silicon，Qwen3-14B）+ PEFT / Transformers / PyTorch（Windows/CUDA/CPU 备选） |
 | **缓存/限流** | Redis（OCR 缓存、Key 池原子计数、速率限制） |
 | **安全** | JWT + bcrypt + Fernet + MIME 魔数校验 |
 | **GPU 加速** | Metal (Apple Silicon) / CUDA (NVIDIA) / ROCm (AMD) / CPU 自动检测 |
@@ -277,7 +268,7 @@ sito/
 - Python 3.11+, Node.js 18+
 - 虚拟环境：`python -m venv .venv`
 
-### 一键安装环境（v0.6.2 新增）
+### 一键安装环境（v0.6.3）
 
 安装脚本会先检查本机已有环境，已安装的依赖会跳过，不满足本地推理或 LoRA 训练条件时不会强行下载模型或训练依赖。
 
@@ -291,7 +282,7 @@ bash setup/setup.sh
 .\setup\setup.ps1
 ```
 
-脚本会执行：Python/Node/Git 预检 → RAM/磁盘/GPU/VRAM/网络检测 → 创建 `.venv` → 按需安装后端、推理、训练和前端依赖 → 按条件下载 `models/qwen3-4b.gguf` → 初始化数据库 → 输出安装报告。
+脚本会执行：Python/Node/Git 预检 → RAM/磁盘/GPU/VRAM/网络检测 → 创建 `.venv` → 按需安装后端、推理、训练和前端依赖 → 按条件下载跨平台 4B 备选模型 → 初始化数据库 → 输出安装报告。
 
 模型下载由 `setup/_download_model.py` 负责，下载 Qwen3-4B GGUF 时会显示百分比、下载速度、已下载大小和总大小的进度条。若 HuggingFace 仓库需要认证，请先设置 `HF_TOKEN` 或 `HUGGINGFACE_TOKEN`。
 
@@ -340,10 +331,9 @@ PYTHONPATH="$PWD/backend" python backend/seed.py
 ### LoRA 微调（可选）
 
 ```bash
-cd training
-pip install -r train_requirements.txt
-python train_lora.py      # 训练 + 自动合并 GGUF（一步到位）
-# start.sh 会自动检测 qwen3-4b-lora.gguf
+cd /Users/wangdaoyu/VSCode/sito
+.venv/bin/python training/train_lora_mlx.py   # 训练 → 融合 → GGUF 一步完成
+# start.sh 会自动检测 qwen3-14b-lora.gguf
 ```
 
 ---
@@ -387,7 +377,7 @@ python train_lora.py      # 训练 + 自动合并 GGUF（一步到位）
 | `JWT_SECRET` | JWT 签名密钥 | 开发默认值 |
 | `ENCRYPTION_KEY` | API Key Fernet 加密密钥 | 自动生成 |
 | `LLAMA_SERVER_URL` | 本地推理服务地址 | `http://127.0.0.1:18080` |
-| `MODEL_PATH` | 推理模型路径 | `models/qwen3-4b.gguf`（微调后自动切换） |
+| `MODEL_PATH` | 推理模型路径 | `models/qwen3-14b-lora.gguf` |
 | `LLM_API_BASE` | 外部 LLM API 地址 | DashScope |
 | `LLM_API_KEY` | 外部 LLM Key | 空（使用 Key 池） |
 | `LLM_MODEL` | 多模态 OCR 模型 | `qwen-vl-max` |
@@ -403,6 +393,17 @@ python train_lora.py      # 训练 + 自动合并 GGUF（一步到位）
 - 🔧 [运维排查手册](docs/TROUBLESHOOTING.md) — 系统架构、常见问题排查、日志格式参考
 
 ---
+
+## 最近更新 (v0.6.3)
+
+- 🧠 **云端填表 + 本地合规分流**：自然语言表单预填强制使用云端 LLM，分类、RAG 合规分析和本地兜底继续使用 `models/qwen3-14b-lora.gguf`
+- 🗓️ **请假相对日期补全**：后端规则兜底支持“明天/后天/明后两天”，并自动补全地点、交通工具和公假类型；前端统一把日期值规范化为 `datetime-local` 可显示格式
+- 📬 **通知中心分页**：通知 API 支持 `types` 服务端过滤，前端按分类分页显示，避免 50 条截断后漏消息
+- 📋 **资源预约增强**：补齐会议室/车辆管理入口、空状态、字段匹配和后端预约校验
+- ⚖️ **审批 AI 体验增强**：审批详情打开后自动合规分析，并根据风险等级高亮推荐动作按钮
+- 🏛️ **2025 版政策助手**：政策知识库和助手问题入口更新到 2025 年版
+- 🧪 **Qwen3-14B MLX 微调管线**：新增多任务语料构建、MLX LoRA 训练/融合/GGUF 转换脚本，14B GGUF 成为本地推理默认模型
+- 🧰 **发布卫生**：更新 `.gitignore`，排除本地模型、MLX 融合产物和训练拆分数据，避免误提交大文件
 
 ## 最近更新 (v0.6.2v2)
 

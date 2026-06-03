@@ -1,0 +1,470 @@
+#!/usr/bin/env python3
+"""
+多任务训练语料：统一 JSON 输出（意图识别 + 字段预填）
+输出: data/sdust_multitask_lora.jsonl
+"""
+
+import json, random, datetime
+from pathlib import Path
+
+random.seed(42)
+DATA_DIR = Path(__file__).parent
+OUTPUT = DATA_DIR / "sdust_multitask_lora.jsonl"
+TODAY = datetime.date.today()
+
+SAMPLES = []
+
+def add(doc_type, confidence, ambiguity, input_text, prefill, secondary=None, clarification="", missing=None):
+    obj = {
+        "document_type": doc_type,
+        "confidence": confidence,
+        "ambiguity": ambiguity,
+        "prefill_fields": prefill or {},
+    }
+    if ambiguity:
+        obj["secondary_document_type"] = secondary
+        obj["clarification"] = clarification
+    if missing:
+        obj["missing_fields"] = missing
+    SAMPLES.append({
+        "input": input_text,
+        "output": json.dumps(obj, ensure_ascii=False),
+    })
+
+# ── 请假 (leave) ──
+add("leave", 0.92, False, "我要请假三天，家里有事回老家一趟",
+    {"leave_type":"事假","reason":"家中有事需回老家处理","start_date":"2026-06-04","end_date":"2026-06-06","destination":"老家","applicant":"张明","student_id":"2024001","college":"计算机学院","class_name":"计科2401班","phone":"13912345678","advisor":"李芳"})
+
+add("leave", 0.90, False, "明天发烧了想请一天病假",
+    {"leave_type":"病假","reason":"发烧身体不适","start_date":"2026-06-04","end_date":"2026-06-04","applicant":"张明","student_id":"2024001","college":"计算机学院","class_name":"计科2401班","phone":"13912345678","advisor":"李芳"})
+
+add("leave", 0.88, False, "辅导员你好，我下周一到周三要去参加数学建模比赛不在学校",
+    {"leave_type":"公假","reason":"参加数学建模比赛","start_date":"2026-06-08","end_date":"2026-06-10","applicant":"张明","student_id":"2024001","college":"计算机学院","class_name":"计科2401班","phone":"13912345678","advisor":"李芳"})
+
+add("leave", 0.87, False, "我父母来学校看我，想请半天假陪他们吃个饭",
+    {"leave_type":"事假","reason":"父母来校探望，陪同吃饭","start_date":"2026-06-04","end_date":"2026-06-04","applicant":"张明","student_id":"2024001","college":"计算机学院","class_name":"计科2401班","phone":"13912345678","advisor":"李芳"})
+
+add("leave", 0.85, False, "家里老人过世了，需要请假回去参加葬礼",
+    {"leave_type":"事假","reason":"家中老人去世需回老家参加葬礼","start_date":"2026-06-04","end_date":"2026-06-08","destination":"老家","applicant":"张明","student_id":"2024001","college":"计算机学院","class_name":"计科2401班","phone":"13912345678","advisor":"李芳"})
+
+add("leave", 0.86, False, "这个周五去北京考托福，前后大概要请四天假",
+    {"leave_type":"事假","reason":"去北京参加托福考试","start_date":"2026-06-05","end_date":"2026-06-08","destination":"北京","applicant":"张明","student_id":"2024001","college":"计算机学院","class_name":"计科2401班","phone":"13912345678","advisor":"李芳"})
+
+# 请假 + 出差 歧义案例
+add("leave", 0.68, True, "我要请假，我要去无锡出差，明天和后天都不在学校，坐高铁去",
+    {"leave_type":"公假","reason":"去无锡出差","start_date":"2026-06-04","end_date":"2026-06-05","destination":"无锡","transportation":"高铁","applicant":"张明","student_id":"2024001","college":"计算机学院","class_name":"计科2401班","phone":"13912345678","advisor":"李芳"},
+    secondary="business_trip",
+    clarification="该描述同时包含请假和出差信息。已按学生离校场景预填请假申请，如需正式出差审批请另建出差申请。")
+
+add("leave", 0.75, True, "下周出差去深圳开学术会议，帮我填请假条",
+    {"leave_type":"公假","reason":"去深圳参加学术会议","start_date":"2026-06-08","end_date":"2026-06-12","destination":"深圳","applicant":"张明","student_id":"2024001","college":"计算机学院","class_name":"计科2401班","phone":"13912345678","advisor":"李芳"},
+    secondary="business_trip",
+    clarification="出差需另外提交出差申请，已优先预填请假申请。")
+
+add("leave", 0.80, False, "今天身体不舒服想回家休息明天再回来",
+    {"leave_type":"病假","reason":"身体不适需要回家休息","start_date":"2026-06-03","end_date":"2026-06-04","applicant":"张明","student_id":"2024001","college":"计算机学院","class_name":"计科2401班","phone":"13912345678","advisor":"李芳"})
+
+add("leave", 0.82, False, "周末要去南京面试实习，请假两天",
+    {"leave_type":"事假","reason":"去南京参加实习面试","start_date":"2026-06-06","end_date":"2026-06-07","destination":"南京","applicant":"张明","student_id":"2024001","college":"计算机学院","class_name":"计科2401班","phone":"13912345678","advisor":"李芳"})
+
+add("leave", 0.83, False, "腿扭伤了没法走路想请假到下周",
+    {"leave_type":"病假","reason":"腿部扭伤行动不便","start_date":"2026-06-03","end_date":"2026-06-08","applicant":"张明","student_id":"2024001","college":"计算机学院","class_name":"计科2401班","phone":"13912345678","advisor":"李芳"})
+
+add("leave", 0.91, False, "后天是姐姐结婚，我要回家参加婚礼请假两天",
+    {"leave_type":"事假","reason":"姐姐结婚需回家参加婚礼","start_date":"2026-06-05","end_date":"2026-06-06","destination":"老家","applicant":"张明","student_id":"2024001","college":"计算机学院","class_name":"计科2401班","phone":"13912345678","advisor":"李芳"})
+
+add("leave", 0.84, False, "因为我做了一个小手术需要住院观察，可能要请假一周左右",
+    {"leave_type":"病假","reason":"术后需要住院观察休养","start_date":"2026-06-03","end_date":"2026-06-10","applicant":"张明","student_id":"2024001","college":"计算机学院","class_name":"计科2401班","phone":"13912345678","advisor":"李芳"})
+
+add("leave", 0.88, False, "下周五下午去隔壁学校听讲座，请假两小时",
+    {"leave_type":"事假","reason":"去隔壁学校听学术讲座","start_date":"2026-06-06","end_date":"2026-06-06","destination":"隔壁学校","applicant":"张明","student_id":"2024001","college":"计算机学院","class_name":"计科2401班","phone":"13912345678","advisor":"李芳"})
+
+add("leave", 0.79, True, "我明天可能有事不一定来，如果来不了算请假行吗",
+    {"leave_type":"事假","reason":"不确定是否到校","start_date":"2026-06-04","end_date":"2026-06-04","applicant":"张明","student_id":"2024001","college":"计算机学院","class_name":"计科2401班","phone":"13912345678","advisor":"李芳"},
+    secondary="leave",
+    clarification="请假意愿不明确，已预填待确认信息。")
+
+add("leave", 0.86, False, "五一假期想提前一天走晚回来一天可以吗",
+    {"leave_type":"事假","reason":"延长五一假期回家","start_date":"2026-04-30","end_date":"2026-05-06","destination":"老家","applicant":"张明","student_id":"2024001","college":"计算机学院","class_name":"计科2401班","phone":"13912345678","advisor":"李芳"})
+
+add("leave", 0.87, False, "帮我室友王丽填一个请假单，她发烧去医院了",
+    {"leave_type":"病假","reason":"发烧去校医院就诊","applicant":"王丽","start_date":"2026-06-03","end_date":"2026-06-04"},
+    clarification="非本人申请，字段需确认")
+
+# ── 出差 (business_trip) ──
+add("business_trip", 0.93, False, "下周三去上海开会，坐飞机去，预算大概三千",
+    {"destination":"上海","start_date":"2026-06-04","end_date":"2026-06-04","purpose":"参加上海会议","estimated_cost":"3000","transportation":"飞机","applicant":"张明","department":"计算机学院"})
+
+add("business_trip", 0.90, False, "6月10号到12号去北京出差见客户",
+    {"destination":"北京","start_date":"2026-06-10","end_date":"2026-06-12","purpose":"拜访客户","applicant":"张明","department":"计算机学院"})
+
+add("business_trip", 0.88, False, "下周一到周三去广州参加行业展会",
+    {"destination":"广州","start_date":"2026-06-08","end_date":"2026-06-10","purpose":"参加行业展会","applicant":"张明","department":"计算机学院"})
+
+add("business_trip", 0.89, False, "去济南省教育厅送材料当天来回",
+    {"destination":"济南","start_date":"2026-06-04","end_date":"2026-06-04","purpose":"前往省教育厅提交材料","transportation":"火车","applicant":"张明","department":"计算机学院"})
+
+add("business_trip", 0.86, False, "下个月要到成都出差一周做项目验收",
+    {"destination":"成都","start_date":"2026-07-01","end_date":"2026-07-07","purpose":"项目验收","estimated_cost":"8000","applicant":"张明","department":"计算机学院"})
+
+add("business_trip", 0.92, False, "明天去天津参加学术会议，高铁来回，需要住宿一晚",
+    {"destination":"天津","start_date":"2026-06-04","end_date":"2026-06-05","purpose":"参加学术会议","transportation":"高铁","accommodation":"天津市内酒店","applicant":"张明","department":"计算机学院"})
+
+add("business_trip", 0.87, False, "学校派我去武汉参加一个培训，下周一到周五",
+    {"destination":"武汉","start_date":"2026-06-08","end_date":"2026-06-12","purpose":"参加上级培训","applicant":"张明","department":"计算机学院"})
+
+add("business_trip", 0.84, False, "到青岛校区办事，后天去大后天回，坐高铁",
+    {"destination":"青岛","start_date":"2026-06-05","end_date":"2026-06-06","purpose":"到青岛校区办事","transportation":"高铁"})
+
+# ── 报销 (reimbursement) ──
+add("reimbursement", 0.92, False, "上周去北京出差花了3500块的住宿和交通费要报一下",
+    {"amount":"3500","category":"差旅交通","reason":"北京出差住宿和交通费报销","date":"2026-06-01","applicant":"张明","department":"计算机学院"})
+
+add("reimbursement", 0.90, False, "买实验试剂花了800块钱，发票号是12345678",
+    {"amount":"800","category":"实验耗材","reason":"购买实验试剂","invoice_no":"12345678","date":"2026-06-01","applicant":"张明","department":"计算机学院"})
+
+add("reimbursement", 0.88, False, "打印毕设论文花了120块打印费能报吗",
+    {"amount":"120","category":"印刷资料","reason":"打印毕业论文","date":"2026-06-01","applicant":"张明","department":"计算机学院"})
+
+add("reimbursement", 0.91, False, "上个月买了三本专业书280元要报销",
+    {"amount":"280","category":"图书资料","reason":"购买专业参考书","date":"2026-05-15","applicant":"张明","department":"计算机学院"})
+
+add("reimbursement", 0.89, False, "实验室空调坏了修了两次花了2500，这是维修发票",
+    {"amount":"2500","category":"维修","reason":"实验室空调维修","date":"2026-05-20","applicant":"张明","department":"计算机学院"})
+
+add("reimbursement", 0.87, False, "请客户吃饭花了600块钱能报销吗",
+    {"amount":"600","category":"会议费","reason":"业务招待用餐","date":"2026-06-01","applicant":"张明","department":"计算机学院"})
+
+add("reimbursement", 0.85, False, "我这有一堆发票需要报销，买了文具50、打车80、快递费30",
+    {"amount":"160","category":"办公用品","reason":"购买办公文具及快递费报销","date":"2026-05-28","applicant":"张明","department":"计算机学院"})
+
+add("reimbursement", 0.86, False, "上周末去济南参加培训，高铁费245块需要报销",
+    {"amount":"245","category":"差旅交通","reason":"济南培训高铁差旅费","date":"2026-05-30","applicant":"张明","department":"计算机学院"})
+
+add("reimbursement", 0.88, False, "打印店那80块钱的打印费，还有装订费30，一共110",
+    {"amount":"110","category":"印刷资料","reason":"打印和装订费用报销","date":"2026-06-01","applicant":"张明","department":"计算机学院"})
+
+add("reimbursement", 0.84, False, "上网课买的摄像头话筒两样一共花了350能不能报销",
+    {"amount":"350","category":"办公用品","reason":"网课用摄像头和话筒采购","date":"2026-05-25","applicant":"张明","department":"计算机学院"})
+
+add("reimbursement", 0.90, False, "教研室10月份水电网费总共520要报销",
+    {"amount":"520","category":"其他","reason":"教研室10月水电费网费报销","date":"2025-10-31","applicant":"张明","department":"计算机学院"})
+
+add("reimbursement", 0.86, False, "去杭州出了个短差，晚上的住宿加两顿饭一共不超800",
+    {"amount":"800","category":"差旅交通","reason":"杭州出差住宿用餐报销","destination":"杭州","applicant":"张明","department":"计算机学院"})
+
+add("reimbursement", 0.82, False, "帮老师去楼下打印店复印文件给了50现金，老师让我来报",
+    {"amount":"50","category":"印刷资料","reason":"老师文件复印费用","date":"2026-06-01","applicant":"张明","department":"计算机学院"},
+    clarification="非本人消费，需确认报销归属")
+
+# ── 社团活动 (club_application) ──
+add("club_application",0.90,False,"吉他社下周六下午要在大学生活动中心办迎新音乐会,预计来200人",
+    {"club_name":"吉他社","activity":"迎新音乐会","date":"2026-06-06","start_time":"14:00","end_time":"17:00","venue":"大学生活动中心","participants":"200","club_type":"文化体育","purpose":"迎接新社员","description":"吉他社迎新音乐会，表演节目并招新"})
+
+add("club_application",0.88,False,"我们编程社团这周日想在教学楼办一场算法竞赛",
+    {"club_name":"编程社团","activity":"算法竞赛","date":"2026-06-07","start_time":"09:00","end_time":"12:00","venue":"教学楼","participants":"50","club_type":"学术科技","purpose":"培养编程兴趣","description":"面向全校的算法竞赛活动"})
+
+add("club_application",0.87,False,"摄影协会想组织一次校园外拍活动，去海边",
+    {"club_name":"摄影协会","activity":"校园外拍摄影","date":"2026-06-06","venue":"校外海边","participants":"15","club_type":"文化体育","purpose":"丰富社团活动","description":"组织社员到海边进行户外摄影实践"})
+
+add("club_application",0.89,False,"志愿者协会下周末想去养老院做义工活动",
+    {"club_name":"志愿者协会","activity":"养老院义工","date":"2026-06-13","start_time":"08:00","end_time":"16:00","venue":"市养老院","participants":"30","club_type":"志愿服务","purpose":"社会公益服务","description":"前往市养老院开展志愿服务活动"})
+
+add("club_application",0.85,False,"我们准备搞一个校园义卖，给山区小学捐款，要申请一下",
+    {"club_name":"青年志愿者协会","activity":"校园爱心义卖","date":"2026-06-10","venue":"食堂广场","participants":"100","club_type":"志愿服务","purpose":"为山区小学筹集善款","description":"组织爱心义卖活动，所得善款全部捐给山区小学"})
+
+# ── 教室借用 (classroom_booking) ──
+add("classroom_booking",0.91,False,"下周二下午想借501大教室开班会",
+    {"room_no":"501","date":"2026-06-09","start_time":"14:00","end_time":"16:00","purpose":"召开班级主题班会","applicant":"张明","college":"计算机学院"})
+
+add("classroom_booking",0.89,False,"这周五下午需要借一个多媒体教室做小组演示",
+    {"date":"2026-06-05","start_time":"14:00","end_time":"16:00","purpose":"小组课程项目展示答辩","need_multimedia":True,"applicant":"张明","college":"计算机学院"})
+
+add("classroom_booking",0.87,False,"想借教学楼空教室自习，明天一整天有人能安排吗",
+    {"date":"2026-06-04","purpose":"自习","applicant":"张明","college":"计算机学院"})
+
+add("classroom_booking",0.86,False,"下周六有学生补课，需要借个大教室，最好能做60个人",
+    {"date":"2026-06-13","purpose":"学生补课","participants":"60","need_multimedia":True,"applicant":"张明","college":"计算机学院"})
+
+# ── 宿舍调换 (dorm_change) ──
+add("dorm_change",0.88,False,"我现在住5号楼302，想换到新建的9号楼去",
+    {"applicant":"张明","student_id":"2024001","college":"计算机学院","current_building":"5号楼","current_room":"302","preferred_building":"9号楼","phone":"13912345678","reason":"9号楼条件更好"})
+
+add("dorm_change",0.87,False,"我和室友性格不合，能不能把我调到别的宿舍",
+    {"applicant":"张明","student_id":"2024001","college":"计算机学院","current_building":"5号楼","current_room":"302","reason":"室友生活习惯不同，无法协调","phone":"13912345678"})
+
+add("dorm_change",0.86,False,"宿舍靠马路，每晚都很吵睡不好想换房",
+    {"applicant":"张明","student_id":"2024001","college":"计算机学院","current_building":"5号楼","current_room":"302","reason":"宿舍临街噪音严重影响休息","phone":"13912345678"})
+
+# ── 奖学金 (scholarship) ──
+add("scholarship",0.91,False,"我GPA 3.8想申请国家奖学金，去年拿了两个竞赛奖项",
+    {"applicant":"张明","student_id":"2024001","college":"计算机学院","major":"计算机科学与技术","class_name":"计科2401班","scholarship_type":"国家奖学金","gpa":"3.8","achievements":"获得两项学科竞赛省级奖项"})
+
+add("scholarship",0.88,False,"我想申请学业奖学金,绩点3.5,这学期没挂过科",
+    {"applicant":"张明","student_id":"2024001","college":"计算机学院","major":"计算机科学与技术","class_name":"计科2401班","scholarship_type":"学业奖学金","gpa":"3.5","achievements":"无挂科记录"})
+
+add("scholarship",0.87,False,"大二了想试一下能不能申请个企业奖学金",
+    {"applicant":"张明","student_id":"2024001","college":"计算机学院","major":"计算机科学与技术","class_name":"计科2401班","scholarship_type":"企业奖学金"})
+
+# ── 休学/复学 (suspend_resume) ──
+add("suspend_resume",0.90,False,"因为身体原因需要休学一学期，下个学期开始",
+    {"applicant":"张明","student_id":"2024001","college":"计算机学院","major":"计算机科学与技术","apply_type":"休学","start_date":"2026-09-01","end_date":"2027-02-28","reason":"健康原因需休学调养一学期","phone":"13912345678"})
+
+add("suspend_resume",0.88,False,"暑假前复学，我休学日期到了",
+    {"applicant":"张明","student_id":"2024001","college":"计算机学院","major":"计算机科学与技术","apply_type":"复学","start_date":"2026-06-30","reason":"休学期满申请复学","phone":"13912345678"})
+
+add("suspend_resume",0.87,False,"家里经济困难我可能要先休学出去打工一年",
+    {"applicant":"张明","student_id":"2024001","college":"计算机学院","major":"计算机科学与技术","apply_type":"休学","start_date":"2026-09-01","end_date":"2027-08-31","reason":"家庭经济困难需外出务工","phone":"13912345678"})
+
+# ── 用章申请 (seal_application) ──
+add("seal_application",0.89,False,"毕业实习需要盖学院的章，要怎么办手续",
+    {"applicant":"张明","department":"计算机学院","seal_type":"院章","document_name":"毕业实习证明","copies":"1","purpose":"实习单位要求的实习证明盖章","date":"2026-06-05"})
+
+add("seal_application",0.87,False,"奖学金申请表需要盖学校和学院的章各三份",
+    {"applicant":"张明","department":"计算机学院","seal_type":"校章","document_name":"奖学金申请表","copies":"3","purpose":"奖学金申报材料盖章","date":"2026-06-05"})
+
+add("seal_application",0.86,False,"需要盖一个合同章，和校外公司合作项目要用",
+    {"applicant":"张明","department":"计算机学院","seal_type":"合同专用章","document_name":"校企合作协议书","copies":"2","purpose":"与校外企业签订合作协议","date":"2026-06-05"})
+
+# ── 在读证明 (enrollment_proof) ──
+add("enrollment_proof",0.90,False,"我要去办护照出国旅行，需要开在读证明",
+    {"applicant":"张明","student_id":"2024001","college":"计算机学院","major":"计算机科学与技术","class_name":"计科2401班","purpose":"出国签证","copies":"2","phone":"13912345678"})
+
+add("enrollment_proof",0.88,False,"暑假实习要去入职，HR跟我要在学证明",
+    {"applicant":"张明","student_id":"2024001","college":"计算机学院","major":"计算机科学与技术","class_name":"计科2401班","purpose":"实习","copies":"1","phone":"13912345678"})
+
+add("enrollment_proof",0.87,False,"考研要用在校生证明，帮我开两份",
+    {"applicant":"张明","student_id":"2024001","college":"计算机学院","major":"计算机科学与技术","class_name":"计科2401班","purpose":"考研","copies":"2","phone":"13912345678"})
+
+# ── 成绩单 (transcript_print) ──
+add("transcript_print",0.90,False,"准备出国留学需要中英文成绩单打印三份",
+    {"applicant":"张明","student_id":"2024001","college":"计算机学院","major":"计算机科学与技术","class_name":"计科2401班","transcript_type":"中英文成绩单","copies":"3","purpose":"出国留学","phone":"13912345678"})
+
+add("transcript_print",0.88,False,"找工作面试要我打一份中文成绩单",
+    {"applicant":"张明","student_id":"2024001","college":"计算机学院","major":"计算机科学与技术","class_name":"计科2401班","transcript_type":"中文成绩单","copies":"1","purpose":"求职","phone":"13912345678"})
+
+add("transcript_print",0.85,False,"暑期学校项目需要打印成绩单中英文各两份",
+    {"applicant":"张明","student_id":"2024001","college":"计算机学院","major":"计算机科学与技术","class_name":"计科2401班","transcript_type":"中英文成绩单","copies":"4","purpose":"其他","phone":"13912345678"})
+
+add("transcript_print",0.86,False,"保研要用，打两份中文成绩单就行",
+    {"applicant":"张明","student_id":"2024001","college":"计算机学院","major":"计算机科学与技术","class_name":"计科2401班","transcript_type":"中文成绩单","copies":"2","purpose":"考研","phone":"13912345678"})
+
+# ── 更多出差场景 ──
+add("business_trip",0.91,False,"下周五坐高铁去杭州和合作单位签协议当天来回",
+    {"destination":"杭州","start_date":"2026-06-05","end_date":"2026-06-05","purpose":"与合作单位签署合作协议","transportation":"高铁","applicant":"张明","department":"计算机学院"})
+
+add("business_trip",0.89,False,"学校安排去西安高校考察学习周一出发周四回来",
+    {"destination":"西安","start_date":"2026-06-08","end_date":"2026-06-11","purpose":"赴西安高校考察学习","applicant":"张明","department":"计算机学院"})
+
+add("business_trip",0.88,False,"六月中要去合肥参加项目中期汇报，大概三四天",
+    {"destination":"合肥","start_date":"2026-06-15","end_date":"2026-06-18","purpose":"项目中期汇报","applicant":"张明","department":"计算机学院"})
+
+add("business_trip",0.87,False,"后天到隔壁城市做个企业调研，开自己车去",
+    {"destination":"就近城市","start_date":"2026-06-05","end_date":"2026-06-05","purpose":"企业调研","transportation":"汽车","applicant":"张明","department":"计算机学院"})
+
+add("business_trip",0.92,False,"下周一有一个学术论坛在隔壁市，坐高铁去当天回",
+    {"destination":"隔壁城市","start_date":"2026-06-08","end_date":"2026-06-08","purpose":"参加学术论坛","transportation":"高铁","applicant":"张明","department":"计算机学院"})
+
+add("business_trip",0.85,False,"要跟导师一起去苏州出差，大概要住两晚",
+    {"destination":"苏州","start_date":"2026-06-10","end_date":"2026-06-12","purpose":"随导师赴苏州出差","accommodation":"苏州市内酒店","applicant":"张明","department":"计算机学院"})
+
+add("business_trip",0.90,False,"8月要去宁夏做一个野外调研，可能需要一周左右",
+    {"destination":"宁夏","start_date":"2026-08-01","end_date":"2026-08-07","purpose":"野外调研","applicant":"张明","department":"计算机学院"})
+
+# ── 更多报销场景 ──
+add("reimbursement",0.89,False,"出差回来一堆发票要报销，大概两千多",
+    {"amount":"2000","category":"差旅交通","reason":"出差综合费用报销","date":"2026-05-28","applicant":"张明","department":"计算机学院"})
+
+add("reimbursement",0.88,False,"寄论文到期刊的快递费和审稿费一共360能报吗",
+    {"amount":"360","category":"印刷资料","reason":"论文投稿快递费和审稿费","date":"2026-05-20","applicant":"张明","department":"计算机学院"})
+
+add("reimbursement",0.87,False,"5月份买了50个实验培养皿和一批试管花了430",
+    {"amount":"430","category":"实验耗材","reason":"购买实验室培养皿和试管","date":"2026-05-15","applicant":"张明","department":"计算机学院"})
+
+add("reimbursement",0.90,False,"项目结题要把这半年所有差旅和耗材费用一起报一下",
+    {"amount":"0","category":"差旅交通","reason":"项目结题综合费用报销（差旅+耗材）","date":"2026-06-01","applicant":"张明","department":"计算机学院"},
+    clarification="费用明细待整理")
+
+add("reimbursement",0.86,False,"我去财务问过了说要发票才能报,这是上个月买实验兔的发票560块",
+    {"amount":"560","category":"实验耗材","reason":"购买实验用兔","invoice_no":"已持有发票","date":"2026-05-10","applicant":"张明","department":"计算机学院"})
+
+add("reimbursement",0.85,False,"图便宜在拼多多买了教研室的清洁用品,能不能报销,花了78",
+    {"amount":"78","category":"办公用品","reason":"购买教研室清洁用品","date":"2026-05-25","applicant":"张明","department":"计算机学院"},
+    clarification="非正规渠道购买需核实发票合规性")
+
+add("reimbursement",0.91,False,"课题组聚餐吃火锅大家AA了，我代表垫付的580能报吗",
+    {"amount":"580","category":"会议费","reason":"课题组聚餐招待费用","date":"2026-05-28","applicant":"张明","department":"计算机学院"})
+
+# ── 更多社团场景 ──
+add("club_application",0.88,False,"英语角想在图书馆研讨室办一个英语演讲比赛",
+    {"club_name":"英语角","activity":"英语演讲比赛","date":"2026-06-10","start_time":"14:00","end_time":"17:00","venue":"图书馆研讨室","participants":"40","club_type":"文化体育","purpose":"提升英语表达能力","description":"举办校园英语演讲比赛"})
+
+add("club_application",0.87,False,"科创协会申请搞一个 Arduino 嵌入式比赛，要奖品预算5000",
+    {"club_name":"科创协会","activity":"Arduino嵌入式设计大赛","date":"2026-06-13","venue":"信息中心","participants":"80","budget":"5000","club_type":"学术科技","purpose":"激发学生创新","description":"Arduino嵌入式设计比赛"})
+
+add("club_application",0.86,False,"书画社要在行政楼大厅办一个书画展下个月初",
+    {"club_name":"书画社","activity":"书画作品展","date":"2026-07-01","venue":"行政楼大厅","club_type":"文化体育","purpose":"展示社团成果","description":"在行政楼大厅举办书画作品展览"})
+
+add("club_application",0.85,False,"环保协会想去公园捡垃圾顺便搞个环保宣传",
+    {"club_name":"环保协会","activity":"环保志愿活动","date":"2026-06-07","venue":"市人民公园","participants":"25","club_type":"志愿服务","purpose":"环保志愿服务","description":"公园捡垃圾和环保宣传"})
+
+add("club_application",0.89,False,"轮滑社想在校园道路搞一个刷街活动，需要审批一下",
+    {"club_name":"轮滑社","activity":"校园刷街活动","date":"2026-06-06","venue":"校园主干道","participants":"30","club_type":"文化体育","purpose":"丰富校园生活","description":"沿校园主干道进行轮滑刷街活动"})
+
+# ── 更多教室场景 ──
+add("classroom_booking",0.88,False,"学生会换届选举要借一个阶梯教室下周三晚上",
+    {"room_no":"阶梯教室","date":"2026-06-10","start_time":"18:00","end_time":"21:00","purpose":"学生会换届选举大会","applicant":"张明","college":"计算机学院"})
+
+add("classroom_booking",0.87,False,"考研自习室满了能帮我借个小教室自己用吗",
+    {"date":"2026-06-04","purpose":"考研自习","applicant":"张明","college":"计算机学院"})
+
+add("classroom_booking",0.86,False,"下周就是期末了想借多媒体教室给学生放一下复习PPT",
+    {"date":"2026-06-15","start_time":"14:00","end_time":"17:00","purpose":"期末复习课","need_multimedia":True,"applicant":"张明","college":"计算机学院"})
+
+add("classroom_booking",0.85,False,"暑假夏令营要连续借用三天大教室，每天上午",
+    {"date":"2026-07-05","start_time":"08:00","end_time":"12:00","purpose":"暑期夏令营活动","participants":"80","need_multimedia":True,"applicant":"张明","college":"计算机学院"})
+
+# ── 更多场景 ──
+add("dorm_change",0.85,False,"室友天天打游戏到半夜影响我复习，快疯了想换宿舍",
+    {"applicant":"张明","student_id":"2024001","college":"计算机学院","current_building":"5号楼","current_room":"302","reason":"室友作息严重干扰学习和休息","phone":"13912345678"})
+
+add("scholarship",0.86,False,"我去年拿过国家奖学金今年还想试一下，GPA比去年还高0.2",
+    {"applicant":"张明","student_id":"2024001","college":"计算机学院","major":"计算机科学与技术","class_name":"计科2401班","scholarship_type":"国家奖学金","gpa":"4.0","achievements":"连续两年取得优异成绩"})
+
+add("suspend_resume",0.86,False,"我爸生病要照顾请假时间太长怕影响学业想先休学",
+    {"applicant":"张明","student_id":"2024001","college":"计算机学院","major":"计算机科学与技术","apply_type":"休学","start_date":"2026-06-03","reason":"父亲病重需回家照顾","phone":"13912345678"})
+
+add("seal_application",0.85,False,"需要学院的章盖一份社会实践证明，做一个暑假的居委会义工",
+    {"applicant":"张明","department":"计算机学院","seal_type":"院章","document_name":"社会实践证明","copies":"1","purpose":"暑期社会实践证明盖章","date":"2026-07-01"})
+
+add("enrollment_proof",0.86,False,"要买房贷款需要学校开的在读证明，三个银行各要一份",
+    {"applicant":"张明","student_id":"2024001","college":"计算机学院","major":"计算机科学与技术","class_name":"计科2401班","purpose":"银行贷款","copies":"3","phone":"13912345678"})
+
+# 更多歧义/混合
+add("leave",0.62,True,"我下周去北京一星期，面试然后顺便玩一下",
+    {"leave_type":"事假","reason":"去北京面试及个人事务","start_date":"2026-06-08","end_date":"2026-06-14","destination":"北京","applicant":"张明","student_id":"2024001","college":"计算机学院","class_name":"计科2401班","phone":"13912345678","advisor":"李芳"},
+    secondary="enrollment_proof",
+    clarification="请假为主，如需学校开具实习/在读证明请单独办理。")
+
+add("leave",0.68,True,"送导师去机场顺便请假半天",
+    {"leave_type":"事假","reason":"送导师去机场","start_date":"2026-06-04","end_date":"2026-06-04","applicant":"张明","student_id":"2024001","college":"计算机学院","class_name":"计科2401班","phone":"13912345678","advisor":"李芳"},
+    secondary="leave",
+    clarification="已按事假预填，如属公务陪同请调整为公假。")
+
+add("reimbursement",0.66,True,"帮实验室买东西钱是我垫的可是淘宝没给开发票",
+    {"amount":"0","category":"实验耗材","reason":"替实验室垫付采购款","applicant":"张明","department":"计算机学院"},
+    secondary="reimbursement",
+    clarification="缺少发票无法报销，建议联系商家补开发票后提交。",
+    missing=["amount","invoice_no"])
+
+add("business_trip",0.65,True,"要出差开会还想去那边城市玩两天再回来",
+    {"destination":"会议城市","start_date":"2026-06-08","end_date":"2026-06-12","purpose":"参会及相关活动","applicant":"张明","department":"计算机学院"},
+    secondary="business_trip",
+    clarification="已预填出差信息，非公差附带行程费用需自理。")
+
+add("leave",0.72,True,"明天下午班主任要找谈话我可能还要去医院",
+    {"leave_type":"病假","reason":"去医院看病","start_date":"2026-06-04","end_date":"2026-06-04","applicant":"张明","student_id":"2024001","college":"计算机学院","class_name":"计科2401班","phone":"13912345678","advisor":"李芳"},
+    secondary="leave",
+    clarification="多个活动重叠，已按请假（看病）预填。找班主任谈话不属于请假范畴。")
+
+# 短输入/模糊输入
+add("leave",0.75,False,"请假",
+    {"leave_type":"事假","applicant":"张明","student_id":"2024001","college":"计算机学院","class_name":"计科2401班","phone":"13912345678","advisor":"李芳"},
+    missing=["reason","start_date","end_date","leave_type_detail"])
+
+add("reimbursement",0.73,False,"报销",
+    {"applicant":"张明","department":"计算机学院"},
+    missing=["amount","invoice_no","category","reason","date"])
+
+add("business_trip",0.70,False,"出差",
+    {"applicant":"张明","department":"计算机学院"},
+    missing=["destination","start_date","end_date","purpose"])
+
+# ── 写入 ──
+add("leave", 0.62, True, "我下周要回老家三天顺便还要去当地的公司签一个实习协议",
+    {"leave_type":"事假","reason":"回老家处理个人事务并签署实习协议","start_date":"2026-06-08","end_date":"2026-06-10","destination":"老家","applicant":"张明","student_id":"2024001","college":"计算机学院","class_name":"计科2401班","phone":"13912345678","advisor":"李芳"},
+    secondary="leave",
+    clarification="主要是请假回家，实习相关事宜属于个人事务。如需学校开具实习证明请另办手续。")
+
+add("reimbursement", 0.63, True, "上周出差去开会，请了三天假，住宿费和打车费要报销",
+    {"amount":"0","category":"差旅交通","reason":"出差住宿费和交通费报销","date":"2026-05-28","applicant":"张明","department":"计算机学院"},
+    secondary="business_trip",
+    clarification="涉及出差但以报销为主诉求。出差审批需另外提交。")
+
+add("leave", 0.70, True, "我下周要去参加一个不在学校的比赛还要领奖品",
+    {"leave_type":"公假","reason":"参加校外竞赛","start_date":"2026-06-08","end_date":"2026-06-10","applicant":"张明","student_id":"2024001","college":"计算机学院","class_name":"计科2401班","phone":"13912345678","advisor":"李芳"},
+    secondary="club_application",
+    clarification="比赛请假已预填，如需学校经费支持或组织参赛需走社团活动流程。")
+
+add("reimbursement", 0.64, True, "买了实验器材和打印了资料一共有三张发票要报销",
+    {"amount":"0","category":"实验耗材","reason":"实验器材和打印资料综合报销","date":"2026-06-01","applicant":"张明","department":"计算机学院"},
+    secondary="reimbursement",
+    clarification="多笔发票混报，金额待清点后填写。")
+
+add("classroom_booking", 0.67, True, "周六要办个社团活动顺便借一间教室",
+    {"date":"2026-06-06","purpose":"社团活动","applicant":"张明","college":"计算机学院"},
+    secondary="club_application",
+    clarification="社团活动和教室借用在审批流程上独立，需分别提交。已预填教室借用申请。")
+
+add("leave", 0.55, True, "我明天要出去一趟不知道什么时候回来先请着假吧",
+    {"leave_type":"事假","reason":"外出待定","start_date":"2026-06-04","applicant":"张明","student_id":"2024001","college":"计算机学院","class_name":"计科2401班","phone":"13912345678","advisor":"李芳"},
+    secondary="leave",
+    clarification="请假时间和事由不够明确，建议与辅导员确认后补充详细信息。",
+    missing=["end_date", "reason_detail"])
+
+add("business_trip", 0.52, True, "要出差但又不太确定去哪可能好几个地方",
+    {"purpose":"多地点出差","applicant":"张明","department":"计算机学院"},
+    secondary="business_trip",
+    clarification="出差地点和时间不确定，建议确认行程后补充详细信息。",
+    missing=["destination", "start_date", "end_date"])
+
+# ── 口语化/年轻化表达 ──
+add("leave", 0.85, False, "xd 我有点不舒服想请一天假歇着",
+    {"leave_type":"病假","reason":"身体不适需要休息","start_date":"2026-06-04","end_date":"2026-06-04","applicant":"张明","student_id":"2024001","college":"计算机学院","class_name":"计科2401班","phone":"13912345678","advisor":"李芳"})
+
+add("reimbursement", 0.87, False, "大佬救命，上个月垫了实验材料费800块，现在要吃土了急着报",
+    {"amount":"800","category":"实验耗材","reason":"垫付实验材料费急需报销","date":"2026-05-20","applicant":"张明","department":"计算机学院"})
+
+add("leave", 0.83, False, "sooorry 老师我明天真的来不了 家里有点急事",
+    {"leave_type":"事假","reason":"家中有急事无法到校","start_date":"2026-06-04","end_date":"2026-06-04","applicant":"张明","student_id":"2024001","college":"计算机学院","class_name":"计科2401班","phone":"13912345678","advisor":"李芳"})
+
+add("business_trip", 0.86, False, "头儿，领导让我去趟南京对接项目，周二走周五回",
+    {"destination":"南京","start_date":"2026-06-09","end_date":"2026-06-12","purpose":"项目对接","applicant":"张明","department":"计算机学院"})
+
+# ── 缺失字段场景 ──
+add("reimbursement", 0.72, False, "我有几张发票要报销但是还没整理好",
+    {"reason":"待整理发票报销","applicant":"张明","department":"计算机学院"},
+    clarification="缺少金额和发票信息，请整理后补充",
+    missing=["amount", "invoice_no", "category"])
+
+add("leave", 0.60, False, "要请假，但是具体时间还没确定",
+    {"leave_type":"事假","reason":"待定","applicant":"张明","student_id":"2024001","college":"计算机学院","class_name":"计科2401班","phone":"13912345678","advisor":"李芳"},
+    missing=["start_date", "end_date", "reason_detail"])
+
+add("business_trip", 0.55, False, "可能要去出差",
+    {"purpose":"待定出差","applicant":"张明","department":"计算机学院"},
+    missing=["destination", "start_date", "end_date", "purpose_detail"])
+
+# ── 已填好部分字段场景 ──
+add("leave", 0.95, False, "张三，学号2023001，计算机学院大二，后天回家参加堂姐婚礼请假三天",
+    {"applicant":"张三","student_id":"2023001","college":"计算机学院","class_name":"计科2301班","leave_type":"事假","reason":"堂姐结婚回家参加婚礼","start_date":"2026-06-05","end_date":"2026-06-07","destination":"老家","phone":"13912345678","advisor":"李芳"})
+
+add("reimbursement", 0.93, False, "5月28号买的实验室用试剂，发票号NF20250528003，一共1300块钱，刷卡付的，事由是课题组实验耗材采购",
+    {"amount":"1300","category":"实验耗材","reason":"课题组实验耗材采购","invoice_no":"NF20250528003","date":"2025-05-28","applicant":"张明","department":"计算机学院","payment_method":"对公转账"})
+
+# ── 写入 ──
+with open(OUTPUT, "w", encoding="utf-8") as f:
+    for item in SAMPLES:
+        f.write(json.dumps(item, ensure_ascii=False) + "\n")
+
+print(f"生成 {len(SAMPLES)} 条多任务语料 → {OUTPUT}")
+
+# 统计
+from collections import Counter
+parsed = [json.loads(item["output"]) for item in SAMPLES]
+types = Counter(p.get("document_type") for p in parsed if p.get("document_type"))
+amb = sum(1 for p in parsed if p.get("ambiguity"))
+print(f"类型分布: {dict(types)}")
+print(f"歧义案例: {amb} 条")
+missing = sum(1 for p in parsed if p.get("missing_fields"))
+print(f"缺失字段案例: {missing} 条")

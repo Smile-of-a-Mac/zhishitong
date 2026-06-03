@@ -203,7 +203,9 @@ export default function AdminApiKeysPage() {
     </div>
   )
 
-  const addForm = (keyType: string) => (
+  const addForm = (keyType: string, open: boolean) => (
+    <div className={`login-collapse${open ? ' login-collapse-open' : ''}`}>
+      <div className={`login-collapse-content${open ? ' login-collapse-content-open' : ''}`}>
     <GlassCard size="sm" style={{ marginTop: 12, background: 'var(--glass-bg)' }}>
       {/* 1. 选择供应商 */}
       <div style={{ marginBottom: 8 }}>
@@ -260,7 +262,30 @@ export default function AdminApiKeysPage() {
         <button onClick={resetForm} className="glass-btn glass-btn-outline">取消</button>
       </div>
     </GlassCard>
+      </div>
+    </div>
   )
+
+  const addButton = (type: 'ocr' | 'fill' | 'llm', label: string) => {
+    const open = showAdd === type
+    return (
+      <button
+        onClick={() => open ? resetForm() : setShowAdd(type)}
+        className="glass-btn glass-btn-outline"
+        style={{
+          marginTop: 12,
+          borderStyle: 'dashed',
+          borderColor: 'var(--accent)',
+          color: 'var(--accent)',
+          transition: 'transform 0.2s ease, background 0.2s ease, border-color 0.2s ease',
+        }}
+        aria-expanded={open}
+      >
+        <span style={{ display: 'inline-block', transform: `rotate(${open ? 45 : 0}deg)`, transition: 'transform 0.22s ease' }}>+</span>
+        {' '}{open ? `收起${label}` : `添加${label}`}
+      </button>
+    )
+  }
 
   return (
     <div>
@@ -279,11 +304,8 @@ export default function AdminApiKeysPage() {
           <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{ocrKeys.length} / 100</span>
         </div>
         {renderTable(ocrKeys)}
-        {showAdd === 'ocr' ? addForm('ocr') : (
-          <button onClick={() => setShowAdd('ocr')} className="glass-btn glass-btn-outline" style={{ marginTop: 12, borderStyle: 'dashed', borderColor: 'var(--accent)', color: 'var(--accent)' }}>
-            + 添加 OCR Key
-          </button>
-        )}
+        {addButton('ocr', ' OCR Key')}
+        {addForm('ocr', showAdd === 'ocr')}
       </GlassCard>
 
       <GlassCard strong>
@@ -292,11 +314,8 @@ export default function AdminApiKeysPage() {
           <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{fillKeys.length} / 100</span>
         </div>
         {renderTable(fillKeys)}
-        {showAdd === 'fill' ? addForm('json_fill') : (
-          <button onClick={() => setShowAdd('fill')} className="glass-btn glass-btn-outline" style={{ marginTop: 12, borderStyle: 'dashed', borderColor: 'var(--accent)', color: 'var(--accent)' }}>
-            + 添加填充 Key
-          </button>
-        )}
+        {addButton('fill', '填充 Key')}
+        {addForm('json_fill', showAdd === 'fill')}
       </GlassCard>
       <GlassCard strong>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', rowGap: 6, marginBottom: 12 }}>
@@ -304,11 +323,8 @@ export default function AdminApiKeysPage() {
           <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{llmKeys.length} / 100</span>
         </div>
         {renderTable(llmKeys)}
-        {showAdd === 'llm' ? addForm('llm') : (
-          <button onClick={() => setShowAdd('llm')} className="glass-btn glass-btn-outline" style={{ marginTop: 12, borderStyle: 'dashed', borderColor: 'var(--accent)', color: 'var(--accent)' }}>
-            + 添加 AI Key
-          </button>
-        )}
+        {addButton('llm', ' AI Key')}
+        {addForm('llm', showAdd === 'llm')}
       </GlassCard>
       </div>
     </div>

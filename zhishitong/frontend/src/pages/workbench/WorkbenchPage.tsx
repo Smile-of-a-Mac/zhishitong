@@ -5,6 +5,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { getDocTypeLabel } from '../../constants/docTypes'
 import { APPROVAL_STATUS_EMOJI } from '../../constants/approvalStatus'
 import GlassCard from '../../components/GlassCard'
+import { normalizeFormInputValue, normalizeFormInputValues } from '../../utils/formValues'
 
 // NL 意图识别结果类型
 interface IntentResult {
@@ -197,7 +198,7 @@ export default function WorkbenchPage() {
           const parsed = typeof rec.filled_json === 'string' ? JSON.parse(rec.filled_json) : rec.filled_json
           const init: Record<string, string> = {}
           for (const [k, v] of Object.entries(parsed)) init[k] = String(v ?? '')
-          setFormFields(init)
+          setFormFields(normalizeFormInputValues(init, rec.document_type || '', templates))
         } catch {}
       }
     }).catch(e => {
@@ -219,7 +220,7 @@ export default function WorkbenchPage() {
     } else {
       setFormType(saved.formType || '')
     }
-    setFormFields(saved.formFields || {})
+      setFormFields(normalizeFormInputValues(saved.formFields || {}, saved.formType || saved.ocrResult?.document_type || '', templates))
   }, [user, restored, phase, file])
 
   // ── 客户端文档类型推断（当后端未检测到时兜底）──
@@ -279,7 +280,8 @@ export default function WorkbenchPage() {
     for (const [k, v] of Object.entries(ocrResult.filled_json)) {
       if (v !== null && v !== undefined) init[k] = String(v)
     }
-    setFormFields(init)
+    const useType = ocrResult.document_type || inferDocTypeFromFields(ocrResult.filled_json) || ''
+    setFormFields(normalizeFormInputValues(init, useType, templates))
     // 优先用后端检测结果，否则客户端兜底推断
     if (ocrResult.document_type) {
       setFormType(ocrResult.document_type)
@@ -291,7 +293,7 @@ export default function WorkbenchPage() {
         setOcrResult(prev => prev ? { ...prev, document_type: inferred } : prev)
       }
     }
-  }, [ocrResult])
+  }, [ocrResult, templates])
 
   // ── 自动保存 ──
   useEffect(() => {
@@ -489,10 +491,11 @@ export default function WorkbenchPage() {
     const fields: Record<string, string> = {}
     if (result.filled_json && typeof result.filled_json === 'object' && !Array.isArray(result.filled_json)) {
       for (const [k, v] of Object.entries(result.filled_json)) {
-        if (v !== null && v !== undefined) fields[k] = String(v)
+          if (v !== null && v !== undefined) fields[k] = String(v)
+        }
       }
-    }
-    return fields
+    const useType = result.document_type || inferDocTypeFromFields(result.filled_json) || ''
+    return normalizeFormInputValues(fields, useType, templates)
   }
 
   const submitOcrResult = async (result: OcrResult) => {
@@ -544,7 +547,7 @@ export default function WorkbenchPage() {
     refreshUser().catch(() => {})
   }
 
-  const normalizeIntentFields = (prefill: Record<string, string>) => {
+  const normalizeIntentFields = (prefill: Record<string, string>, docType: string) => {
     const fields: Record<string, string> = {}
     for (const [k, v] of Object.entries(prefill || {})) {
       if (!v) continue
@@ -563,7 +566,7 @@ export default function WorkbenchPage() {
       } else if (k === 'activity_name') {
         fields.activity = val
       } else {
-        fields[k] = val
+        fields[k] = normalizeFormInputValue(k, val, docType, templates)
       }
     }
     return fields
@@ -606,7 +609,7 @@ export default function WorkbenchPage() {
         setFormType(data.document_type)
         let fields: Record<string, string> = {}
         if (data.prefill_fields && Object.keys(data.prefill_fields).length > 0) {
-          fields = normalizeIntentFields(data.prefill_fields)
+          fields = normalizeIntentFields(data.prefill_fields, data.document_type)
           setFormFields(fields)
         }
         setShowNlForm(true)
@@ -1052,7 +1055,8 @@ export default function WorkbenchPage() {
               const longFields = selectedTemplate.fields.filter(f => f.type === 'textarea')
               const shortFields = selectedTemplate.fields.filter(f => f.type !== 'textarea')
               const renderField = (f: TemplateField) => {
-                const val = formFields[f.key] ?? ''
+                const rawVal = formFields[f.key] ?? ''
+                const val = normalizeFormInputValue(f.key, rawVal, ocrResult?.document_type || formType, templates)
                 return (
                   <div key={f.key} style={f.type === 'textarea' ? { marginBottom: 10 } : {}}>
                     <label style={{ display: 'block', fontSize: 12, color: 'var(--text-secondary)', marginBottom: 2 }}>

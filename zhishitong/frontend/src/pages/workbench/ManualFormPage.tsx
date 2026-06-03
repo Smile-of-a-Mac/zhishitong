@@ -5,6 +5,7 @@ import GlassCard from '../../components/GlassCard'
 import { useAuth } from '../../hooks/useAuth'
 import { getDocLabel, getDocIcon, VALID_DOC_TYPES } from '../../constants/docTypes'
 import { useFormStorage } from '../../hooks/useFormStorage'
+import { normalizeFormInputValue } from '../../utils/formValues'
 
 interface TemplateField {
   key: string; label: string; type: string
@@ -159,7 +160,8 @@ export default function ManualFormPage() {
             const longFields = tpl.fields.filter(f => isLongField(f))
 
             const renderField = (f: TemplateField) => {
-              const val = formFields[f.key] ?? ''
+              const rawVal = formFields[f.key] ?? ''
+              const val = normalizeFormInputValue(f.key, rawVal, docType || '', templates)
               const isDaysAuto = f.key === 'days' && computedDays !== null
               const fieldId = `field_${f.key}`
               return (

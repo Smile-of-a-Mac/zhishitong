@@ -1,4 +1,5 @@
 """通知 API"""
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from database import SessionLocal
@@ -25,11 +26,15 @@ def list_notifications(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     unread_only: bool = Query(False),
+    types: Optional[list[str]] = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """获取当前用户的通知列表"""
-    result = get_user_notifications(db, current_user.id, page, page_size, unread_only)
+    normalized_types = None
+    if types:
+        normalized_types = [item.strip() for raw in types for item in raw.split(",") if item.strip()]
+    result = get_user_notifications(db, current_user.id, page, page_size, unread_only, types=normalized_types)
     return NotificationListOut(
         items=[NotificationOut.model_validate(n) for n in result["items"]],
         total=result["total"],

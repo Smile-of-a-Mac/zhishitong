@@ -9,6 +9,7 @@ interface Props {
   recordId: number
   decision?: 'approved' | 'rejected' | 'needs_revision'
   onFillOpinion?: (opinion: string) => void
+  onRecommendation?: (action: 'approved' | 'rejected' | 'needs_revision') => void
 }
 
 interface ComplianceItem {
@@ -50,7 +51,13 @@ const STATUS_ICON: Record<string, string> = {
   error: '❌',
 }
 
-export default function AIDecisionPanel({ recordId, decision, onFillOpinion }: Props) {
+const RECOMMENDATION: Record<ComplianceResult['risk_level'], { action: 'approved' | 'rejected' | 'needs_revision'; label: string }> = {
+  low: { action: 'approved', label: '建议通过' },
+  medium: { action: 'needs_revision', label: '建议需修改' },
+  high: { action: 'rejected', label: '建议不通过' },
+}
+
+export default function AIDecisionPanel({ recordId, decision, onFillOpinion, onRecommendation }: Props) {
   const [tab, setTab] = useState<'compliance' | 'similar'>('compliance')
   const [compliance, setCompliance] = useState<ComplianceResult | null>(null)
   const [complianceLoading, setComplianceLoading] = useState(false)
@@ -73,6 +80,8 @@ export default function AIDecisionPanel({ recordId, decision, onFillOpinion }: P
         const res = await axios.post(`/api/ai/compliance/${recordId}`)
         if (!cancelled && res.data && typeof res.data === 'object') {
           setCompliance(res.data)
+          const risk = res.data.risk_level as ComplianceResult['risk_level']
+          if (RECOMMENDATION[risk]) onRecommendation?.(RECOMMENDATION[risk].action)
         }
       } catch {
         // API 失败时保留旧结果不清空
@@ -157,6 +166,11 @@ export default function AIDecisionPanel({ recordId, decision, onFillOpinion }: P
             }}
           >
             {RISK_LABEL[compliance.risk_level]}
+          </span>
+        )}
+        {compliance && (
+          <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 600, color: RISK_COLOR[compliance.risk_level] }}>
+            {RECOMMENDATION[compliance.risk_level].label}
           </span>
         )}
       </div>

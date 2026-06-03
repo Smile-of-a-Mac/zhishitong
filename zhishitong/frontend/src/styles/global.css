@@ -1232,6 +1232,33 @@ details.collapsible-details > summary:hover {
   min-height: 48px;
 }
 
+.review-action-btn {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 0;
+  border: 1.5px solid var(--review-color);
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--review-color);
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 550;
+  font-family: var(--font-stack);
+  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.review-action-btn:hover,
+.review-action-btn.is-active,
+.review-action-btn.is-recommended {
+  background: var(--review-color);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+.review-action-btn.is-recommended:not(.is-active) {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--review-color) 18%, transparent);
+}
+
 @media (max-width: 768px) {
   .mobile-review-action-bar {
     position: sticky;

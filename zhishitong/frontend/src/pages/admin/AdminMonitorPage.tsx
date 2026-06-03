@@ -69,15 +69,85 @@ function formatUptime(s: number) {
   return d > 0 ? `${d}d ${h}h ${m}m` : `${h}h ${m}m`
 }
 
+function MonitorLoadingWindow() {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 50,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        pointerEvents: 'none',
+      }}
+    >
+      <GlassCard strong style={{
+        width: 320,
+        padding: 18,
+        border: '1px solid rgba(0,122,255,0.18)',
+        boxShadow: '0 18px 50px rgba(31,38,135,0.16)',
+        background: 'rgba(255,255,255,0.72)',
+      }}>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
+          <span style={{
+            width: 34,
+            height: 34,
+            borderRadius: 12,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(0,122,255,0.10)',
+            color: 'var(--accent-color)',
+            fontSize: 17,
+          }}>
+            🖥️
+          </span>
+          <div>
+            <div style={{ fontWeight: 650, fontSize: 15, color: 'var(--text-primary)' }}>正在加载系统监控</div>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>同步服务状态与运行指标</div>
+          </div>
+          <span style={{
+            marginLeft: 'auto',
+            width: 18,
+            height: 18,
+            borderRadius: '50%',
+            border: '2px solid rgba(0,122,255,0.18)',
+            borderTopColor: 'var(--accent-color)',
+            animation: 'spin 0.85s linear infinite',
+          }} />
+        </div>
+        <div style={{ display: 'grid', gap: 7, fontSize: 12, color: 'var(--text-secondary)' }}>
+          {['健康检查', '今日统计', '日志与错误摘要'].map((label, index) => (
+            <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{
+                width: 6,
+                height: 6,
+                borderRadius: '50%',
+                background: index === 0 ? 'var(--accent-color)' : 'rgba(120,120,128,0.35)',
+              }} />
+              <span>{label}</span>
+            </div>
+          ))}
+        </div>
+      </GlassCard>
+    </div>
+  )
+}
+
 export default function AdminMonitorPage() {
   const [health, setHealth] = useState<SystemHealth | null>(null)
   const [stats, setStats] = useState<SystemStats | null>(null)
   const [errors, setErrors] = useState<ErrorSummary[]>([])
   const [logs, setLogs] = useState<LogEntry[]>([])
+  const [loading, setLoading] = useState(true)
   const [logFilter, setLogFilter] = useState({ category: '', level: '' })
   const [tab, setTab] = useState<'overview' | 'logs' | 'errors'>('overview')
 
   const fetchAll = async () => {
+    setLoading(true)
     try {
       const [h, s, e, l] = await Promise.all([
         axios.get('/api/admin/monitor/health').then(r => r.data),
@@ -88,6 +158,8 @@ export default function AdminMonitorPage() {
       setHealth(h); setStats(s); setErrors(e); setLogs(l)
     } catch (err) {
       console.error('Failed to fetch monitor data', err)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -109,6 +181,7 @@ export default function AdminMonitorPage() {
   return (
     <div>
       <h1 className="page-title">🖥️ 系统监控</h1>
+      {loading && <MonitorLoadingWindow />}
 
       {/* 标签切换 */}
       <GlassCard size="sm" style={{ marginBottom: 16, display: 'flex', gap: 8, alignItems: 'center', padding: '12px 16px' }}>

@@ -1,7 +1,7 @@
 """种子数据 — 管理员 & 两所学校演示用户"""
 import os
 from database import SessionLocal, engine
-from models import Base, User, TierEnum
+from models import Base, User, TierEnum, ResourceRoom, ResourceVehicle
 from auth import hash_password
 
 Base.metadata.create_all(bind=engine)
@@ -175,6 +175,24 @@ def seed():
                     is_pinned=a_data.get("is_pinned", False),
                     author_id=admin_user.id,
                 ))
+
+        # ── 初始化可预约资源 ──
+        if db.query(ResourceRoom).count() == 0:
+            sample_rooms = [
+                {"name": "行政楼 301 会议室", "location": "行政楼三层", "capacity": 18, "equipment": "投影仪、白板、视频会议"},
+                {"name": "图书馆一楼研讨室", "location": "图书馆一层东侧", "capacity": 10, "equipment": "电子屏、白板"},
+                {"name": "信息中心培训室", "location": "信息中心二层", "capacity": 32, "equipment": "投影仪、讲台、无线麦克风"},
+            ]
+            for room_data in sample_rooms:
+                db.add(ResourceRoom(**room_data))
+
+        if db.query(ResourceVehicle).count() == 0:
+            sample_vehicles = [
+                {"plate_number": "鲁B·K2025", "model": "别克 GL8", "seats": 7, "driver": "王师傅"},
+                {"plate_number": "鲁B·S0701", "model": "大众帕萨特", "seats": 5, "driver": "李师傅"},
+            ]
+            for vehicle_data in sample_vehicles:
+                db.add(ResourceVehicle(**vehicle_data))
 
         db.commit()
         print("✅ 种子数据就绪")

@@ -33,11 +33,14 @@ def get_user_notifications(
     page: int = 1,
     page_size: int = 20,
     unread_only: bool = False,
+    types: Optional[List[str]] = None,
 ) -> dict:
     """获取用户通知列表，返回 items + total + unread_count"""
     q = db.query(Notification).filter(Notification.user_id == user_id)
     if unread_only:
         q = q.filter(Notification.is_read == False)
+    if types:
+        q = q.filter(Notification.type.in_(types))
 
     total = q.count()
     unread_count = (

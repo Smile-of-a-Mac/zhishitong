@@ -96,13 +96,11 @@ else
   run_step "安装推理服务 Python 依赖…" "$VENV_PIP" install -r "$INFER_DIR/requirements.txt"
 fi
 
-# ---------- 2.5 训练可选依赖 ----------
-if [ -f "$ROOT_DIR/../training/train_requirements.txt" ]; then
-  if "$VENV_PYTHON" -c "import torch, transformers, peft" 2>/dev/null; then
-    log "训练 Python 依赖已就绪，跳过 pip install"
-  else
-    run_step "安装训练 Python 依赖…" "$VENV_PIP" install -r "$ROOT_DIR/../training/train_requirements.txt"
-  fi
+# ---------- 2.5 训练可选依赖（MLX 使用根目录 requirements.txt） ----------
+if "$VENV_PYTHON" -c "import mlx" 2>/dev/null; then
+  log "训练依赖 (mlx) 已就绪，跳过 pip install"
+else
+  run_step "安装训练依赖…" "$VENV_PIP" install -r "$ROOT_DIR/../requirements.txt"
 fi
 
 # ---------- 3. 数据库初始化 ----------
@@ -130,17 +128,16 @@ trap 'cleanup 0' SIGINT SIGTERM
 
 # ---------- 5. 切换微调模型（如有） ----------
 MODELS_DIR="$ROOT_DIR/../models"
-LORA_GGUF="$MODELS_DIR/qwen3-4b-lora.gguf"
+LORA_GGUF="$MODELS_DIR/qwen3-14b-lora.gguf"
 
-# merge_lora.py 已直接输出 GGUF，无需额外转换
 if [ -f "$LORA_GGUF" ]; then
   export MODEL_PATH="$LORA_GGUF"
-  log "使用微调模型: qwen3-4b-lora.gguf"
+  log "使用微调模型: qwen3-14b-lora.gguf"
 fi
 
 # ---------- 6. 启动推理服务 ----------
 log "启动本地推理服务 (llama.cpp)…"
-export MODEL_PATH="${MODEL_PATH:-$MODELS_DIR/qwen3-4b.gguf}"
+export MODEL_PATH="${MODEL_PATH:-$MODELS_DIR/qwen3-14b-lora.gguf}"
 mkdir -p "$ROOT_DIR/logs"
 PYTHONPATH="$INFER_DIR" "$VENV_UVICORN" server:app \
   --host 0.0.0.0 --port 18080 \

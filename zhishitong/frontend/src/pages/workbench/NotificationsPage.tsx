@@ -62,38 +62,47 @@ const NOTIFICATION_TABS: { key: NotificationTabKey; label: string; types: string
   { key: 'system', label: '📢 系统消息', types: ['system_announcement'] },
 ]
 
+const PAGE_SIZE = 10
+
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([])
+  const [total, setTotal] = useState(0)
   const [unreadCount, setUnreadCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [errorMsg, setErrorMsg] = useState('')
   const [detail, setDetail] = useState<Notification | null>(null)
   const [activeTab, setActiveTab] = useState<NotificationTabKey>('all')
+  const [page, setPage] = useState(1)
   const nav = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const { user } = useAuth()
 
   const isReviewer = user?.is_dept_admin || user?.is_finance_admin || user?.is_school_admin
 
-  const fetchNotifications = async () => {
+  const fetchNotifications = async (nextPage = page, nextTab = activeTab) => {
     setLoading(true)
     setErrorMsg('')
     try {
-      const res = await axios.get('/api/notifications', { params: { page_size: 50 } })
+      const tab = NOTIFICATION_TABS.find(t => t.key === nextTab)
+      const params: Record<string, string | number> = { page: nextPage, page_size: PAGE_SIZE }
+      if (tab && tab.types.length > 0) params.types = tab.types.join(',')
+      const res = await axios.get('/api/notifications', { params })
       const data = res.data
       setNotifications(data.items || [])
+      setTotal(data.total || 0)
       setUnreadCount(data.unread_count || 0)
     } catch (e: any) {
       const status = e?.response?.status
       if (status) setErrorMsg(`请求失败 (${status})`)
       else setErrorMsg('网络错误，无法获取通知')
       setNotifications([])
+      setTotal(0)
     } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => { fetchNotifications() }, [])
+  useEffect(() => { fetchNotifications(page, activeTab) }, [page, activeTab])
 
   const markRead = async (id: number) => {
     await axios.post(`/api/notifications/${id}/read`)
@@ -154,14 +163,14 @@ export default function NotificationsPage() {
 
   const fullTime = (d: string) => new Date(d).toLocaleString('zh-CN')
 
-  const activeTabConfig = NOTIFICATION_TABS.find(t => t.key === activeTab)
-  const filteredNotifications = activeTab === 'all'
-    ? notifications
-    : notifications.filter(n => activeTabConfig?.types.includes(n.type))
+  const filteredNotifications = notifications
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  const pageStart = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1
+  const pageEnd = Math.min(total, page * PAGE_SIZE)
 
   const unreadByTab = (tab: typeof NOTIFICATION_TABS[number]) => {
     if (tab.key === 'all') return unreadCount
-    return notifications.filter(n => !n.is_read && tab.types.includes(n.type)).length
+    return 0
   }
 
   if (loading) {
@@ -172,7 +181,7 @@ export default function NotificationsPage() {
     return (
       <GlassCard style={{ padding: 30, textAlign: 'center' }}>
         <p style={{ color: 'var(--red)', marginBottom: 12 }}>⚠️ {errorMsg}</p>
-        <button className="glass-btn glass-btn-outline glass-btn-sm" onClick={fetchNotifications}>重试</button>
+        <button className="glass-btn glass-btn-outline glass-btn-sm" onClick={() => fetchNotifications(page, activeTab)}>重试</button>
       </GlassCard>
     )
   }
@@ -185,7 +194,7 @@ export default function NotificationsPage() {
         fontSize: 14, color: 'var(--text-secondary)',
         paddingBottom: 16, borderBottom: '1px solid var(--divider)', marginBottom: 24,
       }}>
-        <span>共 {notifications.length} 条消息，未读 {unreadCount} 条</span>
+        <span>共 {total} 条消息，未读 {unreadCount} 条</span>
         {unreadCount > 0 && (
           <button className="glass-btn glass-btn-outline glass-btn-sm" onClick={markAllRead}>
             全部已读 ({unreadCount})
@@ -200,7 +209,7 @@ export default function NotificationsPage() {
           return (
             <button
               key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
+              onClick={() => { setActiveTab(tab.key); setPage(1) }}
               className="glass-btn glass-btn-sm"
               style={{
                 background: isActive ? 'var(--accent)' : 'var(--glass-bg)',
@@ -226,48 +235,65 @@ export default function NotificationsPage() {
 
       {filteredNotifications.length === 0 ? (
         <GlassCard style={{ padding: 40, textAlign: 'center', color: 'var(--text-secondary)' }}>
-          {notifications.length === 0 ? '暂无通知' : '当前分类暂无通知'}
+          {total === 0 ? '暂无通知' : '当前分类暂无通知'}
         </GlassCard>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {filteredNotifications.map(n => (
-            <GlassCard
-              key={n.id}
-              strong={!n.is_read}
-              onClick={() => openDetail(n)}
-              style={{
-                padding: '14px 16px',
-                cursor: 'pointer',
-                opacity: n.is_read ? 0.7 : 1,
-                position: 'relative',
-                transition: 'opacity 0.2s ease, box-shadow 0.2s ease',
-              }}
-            >
-              {!n.is_read && (
-                <span style={{
-                  position: 'absolute', top: 16, right: 16,
-                  width: 8, height: 8, borderRadius: '50%',
-                  background: 'var(--accent)',
-                }} />
-              )}
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                <span style={{
-                  fontSize: 12, fontWeight: 500,
-                  color: TYPE_COLOR[n.type] || 'var(--accent)',
-                }}>
-                  {TYPE_ICON[n.type] || '📌'} {typeLabel(n.type)}
-                </span>
-                <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
-                  {timeAgo(n.created_at)}
-                </span>
-              </div>
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 2 }}>{n.title}</div>
-              <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                {n.body.length > 80 ? n.body.slice(0, 80) + '…' : n.body}
+        <>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {filteredNotifications.map(n => (
+              <GlassCard
+                key={n.id}
+                strong={!n.is_read}
+                onClick={() => openDetail(n)}
+                style={{
+                  padding: '14px 16px',
+                  cursor: 'pointer',
+                  opacity: n.is_read ? 0.7 : 1,
+                  position: 'relative',
+                  transition: 'opacity 0.2s ease, box-shadow 0.2s ease',
+                }}
+              >
+                {!n.is_read && (
+                  <span style={{
+                    position: 'absolute', top: 16, right: 16,
+                    width: 8, height: 8, borderRadius: '50%',
+                    background: 'var(--accent)',
+                  }} />
+                )}
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <span style={{
+                    fontSize: 12, fontWeight: 500,
+                    color: TYPE_COLOR[n.type] || 'var(--accent)',
+                  }}>
+                    {TYPE_ICON[n.type] || '📌'} {typeLabel(n.type)}
+                  </span>
+                  <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                    {timeAgo(n.created_at)}
+                  </span>
+                </div>
+                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 2 }}>{n.title}</div>
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                  {n.body.length > 80 ? n.body.slice(0, 80) + '…' : n.body}
+                </div>
+              </GlassCard>
+            ))}
+          </div>
+
+          {totalPages > 1 && (
+            <GlassCard size="xs" style={{
+              marginTop: 14,
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+              color: 'var(--text-secondary)', fontSize: 13,
+            }}>
+              <span>第 {pageStart}-{pageEnd} 条 / 共 {total} 条</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <button className="glass-btn glass-btn-outline glass-btn-sm" disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>上一页</button>
+                <span style={{ minWidth: 64, textAlign: 'center' }}>{page} / {totalPages}</span>
+                <button className="glass-btn glass-btn-outline glass-btn-sm" disabled={page >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>下一页</button>
               </div>
             </GlassCard>
-          ))}
-        </div>
+          )}
+        </>
       )}
 
       {/* 详情弹窗 */}

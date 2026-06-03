@@ -4,11 +4,11 @@ This file provides guidance to AI coding agents (OpenCode, Claude Code, Cursor, 
 
 ## Repository Overview
 
-**Sito** — 山东科技大学（SDUST）的校园办事指南与知识问答系统（"知事通"）。基于 LLM（Qwen3-4B）的 RAG 系统，提供校园政策查询、审批流程指南、OCR 识别等功能。
+**Sito** — 山东科技大学（SDUST）的校园办事指南与知识问答系统（"知事通"）。基于云端 LLM + 本地 Qwen3-14B GGUF 的 RAG 系统，提供校园政策查询、审批流程指南、OCR 识别等功能。
 
 - **后端**: Python FastAPI，SQLAlchemy ORM，Redis
 - **前端**: React (TypeScript), Vite
-- **模型**: Qwen3-4B GGUF (LoRA fine-tuned)
+- **模型**: Qwen3-14B GGUF (LoRA fine-tuned)，Qwen3-4B/PEFT 管线作为跨平台备选
 - **数据**: 爬虫采集自山东科技大学各学院网站
 
 ## Agent Skills Integration

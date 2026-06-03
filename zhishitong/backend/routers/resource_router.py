@@ -173,15 +173,39 @@ def create_booking(
     current_user: User = Depends(get_current_user),
 ):
     """创建预约（用户均可）"""
+    try:
+        start_time = datetime.fromisoformat(data.start_time)
+        end_time = datetime.fromisoformat(data.end_time)
+    except ValueError:
+        raise HTTPException(422, "时间格式不正确")
+
+    if end_time <= start_time:
+        raise HTTPException(422, "结束时间必须晚于开始时间")
+
+    resource_type = ResourceType(data.resource_type)
+
+    if resource_type == ResourceType.meeting_room:
+        resource_exists = db.query(ResourceRoom).filter(
+            ResourceRoom.id == data.resource_id,
+            ResourceRoom.is_active == True,
+        ).first()
+    else:
+        resource_exists = db.query(ResourceVehicle).filter(
+            ResourceVehicle.id == data.resource_id,
+            ResourceVehicle.is_active == True,
+        ).first()
+    if not resource_exists:
+        raise HTTPException(404, "预约资源不存在或已停用")
+
     # 检查时间冲突
     conflict = (
         db.query(ResourceBooking)
         .filter(
-            ResourceBooking.resource_type == data.resource_type,
+            ResourceBooking.resource_type == resource_type,
             ResourceBooking.resource_id == data.resource_id,
             ResourceBooking.status.in_([BookingStatus.pending, BookingStatus.approved]),
-            ResourceBooking.start_time < data.end_time,
-            ResourceBooking.end_time > data.start_time,
+            ResourceBooking.start_time < end_time,
+            ResourceBooking.end_time > start_time,
         )
         .first()
     )
@@ -189,12 +213,12 @@ def create_booking(
         raise HTTPException(409, "该时段已被预约，请选择其他时间")
 
     booking = ResourceBooking(
-        resource_type=data.resource_type,
+        resource_type=resource_type,
         resource_id=data.resource_id,
         user_id=current_user.id,
         title=data.title,
-        start_time=datetime.fromisoformat(data.start_time),
-        end_time=datetime.fromisoformat(data.end_time),
+        start_time=start_time,
+        end_time=end_time,
         participants=data.participants,
         status=BookingStatus.pending,
     )

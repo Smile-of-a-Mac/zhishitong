@@ -285,8 +285,8 @@ elif [[ "$CAN_TRAIN" != "true" ]]; then
   warn "本机不满足训练条件，跳过 PyTorch 安装"
   report_add "skip" "PyTorch & Transformers" "本机不满足训练条件，跳过安装"
 else
-  info "安装训练依赖 (torch, transformers, peft)..."
-  "$VENV_PIP" install -r "$ROOT_DIR/training/train_requirements.txt" -q 2>&1 | tail -3
+  info "安装训练依赖 (mlx, transformers)..."
+  "$VENV_PIP" install -r "$ROOT_DIR/requirements.txt" -q 2>&1 | tail -3
   if "$VENV_PYTHON" -c "import torch" 2>/dev/null; then
     ok "训练依赖安装完成"
     TORCH_OK=true
@@ -408,9 +408,8 @@ echo ""
 echo -e "  ${BOLD}启动开发服务器:${NC}"
 echo "    cd zhishitong && bash start.sh"
 echo ""
-echo -e "  ${BOLD}训练 LoRA (可选):${NC}"
-echo "    source .venv/bin/activate"
-echo "    python training/train_lora.py"
+echo -e "  ${BOLD}训练 LoRA (可选, MLX):${NC}"
+echo "    .venv/bin/python training/train_lora_mlx.py"
 echo ""
 echo -e "  ${BOLD}运行测试:${NC}"
 echo "    source .venv/bin/activate"

@@ -1,4 +1,5 @@
 import unittest
+import datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -101,6 +102,40 @@ class ManualComplianceRouterTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("合法事务类型 key", prompt)
         self.assertIn("reimbursement", prompt)
         self.assertIn("prefill_fields", prompt)
+
+    async def test_intent_rule_fill_handles_relative_leave_travel_details(self):
+        user = SimpleNamespace(
+            username="sdu_student_a",
+            real_name="王小明",
+            student_id="20240001",
+            department="计算机学院",
+            school="山东科技大学",
+            major="软件工程",
+            class_name="软工2401",
+            phone="13800000000",
+            advisor="李老师",
+        )
+        raw = '{"document_type":"leave","confidence":0.95,"prefill_fields":{"reason":"去滨州调研"}}'
+
+        class FixedDate(datetime.date):
+            @classmethod
+            def today(cls):
+                return cls(2026, 6, 3)
+
+        with patch("services.rag_service._call_llm", AsyncMock(return_value=raw)), \
+             patch("services.rag_service.datetime.date", FixedDate):
+            result = await svc_parse_intent(
+                "我导师叫我去滨州调研，我明后两天都不在学校，我坐长途汽车去，帮我请个假",
+                current_user=user,
+            )
+
+        fields = result["prefill_fields"]
+        self.assertEqual(result["document_type"], "leave")
+        self.assertEqual(fields["leave_type"], "公假")
+        self.assertEqual(fields["destination"], "滨州")
+        self.assertEqual(fields["transportation"], "长途汽车")
+        self.assertEqual(fields["start_date"], "2026-06-04")
+        self.assertEqual(fields["end_date"], "2026-06-05")
 
     async def test_checks_manual_fields_without_creating_approval_record(self):
         user = SimpleNamespace(

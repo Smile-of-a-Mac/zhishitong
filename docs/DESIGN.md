@@ -1,7 +1,7 @@
 # 智审通 — 产品设计文档
 
 > 状态：**迭代中**
-> 最后更新：2026-06-02
+> 最后更新：2026-06-03
 
 ## 📐 设计图集
 
@@ -65,7 +65,7 @@ LLM 辅助引擎输出：
 |          |      Free 免费版              |     Pro 专业版           |
 |----------|-----------------------------|-------------------------|
 | **文字提取** | EasyOCR（本地，ARM/x86通用）+ PDF 文本提取 | 多模态 LLM API（看图）   |
-| **JSON 填充** | 本地小模型（Qwen3-4B）       | 同一 LLM 完成（一步到位）|
+| **JSON 填充** | 云端 LLM 优先，规则兜底      | 同一 LLM 完成（一步到位）|
 | **调用次数**  | 无限制（纯本地，无外部依赖）   | 管理员设定月度配额      |
 | **用户编辑**  | ✅ 前端可编辑表单            | ✅ 同 Free              |
 | **适用场景**  | 日常轻度使用 / 个人           | 高频审批部门            |
@@ -90,7 +90,7 @@ LLM 辅助引擎输出：
           │ 纯文本（不是图片）
           ▼
 ┌──────────────────────────┐
-│ Step 2: 本地小模型推理    │  ← Qwen3-4B
+│ Step 2: 云端 LLM / 规则兜底│  ← 表单预填走云端，日期/地点规则兜底
 │ 输入: EasyOCR 提取的文本  │    通过 llama.cpp (llama-cpp-python) 运行
 │ 输出: 结构化 JSON          │    纯文本填充，4B 参数轻松胜任
 │                          │
@@ -182,9 +182,10 @@ LLM 辅助引擎输出：
 
 | 模型 | 参数量 | 内存 | 中文 | 用途 | GGUF 文件名 |
 |------|--------|------|:----:|------|------------|
-| **Qwen3-4B-Instruct** | 4B | ~2.5GB (Q4_K_M) | ⭐⭐⭐⭐⭐ | JSON 填充 | `qwen3-4b.gguf` |
+| **Qwen3-14B-Instruct LoRA** | 14B | ~28GB (f16 GGUF) | ⭐⭐⭐⭐⭐ | RAG 合规分析、本地推理兜底 | `qwen3-14b-lora.gguf` |
+| **Qwen3-4B-Instruct** | 4B | ~2.5GB (Q4_K_M) | ⭐⭐⭐⭐ | Windows/CUDA/CPU 备选训练与推理 | `qwen3-4b.gguf` |
 
-**当前使用 Qwen3-4B-Instruct**，Q4_K_M 量化版约 2.5GB。相比旧版 0.5B 模型，中文理解和 JSON 结构化能力大幅提升。
+**当前默认本地推理使用 Qwen3-14B LoRA GGUF**，自然语言填表走云端 LLM；Qwen3-4B PEFT 管线保留为 Windows/CUDA/CPU 备选。
 
 ### 2.3 推理引擎选择
 
@@ -210,7 +211,7 @@ LLM 辅助引擎输出：
 PYTHONPATH="$INFER_DIR" uvicorn server:app --host 0.0.0.0 --port 18080
 
 # 环境变量配置
-MODEL_PATH=models/qwen3-4b.gguf  # 模型路径
+MODEL_PATH=models/qwen3-14b-lora.gguf  # 默认本地推理模型路径
 PORT=18080                             # 服务端口
 N_CTX=2048                             # 上下文长度
 N_THREADS=4                            # CPU 线程数
@@ -1002,7 +1003,7 @@ def add_api_key(key_type, ...):
 > **核心原则：** 项目支持本地开发（start.sh 一键启动）和 Docker 容器化两种部署方式。
 > 当前以本地开发模式为主（`zhishitong/start.sh`），Docker 部署方案作为未来规划。
 
-### 11.0 环境安装策略（v0.6.2）
+### 11.0 环境安装策略（v0.6.3）
 
 **目标：** 安装脚本不替用户“闷头装”，而是先判断本机是否已有依赖、是否具备本地推理和 LoRA 训练能力，再决定安装或跳过。
 
@@ -1010,7 +1011,7 @@ def add_api_key(key_type, ...):
 |------|------|------|
 | `setup/setup.sh` | macOS / Linux | 预检、创建 `.venv`、按需安装 Python/npm 依赖、下载模型、初始化数据库、汇总报告 |
 | `setup/setup.ps1` | Windows | PowerShell 预检、NVIDIA VRAM 检测、按需安装依赖、下载模型、初始化数据库、汇总报告 |
-| `setup/_download_model.py` | 跨平台 | 系统能力检测、HuggingFace 连通性检测、Qwen3-4B GGUF 下载、进度条显示 |
+| `setup/_download_model.py` | 跨平台 | 系统能力检测、HuggingFace 连通性检测、4B 备选 GGUF 下载、进度条显示 |
 
 **能力门槛：**
 
@@ -1078,7 +1079,7 @@ PYTHONPATH="$BACKEND_DIR" uvicorn main:app --host 0.0.0.0 --port 8080 --reload &
 │                                                             │
 │  2. 推理服务启动（llama-cpp-python + uvicorn :18080）       │
 │     ├─ 自动 GPU 检测（Metal/CUDA/ROCm/CPU）                 │
-│     ├─ Qwen3-4B GGUF 模型加载                               │
+│     ├─ Qwen3-14B LoRA GGUF 模型加载（4B 为跨平台备选）        │
 │     └─ 暴露 OpenAI 兼容 API                                 │
 │                                                             │
 │  3. 后端启动（uvicorn :8080）                                │
@@ -1140,7 +1141,7 @@ Dockerfile 和 docker-compose.yml 待后续补充。
 
 | 层级 | 文字提取 | JSON 填充 | 调用限制 |
 |------|---------|-----------|---------|
-| **Free** | EasyOCR（本地）+ PDF 文本提取 | 本地小模型（Qwen3-4B） | 不限制（纯本地） |
+| **Free** | EasyOCR（本地）+ PDF 文本提取 | 云端自然语言填表 + 本地规则兜底；合规分析走本地 Qwen3-14B | OCR 不限制；云端填表需配置 LLM Key |
 | **Pro** | 多模态 LLM API | 同一 LLM | 管理员设定月度配额 |
 
 **过渡策略（从用户级 → 学校级）：**
@@ -1713,88 +1714,64 @@ class RuleConfig(Base):
 
 ## 二十二、LoRA 微调管线（v0.5.0 新增）
 
-> **目标：** 用山东科技大学实际事务流程数据微调 Qwen3-4B，使其成为「山科大事务流程专家」。
+> **目标：** 用山东科技大学实际事务流程数据微调 Qwen3-14B，使其成为「山科大事务流程专家」。Qwen3-4B/PEFT 管线保留为 Windows/CUDA/CPU 备选。
 
 ### 22.1 数据制备
 
 ```
 data/
-├── pages/                          # 爬取的原始 HTML 页面
-│   ├── jwc.sdust.edu.cn/           # 教务处
-│   │   ├── gzlc/                   #   工作流程
-│   │   └── info/                   #   通知公告
-│   └── yjsy.sdust.edu.cn/          # 研究生院
-│       ├── gzb/                    #   工作部
-│       └── gzzd/                   #   规章制度
-├── build_corpus_local.py           # 语料构建脚本
-├── sdust_process_corpus_raw.jsonl  # 原始语料
-└── sdust_process_corpus_lora.jsonl # LoRA 训练数据（instruction/input/output 格式）
+├── sdust_classification.jsonl      # 分类语料（100 条，10 类）
+└── build_classification_corpus.py   # 分类语料构建脚本
 ```
 
-### 22.2 训练配置
+### 22.2 训练配置（MLX + Qwen3-14B）
 
 ```python
-# training/train_lora.py
-MODEL_ID = "Qwen/Qwen3-4B"     # 基座模型（HuggingFace）
-LORA_R = 16                     # LoRA 秩
-LORA_ALPHA = 32                 # 缩放因子
-LORA_TARGETS = [                # 目标模块
-    "q_proj", "k_proj", "v_proj", "o_proj",
-    "gate_proj", "up_proj", "down_proj"
-]
-NUM_EPOCHS = 50                # 训练轮数
-BATCH_SIZE = 1                  # 批大小（9条数据，小批量）
-GRAD_ACCUM = 8                  # 梯度累积（等效 batch=8）
-LEARNING_RATE = 2e-4
-MAX_SEQ_LENGTH = 1024
+# training/train_lora_mlx.py
+BASE_MODEL = "Qwen3-14B (MLX 4bit)"   # 基座模型
+LORA_R = 16                            # LoRA 秩
+LORA_ALPHA = 32                        # 缩放因子
+NUM_EPOCHS = 10                        # 训练轮数
+BATCH_SIZE = 1
+LEARNING_RATE = 1e-4
+MAX_SEQ_LENGTH = 512
+VAL_SPLIT = 0.1                        # 10% 验证集
 ```
 
 ### 22.3 产出物
 
 ```
-lora_output/
-├── checkpoint-50/           # 中间检查点
-├── checkpoint-100/          # 最终检查点
-└── final/                   # 最终 LoRA adapter
-    ├── adapter_config.json
-    ├── adapter_model.safetensors
-    └── ...
-
-lora_output_merged/          # 合并后的完整模型（HuggingFace 格式）
-├── model.safetensors        # 约 1GB
-├── config.json
-├── tokenizer.json
-└── ...
+lora_output_mlx/
+├── adapters.safetensors        # LoRA 适配器权重（847KB）
+├── adapter_config.json         # 适配器配置
+└── merged_f16/                 # 融合后完整模型（HF f16 格式，~28GB）
+    ├── model-*.safetensors
+    ├── config.json
+    └── tokenizer.json
 
 models/
-└── qwen3-4b-lora.gguf       # 转换为 GGUF 格式（给 llama.cpp 推理用）
+└── qwen3-14b-lora.gguf         # 最终 GGUF（~28GB，给 llama.cpp 推理用）
 ```
 
-### 22.4 训练 & 合并 & 转换流程
+### 22.4 训练 & 融合 & 转换（一步完成）
 
 ```bash
-# Step 1: LoRA 微调
-cd training && python train_lora.py
-
-# Step 2: 合并 LoRA adapter 到基座模型
-python merge_lora.py
-
-# Step 3: 转换为 GGUF（训练/合并阶段产出，start.sh 只负责检测并使用）
-# 手动示例：
-python -m llama_cpp.convert_hf_to_gguf lora_output_merged \
-  --outfile models/qwen3-4b-lora.gguf --outtype q8_0
+cd /Users/wangdaoyu/VSCode/sito
+.venv/bin/python training/train_lora_mlx.py
 ```
+
+脚本自动完成：训练 → 保存 LoRA 适配器 → 生成 adapter_config.json → 调用 `mlx_lm fuse --dequantize` → 保存 f16 融合模型 → 调用 `convert_hf_to_gguf.py` 输出 GGUF。
 
 ### 22.5 start.sh 自动切换
 
 ```bash
-# start.sh 检测逻辑（v0.5.0 新增）
+# start.sh 检测逻辑
 if [ -f "$LORA_GGUF" ]; then
   export MODEL_PATH="$LORA_GGUF"  # 使用微调模型
 fi
 ```
 
-当前 `start.sh` 不再负责 HF → GGUF 转换，只检测 `models/qwen3-4b-lora.gguf` 是否存在；转换由训练/合并阶段完成。
+当前 `start.sh` 不再负责 HF → GGUF 转换，只检测 `models/qwen3-14b-lora.gguf` 是否存在；转换由训练/合并阶段完成。
 
 ---
 
@@ -2078,7 +2055,7 @@ fi
 | 5 | ✅ | JSON 动态模板渲染 | 后端 JSON Schema 定义，前端按 type 渲染 |
 | 6 | ✅ | 文件上传安全 | MIME 白名单 + 魔数校验 + UUID 文件名 + 路径防逃逸；Docker `noexec` 卷为部署建议 |
 | 7 | ✅ | 部署方式 | **本地开发**（start.sh 一键启动）+ Docker（未来规划） |
-| 8 | ✅ | 本地模型 GGUF | 使用 Qwen3-4B GGUF，放在 models/ 目录，setup 脚本按能力下载，start.sh 自动检测 |
+| 8 | ✅ | 本地模型 GGUF | 默认使用 Qwen3-14B LoRA GGUF，放在 models/ 目录；Qwen3-4B 作为跨平台备选 |
 | 9 | ⬜ | EasyOCR 在 ARM 上的中文识别精度 | 后续需在 ARM Mac 上实际测试确认 |
 | 10 | ✅ | 推理服务并发 | llama-cpp-python 支持并发请求排队（cont-batching），默认上下文 2048 tokens |
 | 11 | ⬜ | 学校级套餐迁移 | 从用户级 tier 过渡到 school_config 表，见第十二章 |
@@ -2103,3 +2080,4 @@ fi
 | **v0.6.0 → v0.6.1** | 成员管理全面升级（管理端编辑/硬删除/全字段表单）；监控面板重构（状态横幅/分布图/日志错误Tab筛选）；启动脚本优化（Redis 检测/训练依赖/模型验证/依赖缓存）；安全加固（`.jwt_secret` 持久化/JWT 刷新加固/登录限流）；登录页动画打磨；`.gitignore` 完善；配置中心化（JWT 过期时间/环境/允许源） |
 | **v0.6.1 → v0.6.2** | 学生端手动填表提交前 RAG 合规自查（`/api/ai/manual-compliance`，不创建审批记录、不触发智能审批）；手动表单页新增蓝色合规自查按钮与风险/建议/引用政策展示；OCR 图片预处理加速（EXIF 修正、最大边 1800px、JPEG 85、扫描 PDF 转图后压缩）；多模态 OCR 使用压缩后 `image/jpeg` data URI；保留多模态 `max_tokens` 以避免 reasoning JSON 截断；新增跨平台安装脚本（预检、按需安装、VRAM 检测、模型下载进度条、安装报告）；新增后端测试覆盖 |
 | **v0.6.2 → v0.6.2v2** | 智能指令填表接入当前登录账号上下文（第一人称自动补 applicant/student_id 等字段，帮别人填不冒充）；意图识别改为 LLM 自由输出 JSON + 后端字段归一化（`_normalize_json_keys`），不再发送全部模板定义；新增金额/类别正则兜底提取（`_intent_regex_fill`，"公务餐饮"映射为会议费）；NLP 识别与合规分析分步显示；AI 输出全局多色渐变样式（`ai-generated-panel`）；深色模式 AI 容器文字实体白色；AI 面板入场动画、引用条款折叠过渡、NLP 触发背景 blobs；修复政策小助手聊天气泡可读性；后端测试扩展至 16 个 |
+| **v0.6.2v2 → v0.6.3** | 云端 LLM 负责自然语言填表，本地 Qwen3-14B LoRA GGUF 负责 RAG 合规分析/分类兜底；新增请假相对日期、地点、交通、公假类型规则补全；前端表单日期统一规范化为 `datetime-local` 可显示值；通知中心支持服务端类型过滤与分页；资源预约补齐会议室/车辆管理和后端校验；审批详情自动触发 AI 合规分析并高亮推荐操作；政策助手和知识库更新至 2025 版；新增 MLX 多任务语料、14B LoRA 训练/融合/GGUF 转换管线；`.gitignore` 排除本地模型与训练产物 |

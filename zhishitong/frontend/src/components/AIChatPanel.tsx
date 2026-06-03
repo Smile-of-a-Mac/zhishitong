@@ -18,18 +18,18 @@ interface ChatMsg {
 
 const WELCOME: ChatMsg = {
   role: 'assistant',
-  content: '你好！我是智审通政策助手，可以帮你解答各类审批政策问题。',
+  content: '你好！我是智审通政策助手，当前依据 2025 年版制度为你解答审批政策问题。',
 }
 
 const SUGGESTED: string[] = [
   '报销需要什么材料？',
   '请假超过3天怎么办？',
-  '差旅住宿费标准是多少？',
+  '2025年差旅住宿费标准是多少？',
   '社团活动如何申请场地？',
 ]
 
 /* ─── localStorage 工具 ─── */
-const STORAGE_PREFIX = 'zhishitong_chat_'
+const STORAGE_PREFIX = 'zhishitong_chat_2025_'
 
 function storageKey(userId: number) {
   return `${STORAGE_PREFIX}${userId}`
@@ -143,7 +143,7 @@ export default function AIChatPanel() {
           justifyContent: 'center',
           transition: 'transform 0.2s ease, box-shadow 0.2s ease',
         }}
-        title="政策助手"
+        title="政策助手（2025年版）"
         onMouseEnter={e => {
           ;(e.currentTarget as HTMLButtonElement).style.transform = 'scale(1.1)'
           ;(e.currentTarget as HTMLButtonElement).style.boxShadow =
@@ -207,7 +207,7 @@ export default function AIChatPanel() {
                 color: '#34C759',
               }}
             >
-              RAG 知识库
+              2025 版制度
             </span>
             <button
               onClick={() => {
@@ -346,7 +346,7 @@ export default function AIChatPanel() {
                   send(input)
                 }
               }}
-              placeholder="输入政策问题..."
+              placeholder="输入 2025 年版政策问题..."
               style={{
                 flex: 1,
                 padding: '7px 12px',

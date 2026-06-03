@@ -4,7 +4,7 @@ RAG + LLM 增强服务 v2.0
 核心变更（相比 v1 Demo）：
   1. 从 data/policy_kb.json 加载科学编写的政策知识库（非硬编码）
   2. TF-IDF 语义向量检索替代简单关键词匹配
-  3. 所有 LLM 调用统一走本地推理服务（llama.cpp + Qwen3-4B）
+  3. LLM 调用按场景分流：云端模型负责自然语言填表，本地 llama.cpp + Qwen3-14B 负责合规/RAG 兜底
   4. 仅保留规则兜底用于 LLM 完全不可用时的容错
   5. TF-IDF 矩阵磁盘缓存，避免每次重启重新构建
 
@@ -14,6 +14,7 @@ import json
 import logging
 import os
 import re
+import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -195,11 +196,11 @@ async def _call_llm(
     max_tokens: int = 512,
     temperature: float = 0.3,
     db: Optional[Session] = None,
+    force_external: bool = False,
 ) -> str:
     """
     统一 LLM 调用入口。
-    如果提供了 db，则从 Key 池智能选取最优 API Key 并追踪用量/失败。
-    无 db 或池中无可用 Key 时回退到环境变量 → 本地推理服务。
+    force_external=True 时仅尝试外部 API，不回落本地推理（意图识别场景）。
     """
     from services.key_pool import resolve_key, record_success, record_failure
     from models import ApiKeyType
@@ -209,7 +210,6 @@ async def _call_llm(
         messages.append({"role": "system", "content": system})
     messages.append({"role": "user", "content": prompt})
 
-    # 1. 尝试 Key 池（如有 db）
     key_id = None
     api_base = LLM_API_BASE
     api_key = LLM_API_KEY
@@ -225,7 +225,6 @@ async def _call_llm(
         api_key = resolved.api_key
         model = resolved.model
 
-    # 2. 尝试外部 API
     if api_key:
         try:
             async with httpx.AsyncClient(timeout=30) as client:
@@ -241,17 +240,20 @@ async def _call_llm(
                 )
                 resp.raise_for_status()
                 result = resp.json()["choices"][0]["message"]["content"].strip()
-                # 外部 API 成功 → 记录用量
                 if key_id and db:
                     record_success(db, key_id)
                 return result
         except Exception as e:
-            logger.warning(f"外部 LLM 调用失败（Key #{key_id or 'env'}），回落本地推理服务: {e}")
-            # 记录失败
+            logger.warning(f"外部 LLM 调用失败（Key #{key_id or 'env'}）: {e}")
             if key_id and db:
                 record_failure(db, key_id)
+            if force_external:
+                raise
 
-    # 3. 回退到本地推理服务
+    if force_external:
+        raise RuntimeError("未配置外部 LLM API Key，无法执行意图识别。请设置 LLM_API_KEY 环境变量或在管理后台添加 AI Key。")
+
+    # 回退到本地推理服务（仅非 force_external 场景）
     async with httpx.AsyncClient(timeout=120) as client:
         resp = await client.post(
             f"{LLAMA_SERVER_URL}/v1/chat/completions",
@@ -267,16 +269,23 @@ async def _call_llm(
 
 
 def _extract_json(text: str) -> dict:
-    """从 LLM 输出中稳健提取 JSON"""
+    """从 LLM 输出中稳健提取 JSON（处理 think 标签、代码块、杂讯）"""
+    import re
+    # 去掉 think / 思考标签（DeepSeek 等模型）
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
     # 处理 markdown 代码块
     if "```json" in text:
         text = text.split("```json")[1].split("```")[0].strip()
     elif "```" in text:
-        text = text.split("```")[1].split("```")[0].strip()
+        parts = text.split("```")
+        if len(parts) >= 2:
+            text = parts[1].split("```")[0].strip()
     start = text.find("{")
     end = text.rfind("}")
     if start != -1 and end != -1 and end > start:
         text = text[start:end + 1]
+    else:
+        raise ValueError("No JSON object found in response")
     return json.loads(text)
 
 
@@ -676,6 +685,41 @@ def _intent_regex_fill(text: str, fields: dict, doc_type: str) -> dict:
         m = re.search(r"(\d{4}[-/]\d{1,2}[-/]\d{1,2})", text)
         if m:
             filled["date"] = m.group(1).replace("/", "-")
+    if doc_type == "leave":
+        if not filled.get("leave_type"):
+            if any(kw in text for kw in ["调研", "出差", "公务", "导师叫", "老师叫", "会议", "参会"]):
+                filled["leave_type"] = "公假"
+            elif "病" in text:
+                filled["leave_type"] = "病假"
+            else:
+                filled["leave_type"] = "事假"
+        if not filled.get("destination"):
+            m = re.search(r"(?:去|到|赴)([^，,。\s]{2,12}?)(?:调研|出差|参会|开会|学习|培训|办事|$)", text)
+            if m:
+                filled["destination"] = m.group(1)
+        if not filled.get("transportation"):
+            for item in ["长途汽车", "高铁", "火车", "飞机", "汽车", "大巴", "公交", "出租车", "打车", "自驾"]:
+                if item in text:
+                    filled["transportation"] = item
+                    break
+        if not filled.get("reason"):
+            m = re.search(r"(?:去|到|赴)([^，,。\s]{2,20}?(?:调研|出差|参会|开会|学习|培训|办事))", text)
+            if m:
+                filled["reason"] = m.group(1)
+        today = datetime.date.today()
+        if "明后两天" in text or "明后天" in text:
+            start = today + datetime.timedelta(days=1)
+            end = today + datetime.timedelta(days=2)
+            filled.setdefault("start_date", start.isoformat())
+            filled.setdefault("end_date", end.isoformat())
+        elif "明天" in text:
+            day = today + datetime.timedelta(days=1)
+            filled.setdefault("start_date", day.isoformat())
+            filled.setdefault("end_date", day.isoformat())
+        elif "后天" in text:
+            day = today + datetime.timedelta(days=2)
+            filled.setdefault("start_date", day.isoformat())
+            filled.setdefault("end_date", day.isoformat())
     return filled
 
 
@@ -728,7 +772,7 @@ async def parse_intent(text: str, db: Optional[Session] = None, current_user=Non
 若是帮别人填写，基础字段以用户描述为准，不要用当前账号冒充。"""
 
     try:
-        raw = await _call_llm(prompt, max_tokens=800, db=db)
+        raw = await _call_llm(prompt, max_tokens=800, db=db, force_external=True)
         result = _extract_json(raw)
         if not result.get("document_type") or result["document_type"] not in _INTENT_KEYWORDS:
             result["document_type"] = keyword_type

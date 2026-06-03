@@ -5,6 +5,7 @@ import { getFieldLabel } from '../../constants/fieldLabels'
 import GlassCard from '../../components/GlassCard'
 import AuthImage from '../../components/AuthImage'
 import ApprovalProgressBar from '../../components/ApprovalProgressBar'
+import AIDecisionPanel from '../../components/AIDecisionPanel'
 import { STATUS_LABELS, STAGE_LABELS } from '../../utils/constants'
 
 interface FinanceRecord {
@@ -32,6 +33,7 @@ export default function FinanceAdminPage() {
   const [reviewId, setReviewId] = useState<number | null>(null)
   const [reviewAction, setReviewAction] = useState<'approved' | 'rejected' | 'needs_revision'>('approved')
   const [reviewReason, setReviewReason] = useState('')
+  const [aiRecommendedAction, setAiRecommendedAction] = useState<'approved' | 'rejected' | 'needs_revision' | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [suggesting, setSuggesting] = useState(false)
 
@@ -78,7 +80,7 @@ export default function FinanceAdminPage() {
       await axios.put(`/api/finance/records/${reviewId}/status`, {
         status: reviewAction, reason: reviewReason,
       })
-      setReviewId(null); setReviewReason(''); setSelectedRecord(null)
+      setReviewId(null); setReviewReason(''); setSelectedRecord(null); setAiRecommendedAction(null)
       fetchRecords(); fetchStats()
     } catch (e: any) {
       alert(e?.response?.data?.detail || '操作失败')
@@ -150,7 +152,7 @@ export default function FinanceAdminPage() {
                       {new Date(r.created_at).toLocaleDateString('zh-CN')}
                     </td>
                     <td style={{ whiteSpace: 'nowrap' }}>
-                      <button onClick={() => { setSelectedRecord(r); setReviewId(null) }}
+                      <button onClick={() => { setSelectedRecord(r); setReviewId(null); setAiRecommendedAction(null) }}
                         className="glass-btn glass-btn-outline glass-btn-sm">📋 查看详情</button>
                     </td>
                   </tr>
@@ -174,7 +176,7 @@ export default function FinanceAdminPage() {
         <div style={{
           position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
           display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
-        }} onClick={() => { setSelectedRecord(null); setReviewId(null) }}>
+        }} onClick={() => { setSelectedRecord(null); setReviewId(null); setAiRecommendedAction(null) }}>
           <GlassCard strong style={{ width: 560, maxWidth: '90vw', maxHeight: '90vh', overflow: 'auto' }}
             onClick={e => e.stopPropagation()}>
             <h3 style={{ margin: '0 0 16px', fontSize: 17 }}>
@@ -246,24 +248,28 @@ export default function FinanceAdminPage() {
               <>
                 <hr className="glass-divider" />
                 <h4 style={{ margin: '0 0 8px', fontSize: 14 }}>✍️ 财务审批</h4>
-                <div className="mobile-review-action-bar">
+                <AIDecisionPanel
+                  key={selectedRecord.id}
+                  recordId={selectedRecord.id}
+                  decision={reviewAction}
+                  onRecommendation={setAiRecommendedAction}
+                  onFillOpinion={(text) => setReviewReason(prev => prev ? prev + '\n' + text : text)}
+                />
+                <div className="mobile-review-action-bar" style={{ marginTop: 12 }}>
                   {[
                     { action: 'approved' as const, label: '通过', color: 'var(--green)' },
                     { action: 'needs_revision' as const, label: '需修改', color: 'var(--orange)' },
                     { action: 'rejected' as const, label: '驳回', color: 'var(--red)' },
-                  ].map(btn => (
+                  ].map(btn => {
+                    const selected = reviewId === selectedRecord.id && reviewAction === btn.action
+                    const recommended = reviewId !== selectedRecord.id && aiRecommendedAction === btn.action
+                    return (
                     <button key={btn.action} onClick={() => {
                       setReviewId(selectedRecord.id); setReviewAction(btn.action)
                       if (reviewId !== selectedRecord.id || reviewAction !== btn.action) setReviewReason('')
-                    }} style={{
-                      flex: 1, padding: '10px 0', border: `1.5px solid ${btn.color}`,
-                      background: reviewId === selectedRecord.id && reviewAction === btn.action ? btn.color : 'transparent',
-                      color: reviewId === selectedRecord.id && reviewAction === btn.action ? '#fff' : btn.color,
-                      borderRadius: 10, cursor: 'pointer', fontSize: 14, fontWeight: 550,
-                      fontFamily: 'var(--font-stack)',
-                      transition: 'all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1)',
-                    }}>{btn.label}</button>
-                  ))}
+                    }} className={`review-action-btn${selected ? ' is-active' : ''}${recommended ? ' is-recommended' : ''}`}
+                      style={{ '--review-color': btn.color } as React.CSSProperties}>{btn.label}</button>
+                  )})}
                 </div>
                 {reviewId === selectedRecord.id && (
                   <>
@@ -287,7 +293,7 @@ export default function FinanceAdminPage() {
             )}
 
             <div style={{ marginTop: 16, textAlign: 'right' }}>
-              <button onClick={() => { setSelectedRecord(null); setReviewId(null) }}
+              <button onClick={() => { setSelectedRecord(null); setReviewId(null); setAiRecommendedAction(null) }}
                 className="glass-btn glass-btn-outline">关闭</button>
             </div>
           </GlassCard>

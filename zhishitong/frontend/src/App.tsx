@@ -77,7 +77,7 @@ function NoFinanceAdmin({ children }: { children: React.ReactNode }) {
 function AdminRedirect({ children }: { children: React.ReactNode }) {
   const { user } = useAuth()
   if (user?.is_admin && !user?.is_dept_admin && !user?.is_school_admin && !user?.is_finance_admin) {
-    return <Navigate to="/admin/members" replace />
+    return <Navigate to="/admin/monitor" replace />
   }
   return <>{children}</>
 }

@@ -1,6 +1,6 @@
 # 智审通 — 运维与故障排查手册
 
-> 适用版本: v0.6.2+
+> 适用版本: v0.6.3+
 > 目标读者: 系统管理员、运维工程师、技术支持人员
 
 ---
@@ -33,8 +33,8 @@
                │
 ┌──────────────▼──────────────────────┐
 │  本地推理服务 (:18080)                 │
-│  Qwen3-4B-Instruct                  │
-│  模型路径: models/qwen3-4b*.gguf     │
+│  Qwen3-14B LoRA GGUF                │
+│  模型路径: models/qwen3-14b-lora.gguf│
 └─────────────────────────────────────┘
 ```
 
@@ -42,7 +42,7 @@
 | 端口 | 服务 | 说明 |
 |------|------|------|
 | 8080 | 智审通主服务 | Web UI + API |
-| 18080 | 本地推理服务 | Qwen3-4B JSON 填充 |
+| 18080 | 本地推理服务 | Qwen3-14B RAG/合规分析，本地兜底 |
 
 ---
 
@@ -96,9 +96,9 @@
 | 原因 | 解决方案 |
 |------|----------|
 | 推理服务未启动 | 重新运行 `bash start.sh` 或手动启动推理服务 |
-| 模型文件缺失 | 检查 `models/qwen3-4b.gguf` 是否存在 |
+| 模型文件缺失 | 检查 `models/qwen3-14b-lora.gguf` 是否存在；跨平台备选可检查 `models/qwen3-4b.gguf` |
 | EasyOCR 未安装 | `pip install easyocr` |
-| 内存不足 | Q4_K_M 量化模型需约 3GB RAM，检查 `top` 或 `htop` |
+| 内存不足 | 14B GGUF 需要约 28GB 磁盘和较高内存；备选 4B Q4_K_M 约需 3GB RAM |
 
 ### 3.2 Pro 用户外部 LLM 调用失败
 
@@ -348,6 +348,8 @@ htop        # 更友好的界面（需安装）
 
 v0.6.2 起，图片型 OCR 会在后端自动进行 EXIF 方向修正、最大边 1800px 缩放和 JPEG 85 压缩；扫描件 PDF 转为首页图片后同样压缩。
 
+v0.6.3 起，自然语言表单预填优先走云端 LLM；如果云端 Key 不可用，后端会使用规则兜底补全基础字段、相对日期、地点和交通工具。本地 Qwen3-14B 主要用于 RAG 合规分析和本地兜底推理。
+
 **如果 OCR 仍然很慢：**
 
 | 场景 | 排查方向 |
@@ -374,7 +376,7 @@ v0.6.2 起提供跨平台安装脚本：macOS/Linux 使用 `bash setup/setup.sh`
 | 磁盘不足 | 查看安装报告中的空闲磁盘 | 保留至少 8GB 可用空间 |
 | HuggingFace 不可达 | `python setup/_download_model.py --check` | 检查网络、代理或稍后重试 |
 | HuggingFace 需要认证 | 下载时报 401/403 | 设置 `HF_TOKEN` 或 `HUGGINGFACE_TOKEN` 后重试 |
-| 已存在模型 | 检查 `models/qwen3-4b.gguf` | 脚本会跳过已有模型，这是正常行为 |
+| 已存在模型 | 检查 `models/qwen3-14b-lora.gguf` 或跨平台备选 `models/qwen3-4b.gguf` | 脚本会跳过已有模型，这是正常行为 |
 
 ### 9.2 下载进度条不显示或卡住
 
@@ -435,7 +437,7 @@ cp -r zhishitong/data/zhishitong.db zhishitong/data/
 cp -r uploads/ ./
 
 # 备份 LoRA 训练产出
-tar -czf lora_backup.tar.gz lora_output/ lora_output_merged/ models/qwen3-4b-lora.gguf
+tar -czf lora_backup.tar.gz lora_output_mlx/ models/qwen3-14b-lora.gguf
 ```
 
-*文档版本: 2.4 | 最后更新: 2026-06-02*
+*文档版本: 2.5 | 最后更新: 2026-06-03*

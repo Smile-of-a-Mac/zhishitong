@@ -36,6 +36,18 @@ export default function ResourceBookingPage() {
   const [formParticipants, setFormParticipants] = useState('')
   const [formError, setFormError] = useState('')
 
+  // 管理员新增资源表单
+  const [showResourceForm, setShowResourceForm] = useState(false)
+  const [resourceName, setResourceName] = useState('')
+  const [resourceLocation, setResourceLocation] = useState('')
+  const [resourceCapacity, setResourceCapacity] = useState('10')
+  const [resourceEquipment, setResourceEquipment] = useState('')
+  const [vehiclePlate, setVehiclePlate] = useState('')
+  const [vehicleModel, setVehicleModel] = useState('')
+  const [vehicleSeats, setVehicleSeats] = useState('5')
+  const [vehicleDriver, setVehicleDriver] = useState('')
+  const [resourceError, setResourceError] = useState('')
+
   const isAdmin = user?.is_admin || user?.is_school_admin
 
   const fetchData = async () => {
@@ -61,8 +73,30 @@ export default function ResourceBookingPage() {
 
   const resources = tab === 'meeting_room' ? rooms : vehicles
 
+  const resetResourceForm = () => {
+    setResourceName('')
+    setResourceLocation('')
+    setResourceCapacity('10')
+    setResourceEquipment('')
+    setVehiclePlate('')
+    setVehicleModel('')
+    setVehicleSeats('5')
+    setVehicleDriver('')
+    setResourceError('')
+  }
+
+  const openBookingForm = (resourceId: number) => {
+    setFormResId(resourceId)
+    setFormError('')
+    setShowForm(true)
+  }
+
   const handleBook = async () => {
     setFormError('')
+    if (!formResId) {
+      setFormError('请选择要预约的资源')
+      return
+    }
     if (!formTitle || !formStart || !formEnd) {
       setFormError('请填写完整信息')
       return
@@ -82,6 +116,50 @@ export default function ResourceBookingPage() {
     } catch (e: any) {
       setFormError(e?.response?.data?.detail || '网络错误')
     }
+  }
+
+  const handleCreateResource = async () => {
+    setResourceError('')
+    try {
+      if (tab === 'meeting_room') {
+        if (!resourceName.trim() || !resourceLocation.trim()) {
+          setResourceError('请填写会议室名称和位置')
+          return
+        }
+        await axios.post('/api/resources/rooms', {
+          name: resourceName.trim(),
+          location: resourceLocation.trim(),
+          capacity: Number(resourceCapacity) || 10,
+          equipment: resourceEquipment.trim(),
+        })
+      } else {
+        if (!vehiclePlate.trim() || !vehicleModel.trim()) {
+          setResourceError('请填写车牌号和车型')
+          return
+        }
+        await axios.post('/api/resources/vehicles', {
+          plate_number: vehiclePlate.trim(),
+          model: vehicleModel.trim(),
+          seats: Number(vehicleSeats) || 5,
+          driver: vehicleDriver.trim(),
+        })
+      }
+      setShowResourceForm(false)
+      resetResourceForm()
+      fetchData()
+    } catch (e: any) {
+      setResourceError(e?.response?.data?.detail || '保存资源失败')
+    }
+  }
+
+  const handleDeleteResource = async (resourceId: number) => {
+    if (!window.confirm('确认停用该资源？已有预约记录不会被删除。')) return
+    if (tab === 'meeting_room') {
+      await axios.delete(`/api/resources/rooms/${resourceId}`)
+    } else {
+      await axios.delete(`/api/resources/vehicles/${resourceId}`)
+    }
+    fetchData()
   }
 
   const handleCancel = async (id: number) => {
@@ -121,7 +199,7 @@ export default function ResourceBookingPage() {
       <h1 className="page-title">📅 资源预约</h1>
       <GlassCard size="sm" style={{ marginBottom: 16 }}>
         {/* Tab 切换 */}
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <button
             className={`glass-btn glass-btn-sm ${tab === 'meeting_room' ? '' : 'glass-btn-outline'}`}
             onClick={() => setTab('meeting_room')}
@@ -134,18 +212,43 @@ export default function ResourceBookingPage() {
           >
             🚗 车辆
           </button>
+          {isAdmin && (
+            <button
+              className="glass-btn glass-btn-sm"
+              style={{ marginLeft: 'auto' }}
+              onClick={() => { resetResourceForm(); setShowResourceForm(true) }}
+            >
+              ＋ 添加{tab === 'meeting_room' ? '会议室' : '车辆'}
+            </button>
+          )}
         </div>
       </GlassCard>
 
       {/* 资源列表 */}
       <GlassCard style={{ padding: 16, marginBottom: 16 }}>
         <h3 className="section-title" style={{ margin: '0 0 12px' }}>{tab === 'meeting_room' ? '🏢 可用会议室' : '🚗 可用车辆'}</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10 }}>
+        {resources.length === 0 ? (
+          <div className="state-panel state-panel-empty" style={{ padding: 24 }}>
+            暂无可用{tab === 'meeting_room' ? '会议室' : '车辆'}{isAdmin ? '，请点击上方按钮添加资源' : '，请联系管理员添加资源'}
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10 }}>
           {resources.map(r => (
             <GlassCard key={r.id} size="xs" style={{ padding: 12, cursor: 'pointer' }}
-              onClick={() => { setFormResId(r.id); setShowForm(true) }}>
-              <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>
-                {tab === 'meeting_room' ? r.name : r.plate_number}
+              onClick={() => openBookingForm(r.id)}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'flex-start' }}>
+                <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>
+                  {tab === 'meeting_room' ? r.name : r.plate_number}
+                </div>
+                {isAdmin && (
+                  <button
+                    className="glass-btn glass-btn-outline glass-btn-sm"
+                    style={{ padding: '2px 7px', fontSize: 11 }}
+                    onClick={e => { e.stopPropagation(); handleDeleteResource(r.id) }}
+                  >
+                    停用
+                  </button>
+                )}
               </div>
               {tab === 'meeting_room' ? (
                 <>
@@ -162,7 +265,8 @@ export default function ResourceBookingPage() {
               <div style={{ marginTop: 8, fontSize: 12, color: 'var(--accent-color)' }}>点击预约 →</div>
             </GlassCard>
           ))}
-        </div>
+          </div>
+        )}
       </GlassCard>
 
       {/* 预约记录 */}
@@ -236,6 +340,51 @@ export default function ResourceBookingPage() {
               <div className="btn-group" style={{ justifyContent: 'flex-end' }}>
                 <button className="glass-btn glass-btn-outline glass-btn-sm" onClick={() => setShowForm(false)}>取消</button>
                 <button className="glass-btn glass-btn-sm" onClick={handleBook}>确认预约</button>
+              </div>
+            </div>
+          </GlassCard>
+        </div>
+      )}
+
+      {/* 管理员新增资源弹窗 */}
+      {showResourceForm && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
+        }} onClick={() => setShowResourceForm(false)}>
+          <GlassCard strong style={{ padding: 24, width: '90%', maxWidth: 420 }}
+            onClick={e => e.stopPropagation()}>
+            <h3 style={{ margin: '0 0 16px', fontSize: 18, fontWeight: 600 }}>
+              添加{tab === 'meeting_room' ? '会议室' : '车辆'}
+            </h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {tab === 'meeting_room' ? (
+                <>
+                  <input className="glass-input" placeholder="会议室名称" value={resourceName}
+                    onChange={e => setResourceName(e.target.value)} />
+                  <input className="glass-input" placeholder="位置" value={resourceLocation}
+                    onChange={e => setResourceLocation(e.target.value)} />
+                  <input className="glass-input" type="number" min="1" placeholder="容纳人数" value={resourceCapacity}
+                    onChange={e => setResourceCapacity(e.target.value)} />
+                  <input className="glass-input" placeholder="设备（可选）" value={resourceEquipment}
+                    onChange={e => setResourceEquipment(e.target.value)} />
+                </>
+              ) : (
+                <>
+                  <input className="glass-input" placeholder="车牌号" value={vehiclePlate}
+                    onChange={e => setVehiclePlate(e.target.value)} />
+                  <input className="glass-input" placeholder="车型" value={vehicleModel}
+                    onChange={e => setVehicleModel(e.target.value)} />
+                  <input className="glass-input" type="number" min="1" placeholder="座位数" value={vehicleSeats}
+                    onChange={e => setVehicleSeats(e.target.value)} />
+                  <input className="glass-input" placeholder="司机（可选）" value={vehicleDriver}
+                    onChange={e => setVehicleDriver(e.target.value)} />
+                </>
+              )}
+              {resourceError && <div style={{ color: '#FF3B30', fontSize: 12 }}>{resourceError}</div>}
+              <div className="btn-group" style={{ justifyContent: 'flex-end' }}>
+                <button className="glass-btn glass-btn-outline glass-btn-sm" onClick={() => setShowResourceForm(false)}>取消</button>
+                <button className="glass-btn glass-btn-sm" onClick={handleCreateResource}>保存资源</button>
               </div>
             </div>
           </GlassCard>

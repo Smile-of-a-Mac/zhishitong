@@ -79,10 +79,10 @@ package "AI 推理层" as AILayer #FCE4EC {
 
 ' ── LoRA 训练管线 ──
 package "LoRA 微调管线" as LoRA #F3E5F5 {
-  component "train_lora.py\nQwen2.5-0.5B微调" as Train
-  component "merge_lora.py\n合并adapter" as Merge
-  component "lora_output/\nLoRA adapter" as LoraOut
-  component "qwen2.5-0.5b-lora.gguf\n微调后模型" as LoraGGUF
+  component "train_lora_mlx.py\nQwen3-14B MLX微调" as Train
+  component "train_lora.py + merge_lora.py\nPEFT跨平台备选" as Merge
+  component "lora_output_mlx/\nLoRA adapter + merged_f16" as LoraOut
+  component "qwen3-14b-lora.gguf\n微调后模型" as LoraGGUF
 }
 
 ' ── 关系 ──
@@ -97,7 +97,7 @@ Services --> KB
 Services --> Tpl
 
 OcrSvc --> EasyOCR : 本地文字提取
-OcrSvc --> LlamaCpp : 本地JSON填充\n(:18080)
+OcrSvc --> LlamaCpp : 本地兜底推理\n(:18080)
 OcrSvc --> ExtLLM : Pro/Pro+用户\nAPI调用
 RagSvc --> LlamaCpp : RAG问答\n(:18080)
 KeyPool --> ExtLLM : 多Key轮询

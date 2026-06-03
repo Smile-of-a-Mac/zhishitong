@@ -55,6 +55,7 @@ export default function DeptAdminPage() {
   const [fieldAnnotations, setFieldAnnotations] = useState<FieldAnnotation[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [selectedRecord, setSelectedRecord] = useState<DeptRecord | null>(null)
+  const [aiRecommendedAction, setAiRecommendedAction] = useState<'approved' | 'rejected' | 'needs_revision' | null>(null)
   const [suggesting, setSuggesting] = useState(false)
   const [searchParams, setSearchParams] = useSearchParams()
 
@@ -174,6 +175,7 @@ export default function DeptAdminPage() {
     setReviewReason('')
     setFieldAnnotations([])
     setSelectedRecord(record)
+    setAiRecommendedAction(null)
   }
 
   const getFieldAnnotation = (key: string) => fieldAnnotations.find(a => a.field_key === key)?.issue || ''
@@ -212,11 +214,13 @@ export default function DeptAdminPage() {
     const existing = records.find(r => r.id === id)
     if (existing) {
       setSelectedRecord(existing)
+      setAiRecommendedAction(null)
       return
     }
     try {
       const res = await axios.get(`/api/dept/records/${id}`)
       setSelectedRecord(res.data)
+      setAiRecommendedAction(null)
     } catch { }
   }
 
@@ -407,7 +411,7 @@ export default function DeptAdminPage() {
             position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
             display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
           }}
-          onClick={() => { setSelectedRecord(null); setReviewId(null); setFieldAnnotations([]) }}>
+          onClick={() => { setSelectedRecord(null); setReviewId(null); setFieldAnnotations([]); setAiRecommendedAction(null) }}>
           <GlassCard strong className="modal-card" style={{ width: 560, maxWidth: '90vw', maxHeight: '90vh', overflow: 'auto' }}
             onClick={e => e.stopPropagation()}>
             <h3 style={{ margin: '0 0 16px', fontSize: 17 }}>
@@ -505,39 +509,37 @@ export default function DeptAdminPage() {
                 <hr className="glass-divider" />
                 <h4 style={{ margin: '0 0 8px', fontSize: 14 }}>✍️ 审批操作</h4>
 
+                <AIDecisionPanel
+                  key={selectedRecord.id}
+                  recordId={selectedRecord.id}
+                  decision={reviewAction === 'approved' ? 'approved' : reviewAction === 'rejected' ? 'rejected' : 'needs_revision'}
+                  onRecommendation={setAiRecommendedAction}
+                  onFillOpinion={(text) => setReviewReason(prev => prev ? prev + '\n' + text : text)}
+                />
+
                 {/* 操作按钮 */}
-                <div className="mobile-review-action-bar">
+                <div className="mobile-review-action-bar" style={{ marginTop: 12 }}>
                   {[
                     { action: 'approved' as const, label: '通过', color: 'var(--green)' },
                     { action: 'needs_revision' as const, label: '需修改', color: 'var(--orange)' },
                     { action: 'rejected' as const, label: '不通过', color: 'var(--red)' },
-                  ].map(btn => (
+                  ].map(btn => {
+                    const selected = reviewId === selectedRecord.id && reviewAction === btn.action
+                    const recommended = reviewId !== selectedRecord.id && aiRecommendedAction === btn.action
+                    return (
                     <button key={btn.action} onClick={() => {
                       setReviewId(selectedRecord.id)
                       setReviewAction(btn.action)
                       setReviewReason(reviewId === selectedRecord.id && reviewAction === btn.action ? reviewReason : '')
                       if (btn.action !== 'needs_revision') setFieldAnnotations([])
-                    }} style={{
-                      flex: 1, padding: '10px 0', border: `1.5px solid ${btn.color}`,
-                      background: reviewId === selectedRecord.id && reviewAction === btn.action ? btn.color : 'transparent',
-                      color: reviewId === selectedRecord.id && reviewAction === btn.action ? '#fff' : btn.color,
-                      borderRadius: 10, cursor: 'pointer', fontSize: 14, fontWeight: 550,
-                      fontFamily: 'var(--font-stack)',
-                      transition: 'all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1)',
-                    }}>{btn.label}</button>
-                  ))}
+                    }} className={`review-action-btn${selected ? ' is-active' : ''}${recommended ? ' is-recommended' : ''}`}
+                      style={{ '--review-color': btn.color } as React.CSSProperties}>{btn.label}</button>
+                  )})}
                 </div>
 
                 {/* 意见输入（选中操作后展开） */}
                 {reviewId === selectedRecord.id && (
                   <>
-                    {/* AI 辅助决策面板 */}
-                    <AIDecisionPanel
-                      key={selectedRecord.id}
-                      recordId={selectedRecord.id}
-                      decision={reviewAction === 'approved' ? 'approved' : reviewAction === 'rejected' ? 'rejected' : 'needs_revision'}
-                      onFillOpinion={(text) => setReviewReason(prev => prev ? prev + '\n' + text : text)}
-                    />
                     <textarea value={reviewReason} onChange={e => setReviewReason(e.target.value)}
                       placeholder={reviewAction === 'approved' ? '审批意见（选填，无需可留空）' : '请填写审批理由'}
                       className="glass-input" style={{ minHeight: 70, marginTop: 10 }} />
@@ -557,7 +559,7 @@ export default function DeptAdminPage() {
             )}
 
             <div style={{ marginTop: 16, textAlign: 'right' }}>
-              <button onClick={() => { setSelectedRecord(null); setReviewId(null); setFieldAnnotations([]) }}
+              <button onClick={() => { setSelectedRecord(null); setReviewId(null); setFieldAnnotations([]); setAiRecommendedAction(null) }}
                 className="glass-btn glass-btn-outline">关闭</button>
             </div>
           </GlassCard>
