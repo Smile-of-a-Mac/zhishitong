@@ -394,6 +394,14 @@ cd /Users/wangdaoyu/VSCode/sito
 
 ---
 
+## License
+
+本项目代码采用 [Apache License 2.0](LICENSE) 开源。
+
+说明：第三方依赖、外部 LLM API、Qwen 模型权重、EasyOCR 模型、数据源页面和比赛材料仍分别遵循其各自的许可证或服务条款；本许可证仅覆盖本仓库内由项目作者编写并提交的代码与文档。
+
+---
+
 ## 最近更新 (v0.6.3)
 
 - 🧠 **云端填表 + 本地合规分流**：自然语言表单预填强制使用云端 LLM，分类、RAG 合规分析和本地兜底继续使用 `models/qwen3-14b-lora.gguf`
