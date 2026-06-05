@@ -1,5 +1,5 @@
 fastapi
-uvicorn[standard]
+uvicorn
 python-multipart
 pydantic
 sqlalchemy
@@ -8,6 +8,7 @@ httpx
 python-jose[cryptography]
 passlib[bcrypt]
 cryptography
-python-magic
+python-magic; sys_platform != "win32"
+python-magic-bin; sys_platform == "win32"
 Pillow
 bcrypt==4.0.1

@@ -65,7 +65,7 @@ ALLOWED_ORIGINS = [
 # ---- 数据库 ----
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    f"sqlite:///{BASE_DIR / 'data' / 'zhishitong.db'}",
+    f"sqlite:///{(BASE_DIR / 'data' / 'zhishitong.db').as_posix()}",
 )
 # 确保 SQLite 数据目录存在
 if DATABASE_URL.startswith("sqlite"):
@@ -106,5 +106,5 @@ TEMPLATES_PATH = Path(__file__).resolve().parent / "templates.json"
 # ---- RAG ----
 RAG_CACHE_PATH = os.getenv(
     "RAG_CACHE_PATH",
-    str(BASE_DIR / "data" / "rag_tfidf_cache.pkl"),
+    (BASE_DIR / "data" / "rag_tfidf_cache.pkl").as_posix(),
 )

@@ -10,6 +10,7 @@ This file provides guidance to AI coding agents (OpenCode, Claude Code, Cursor, 
 - **前端**: React (TypeScript), Vite
 - **模型**: Qwen3-14B GGUF (LoRA fine-tuned)，Qwen3-4B/PEFT 管线作为跨平台备选
 - **数据**: 爬虫采集自山东科技大学各学院网站
+- **平台**: macOS (Intel + Apple Silicon) / Windows (PowerShell 5.1+) / Linux — Python 代码使用 `pathlib.Path` 跨平台路径，依赖通过 PEP 508 环境标记区分平台 |
 
 ## Agent Skills Integration
 

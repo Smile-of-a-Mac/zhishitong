@@ -309,7 +309,11 @@ if (-not $canInfer) {
     Write-Host "    推荐使用外部 LLM API (Pro 模式)"
 }
 Write-Host ""
-Write-Host "  启动开发服务器:" -ForegroundColor White
+Write-Host "  启动开发服务器（一键）:" -ForegroundColor White
+Write-Host "    cd zhishitong"
+Write-Host "    powershell -File start.ps1"
+Write-Host ""
+Write-Host "  或分步启动:" -ForegroundColor White
 Write-Host "    cd zhishitong"
 Write-Host "    ..\.venv\Scripts\uvicorn backend.main:app --host 0.0.0.0 --port 8080 --reload"
 Write-Host "    # 另一个终端:"

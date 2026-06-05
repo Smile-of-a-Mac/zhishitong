@@ -95,8 +95,10 @@ sito/
 │   │   ├── server.py                   #   自动 GPU 检测 + OpenAI 兼容 API
 │   │   └── requirements.txt
 │   ├── uploads/                        # 上传文件存储（按 user_id 隔离）
-│   ├── start.sh                        # 一键启动（自动检测微调模型）
-│   └── shutdown.sh                     # 一键停止所有服务
+│   ├── start.sh                        # macOS/Linux 一键启动
+│   ├── start.ps1                       # Windows 一键启动
+│   ├── shutdown.sh                     # macOS/Linux 一键停止
+│   └── shutdown.ps1                    # Windows 一键停止
 ├── training/                           # LoRA 微调管线（MLX + PEFT 备选）
 │   ├── train_lora_mlx.py               #   训练 + 融合 + GGUF（Qwen3-14B）
 │   ├── train_lora.py                   #   PEFT 训练备选（Windows/CUDA/CPU）
@@ -258,6 +260,7 @@ sito/
 | **缓存/限流** | Redis（OCR 缓存、Key 池原子计数、速率限制） |
 | **安全** | JWT + bcrypt + Fernet + MIME 魔数校验 |
 | **GPU 加速** | Metal (Apple Silicon) / CUDA (NVIDIA) / ROCm (AMD) / CPU 自动检测 |
+| **平台** | macOS (Intel + Apple Silicon) / Windows (PowerShell 5.1+) / Linux |
 
 ---
 
@@ -268,7 +271,7 @@ sito/
 - Python 3.11+, Node.js 18+
 - 虚拟环境：`python -m venv .venv`
 
-### 一键安装环境（v0.6.3）
+### 一键安装环境
 
 安装脚本会先检查本机已有环境，已安装的依赖会跳过，不满足本地推理或 LoRA 训练条件时不会强行下载模型或训练依赖。
 
@@ -291,41 +294,80 @@ bash setup/setup.sh
 ### 一键启动
 
 ```bash
+# macOS / Linux
 cd zhishitong && bash start.sh
 ```
 
-`start.sh` 自动完成：虚拟环境检测 → 依赖安装 → 数据库初始化 → 推理服务启动（含 GPU 检测） → 微调 GGUF 模型检测 → 后端启动 → 前端启动。
+```powershell
+# Windows (PowerShell 5.1+)
+cd zhishitong
+powershell -File start.ps1
+```
+
+启动脚本自动完成：虚拟环境检测 → 依赖安装 → 数据库初始化 → 推理服务启动（含 GPU 检测） → 微调 GGUF 模型检测 → 后端启动 → 前端启动。按 `Ctrl+C` 同时停止所有服务。
 
 ### 一键停止
 
 ```bash
+# macOS / Linux
 cd zhishitong && bash shutdown.sh
 ```
 
-`shutdown.sh` 按端口精确停止：推理服务 (18080) → 后端 (8080) → 前端 (5173)，并按进程名兜底清理。
+```powershell
+# Windows
+cd zhishitong
+powershell -File shutdown.ps1
+```
+
+停止脚本按端口精确停止：推理服务 (18080) → 后端 (8080) → 前端 (5173)，并按进程名兜底清理。
 
 ### 手动启动
 
 ```bash
-# 后端
+# macOS / Linux — 后端
 cd zhishitong
 source ../.venv/bin/activate
 PYTHONPATH="$PWD/backend" uvicorn main:app --host 0.0.0.0 --port 8080 --reload
 
-# 前端（新终端）
+# macOS / Linux — 前端（新终端）
 cd zhishitong/frontend && npm install && npx vite --host 0.0.0.0 --port 5173
 
-# 本地推理服务（可选，新终端）
+# macOS / Linux — 本地推理服务（可选，新终端）
 cd zhishitong && source ../.venv/bin/activate
 PYTHONPATH="$PWD/inference_server" uvicorn server:app --host 0.0.0.0 --port 18080
+```
+
+```powershell
+# Windows — 后端
+cd zhishitong
+$env:PYTHONPATH = "$pwd\backend"
+..\.venv\Scripts\uvicorn main:app --host 0.0.0.0 --port 8080 --reload
+
+# Windows — 前端（新终端）
+cd zhishitong\frontend
+npm install
+npx vite --host 0.0.0.0 --port 5173
+
+# Windows — 本地推理服务（可选，新终端）
+cd zhishitong
+$env:PYTHONPATH = "$pwd\inference_server"
+..\.venv\Scripts\uvicorn server:app --host 0.0.0.0 --port 18080
 ```
 
 ### 种子数据
 
 ```bash
+# macOS / Linux
 cd zhishitong
 source ../.venv/bin/activate
 PYTHONPATH="$PWD/backend" python backend/seed.py
+```
+
+```powershell
+# Windows
+cd zhishitong
+$env:PYTHONPATH = "$pwd\backend"
+..\.venv\Scripts\python backend\seed.py
 ```
 
 ### LoRA 微调（可选）
@@ -402,10 +444,17 @@ cd /Users/wangdaoyu/VSCode/sito
 
 ---
 
+## 最近更新 (v0.7.0)
+
+- 🪟 **Windows 完整支持**：修复 `uvicorn[standard]` → `uvicorn` 移除 `uvloop` 依赖；`python-magic` 拆分为跨平台条件依赖（Unix 用 `python-magic` / Windows 用 `python-magic-bin`）；SQLite URL 使用 `as_posix()` 避免 Windows 反斜杠破坏路径
+- 📜 **Windows 启动/关闭脚本**：新增 `start.ps1`（JWT 持久化 → 依赖安装 → 数据库初始化 → 三服务启动 + Ctrl+C 清理）和 `shutdown.ps1`（按进程名+端口查杀）
+- 🛠️ **依赖清理**：移除 `uvicorn[standard]` 和 `redis[hiredis]` extras，减少 Windows 编译需求
+- 📖 **README 双平台文档**：所有操作命令同时提供 macOS/Linux bash 和 Windows PowerShell 两种版本
+
 ## 最近更新 (v0.6.3)
 
 - 🧠 **云端填表 + 本地合规分流**：自然语言表单预填强制使用云端 LLM，分类、RAG 合规分析和本地兜底继续使用 `models/qwen3-14b-lora.gguf`
-- 🗓️ **请假相对日期补全**：后端规则兜底支持“明天/后天/明后两天”，并自动补全地点、交通工具和公假类型；前端统一把日期值规范化为 `datetime-local` 可显示格式
+- 🗓️ **请假相对日期补全**：后端规则兜底支持"明天/后天/明后两天"，并自动补全地点、交通工具和公假类型；前端统一把日期值规范化为 `datetime-local` 可显示格式
 - 📬 **通知中心分页与自动更新**：通知 API 支持 `types` 服务端过滤，前端按分类分页显示；通知中心和侧边栏未读红点支持免刷新自动更新，避免 50 条截断后漏消息
 - 📋 **资源预约增强**：补齐会议室/车辆管理入口、空状态、字段匹配和后端预约校验
 - ⚖️ **审批 AI 体验增强**：审批详情打开后自动合规分析，并根据风险等级高亮推荐动作按钮
