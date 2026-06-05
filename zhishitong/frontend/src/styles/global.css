@@ -1235,7 +1235,7 @@ details.collapsible-details > summary:hover {
 .review-action-btn {
   flex: 1;
   min-width: 0;
-  padding: 10px 0;
+  padding: 10px 8px;
   border: 1.5px solid var(--review-color);
   background: rgba(255, 255, 255, 0.72);
   color: var(--review-color);
@@ -1244,7 +1244,14 @@ details.collapsible-details > summary:hover {
   font-size: 14px;
   font-weight: 550;
   font-family: var(--font-stack);
+  position: relative;
+  overflow: hidden;
   transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.review-action-btn:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--review-color) 28%, transparent);
+  outline-offset: 3px;
 }
 
 .review-action-btn:hover,
@@ -1256,7 +1263,44 @@ details.collapsible-details > summary:hover {
 }
 
 .review-action-btn.is-recommended:not(.is-active) {
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--review-color) 18%, transparent);
+  padding: 10px 8px;
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--review-color) 18%, transparent),
+    0 10px 22px color-mix(in srgb, var(--review-color) 24%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.42);
+  animation: recommendedActionPulse 1.8s ease-in-out infinite;
+}
+
+.review-action-btn.is-recommended:not(.is-active)::before {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.52);
+  pointer-events: none;
+}
+
+.review-action-btn.is-recommended:not(.is-active):hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--review-color) 24%, transparent),
+    0 14px 28px color-mix(in srgb, var(--review-color) 30%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.48);
+}
+
+@keyframes recommendedActionPulse {
+  0%, 100% {
+    box-shadow:
+      0 0 0 3px color-mix(in srgb, var(--review-color) 18%, transparent),
+      0 10px 22px color-mix(in srgb, var(--review-color) 24%, transparent),
+      inset 0 1px 0 rgba(255, 255, 255, 0.42);
+  }
+  50% {
+    box-shadow:
+      0 0 0 5px color-mix(in srgb, var(--review-color) 10%, transparent),
+      0 12px 26px color-mix(in srgb, var(--review-color) 28%, transparent),
+      inset 0 1px 0 rgba(255, 255, 255, 0.48);
+  }
 }
 
 @media (max-width: 768px) {

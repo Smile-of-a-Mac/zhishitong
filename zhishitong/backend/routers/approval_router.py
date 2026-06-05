@@ -125,6 +125,7 @@ def list_approvals(
     page_size: int = Query(10, ge=1, le=50),
     q: Optional[str] = Query(None),
     doc_type: Optional[str] = Query(None),
+    statuses: Optional[list[str]] = Query(None),
     date_from: Optional[str] = Query(None),
     date_to: Optional[str] = Query(None),
     user: User = Depends(get_current_user),
@@ -135,6 +136,12 @@ def list_approvals(
         ApprovalRecord.is_deleted == False,
     )
     query = _filter_approval_query(query, q, doc_type, date_from, date_to)
+    if statuses:
+        normalized_statuses = []
+        for value in statuses:
+            normalized_statuses.extend(s.strip() for s in value.split(',') if s.strip())
+        if normalized_statuses:
+            query = query.filter(ApprovalRecord.status.in_(normalized_statuses))
 
     total = query.count()
     records = query.order_by(ApprovalRecord.created_at.desc()).offset(

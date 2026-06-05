@@ -10,6 +10,7 @@ import { STAGE_LABELS, STATUS_LABELS } from '../../utils/constants'
 import { parseApiError } from '../../utils/api'
 
 type TabKey = 'all' | 'pending' | 'approved' | 'rejected'
+const PAGE_SIZE = 10
 
 interface TemplateOption {
   key: string
@@ -56,6 +57,8 @@ export default function HistoryPage() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [filtersOpen, setFiltersOpen] = useState(false)
+  const [page, setPage] = useState(1)
+  const [total, setTotal] = useState(0)
   const nav = useNavigate()
   const [searchParams] = useSearchParams()
 
@@ -72,20 +75,26 @@ export default function HistoryPage() {
     setLoading(true)
     setErrorMsg('')
     try {
-      const params: Record<string, string | number> = { page_size: 50 }
+      const params: Record<string, string | number> = { page, page_size: PAGE_SIZE }
       if (debouncedSearchText) params.q = debouncedSearchText
       if (docTypeFilter) params.doc_type = docTypeFilter
+      const statuses = TAB_CONFIG.find(t => t.key === activeTab)?.statuses || []
+      if (statuses.length > 0) params.statuses = statuses.join(',')
       if (dateFrom) params.date_from = dateFrom
       if (dateTo) params.date_to = dateTo
       const res = await axios.get('/api/approvals', { params })
       setRecords(res.data.items || [])
+      setTotal(res.data.total || 0)
     } catch (e: any) {
       setRecords([])
+      setTotal(0)
       setErrorMsg(parseApiError(e, '加载历史记录失败'))
     } finally { setLoading(false) }
-  }, [debouncedSearchText, docTypeFilter, dateFrom, dateTo])
+  }, [activeTab, debouncedSearchText, docTypeFilter, dateFrom, dateTo, page])
 
   useEffect(() => { fetch() }, [fetch])
+
+  useEffect(() => { setPage(1) }, [activeTab, debouncedSearchText, docTypeFilter, dateFrom, dateTo])
 
   // 支持 ?detail=recordId 从通知页面跳转来自动打开详情
   const detailFetchedRef = React.useRef<number | null>(null)
@@ -110,9 +119,10 @@ export default function HistoryPage() {
 
   const activeTabConfig = TAB_CONFIG.find(t => t.key === activeTab)
   const detailDecision = parseDecisionReason(detail?.decision_reason)
-  const filteredRecords = activeTab === 'all'
-    ? records
-    : records.filter(r => (activeTabConfig?.statuses || []).includes(r.status))
+  const filteredRecords = records
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  const pageStart = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1
+  const pageEnd = Math.min(total, page * PAGE_SIZE)
 
   const handleDelete = async (id: number) => {
     if (!confirm('删除后不可恢复，确认删除？')) return
@@ -199,13 +209,13 @@ export default function HistoryPage() {
   // 统计各状态数量
   const countByStatus = (s: TabKey) => {
     const cfg = TAB_CONFIG.find(t => t.key === s)
-    if (!cfg || cfg.key === 'all') return records.length
-    return records.filter(r => cfg.statuses.includes(r.status)).length
+    if (!cfg || cfg.key === activeTab) return total
+    return '—'
   }
 
   return (
     <div>
-      <h1 className="page-title">历史记录</h1>
+      <h1 className="page-title">📋 历史记录</h1>
 
       {/* Tab 导航 — iOS 风格分段控件 */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
@@ -236,12 +246,14 @@ export default function HistoryPage() {
             >
               <span>{tab.icon}</span>
               <span>{tab.label}</span>
-              <span style={{
-                background: isActive ? 'rgba(255,255,255,0.25)' : 'rgba(128,128,128,0.12)',
-                color: isActive ? '#fff' : 'var(--text-secondary)',
-                borderRadius: 10, padding: '1px 8px', fontSize: 12, fontWeight: 600,
-                minWidth: 22, textAlign: 'center',
-              }}>{count}</span>
+              {isActive && (
+                <span style={{
+                  background: 'rgba(255,255,255,0.25)',
+                  color: '#fff',
+                  borderRadius: 10, padding: '1px 8px', fontSize: 12, fontWeight: 600,
+                  minWidth: 22, textAlign: 'center',
+                }}>{count}</span>
+              )}
             </button>
           )
         })}
@@ -289,7 +301,7 @@ export default function HistoryPage() {
             </label>
             <button
               className="glass-btn glass-btn-outline glass-btn-sm"
-              onClick={() => { setSearchText(''); setDocTypeFilter(''); setDateFrom(''); setDateTo('') }}
+              onClick={() => { setSearchText(''); setDocTypeFilter(''); setDateFrom(''); setDateTo(''); setPage(1) }}
             >
               重置
             </button>
@@ -391,6 +403,21 @@ export default function HistoryPage() {
               ))}
             </tbody>
           </table>
+        </GlassCard>
+      )}
+
+      {!loading && !errorMsg && totalPages > 1 && (
+        <GlassCard size="xs" style={{
+          marginTop: 14,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+          color: 'var(--text-secondary)', fontSize: 13,
+        }}>
+          <span>第 {pageStart}-{pageEnd} 条 / 共 {total} 条</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button className="glass-btn glass-btn-outline glass-btn-sm" disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>上一页</button>
+            <span style={{ minWidth: 64, textAlign: 'center' }}>{page} / {totalPages}</span>
+            <button className="glass-btn glass-btn-outline glass-btn-sm" disabled={page >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>下一页</button>
+          </div>
         </GlassCard>
       )}
 

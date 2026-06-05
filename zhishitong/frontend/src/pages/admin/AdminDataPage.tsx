@@ -31,7 +31,7 @@ export default function AdminDataPage() {
 
   return (
     <div>
-      <h1 className="page-title">数据管理</h1>
+      <h1 className="page-title">📊 数据管理</h1>
       <GlassCard strong>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
           <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-secondary)' }}>筛选：</span>

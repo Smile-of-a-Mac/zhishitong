@@ -289,7 +289,7 @@ export default function AdminApiKeysPage() {
 
   return (
     <div>
-      <h1 className="page-title">API Key 管理</h1>
+      <h1 className="page-title">🔑 API Key 管理</h1>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
