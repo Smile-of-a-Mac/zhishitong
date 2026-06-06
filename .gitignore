@@ -71,6 +71,9 @@ zhishitong/data/*_corpus_*.jsonl
 .vscode/
 .idea/
 
+# ===== 演示文稿 =====
+演示文稿/
+
 # ===== 系统文件 =====
 .DS_Store
 Thumbs.db

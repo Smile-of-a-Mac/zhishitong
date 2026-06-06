@@ -444,12 +444,16 @@ cd /Users/wangdaoyu/VSCode/sito
 
 ---
 
-## 最近更新 (v0.7.0)
+## 最近更新 (v0.6.4)
 
-- 🪟 **Windows 完整支持**：修复 `uvicorn[standard]` → `uvicorn` 移除 `uvloop` 依赖；`python-magic` 拆分为跨平台条件依赖（Unix 用 `python-magic` / Windows 用 `python-magic-bin`）；SQLite URL 使用 `as_posix()` 避免 Windows 反斜杠破坏路径
-- 📜 **Windows 启动/关闭脚本**：新增 `start.ps1`（JWT 持久化 → 依赖安装 → 数据库初始化 → 三服务启动 + Ctrl+C 清理）和 `shutdown.ps1`（按进程名+端口查杀）
+- 🪟 **Windows 完整支持**：修复 `uvicorn[standard]` → `uvicorn` 移除 `uvloop` 依赖；`python-magic` 拆分为跨平台条件依赖；SQLite URL 使用 `as_posix()` 避免 Windows 反斜杠破坏路径
+- 📜 **Windows 启动/关闭脚本**：新增 `start.ps1`、`shutdown.ps1`（按进程名+端口查杀）
+- 🧠 **RAG 问答增强**：增加引用来源强制要求和政策条文引用格式，改用 system prompt 分离更规范的 LLM 调用
+- 📅 **智能日期理解增强**：NL 转字段时支持"今天/明天/后天/今明两天/明后两天"，LLM prompt 注入当前日期和相对日期转换指引，正则补充"参加"关键词
+- 📋 **历史记录分页**：历史记录页 Tab 改为服务端分页，显示真实总数和页码导航
+- 🎨 **审批推荐按钮动效**：推荐动作为脉冲光晕 + 悬停上浮，聚焦可见性样式
+- 🔑 **API Key 页 & 数据管理页**：标题添加 emoji
 - 🛠️ **依赖清理**：移除 `uvicorn[standard]` 和 `redis[hiredis]` extras，减少 Windows 编译需求
-- 📖 **README 双平台文档**：所有操作命令同时提供 macOS/Linux bash 和 Windows PowerShell 两种版本
 
 ## 最近更新 (v0.6.3)
 

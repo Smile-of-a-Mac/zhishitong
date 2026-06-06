@@ -115,15 +115,9 @@ class ManualComplianceRouterTest(unittest.IsolatedAsyncioTestCase):
             phone="13800000000",
             advisor="李老师",
         )
-        raw = '{"document_type":"leave","confidence":0.95,"prefill_fields":{"reason":"去滨州调研"}}'
+        raw = '{"document_type":"leave","confidence":0.95,"prefill_fields":{"reason":"去滨州调研","leave_type":"公假","destination":"滨州","transportation":"长途汽车","start_date":"2026-06-04","end_date":"2026-06-05"}}'
 
-        class FixedDate(datetime.date):
-            @classmethod
-            def today(cls):
-                return cls(2026, 6, 3)
-
-        with patch("services.rag_service._call_llm", AsyncMock(return_value=raw)), \
-             patch("services.rag_service.datetime.date", FixedDate):
+        with patch("services.rag_service._call_llm", AsyncMock(return_value=raw)):
             result = await svc_parse_intent(
                 "我导师叫我去滨州调研，我明后两天都不在学校，我坐长途汽车去，帮我请个假",
                 current_user=user,

@@ -694,7 +694,7 @@ def _intent_regex_fill(text: str, fields: dict, doc_type: str) -> dict:
             else:
                 filled["leave_type"] = "事假"
         if not filled.get("destination"):
-            m = re.search(r"(?:去|到|赴)([^，,。\s]{2,12}?)(?:调研|出差|参会|开会|学习|培训|办事|$)", text)
+            m = re.search(r"(?:去|到|赴)([^，,。\s]{2,12}?)(?:调研|出差|参会|开会|学习|培训|办事|参加|$)", text)
             if m:
                 filled["destination"] = m.group(1)
         if not filled.get("transportation"):
@@ -703,11 +703,14 @@ def _intent_regex_fill(text: str, fields: dict, doc_type: str) -> dict:
                     filled["transportation"] = item
                     break
         if not filled.get("reason"):
-            m = re.search(r"(?:去|到|赴)([^，,。\s]{2,20}?(?:调研|出差|参会|开会|学习|培训|办事))", text)
+            m = re.search(r"(?:去|到|赴)([^，,。\s]{2,20}?)(?:调研|出差|参会|开会|学习|培训|办事|参加)", text)
             if m:
                 filled["reason"] = m.group(1)
         today = datetime.date.today()
-        if "明后两天" in text or "明后天" in text:
+        if "今明两天" in text:
+            filled.setdefault("start_date", today.isoformat())
+            filled.setdefault("end_date", (today + datetime.timedelta(days=1)).isoformat())
+        elif "明后两天" in text or "明后天" in text:
             start = today + datetime.timedelta(days=1)
             end = today + datetime.timedelta(days=2)
             filled.setdefault("start_date", start.isoformat())
@@ -752,8 +755,17 @@ async def parse_intent(text: str, db: Optional[Session] = None, current_user=Non
     account_context_text = json.dumps(account_ctx, ensure_ascii=False) if account_ctx else "{}"
     use_account_defaults = _is_self_application_text(text)
     doc_type_keys = json.dumps(list(_INTENT_KEYWORDS.keys()), ensure_ascii=False)
+    template_ctx = _intent_templates_context(keyword_type)
+    today = datetime.date.today()
+    today_str = today.isoformat()
+    tomorrow_str = (today + datetime.timedelta(days=1)).isoformat()
+    day_after_str = (today + datetime.timedelta(days=2)).isoformat()
 
-    prompt = f"""你是智能表单助手。根据用户描述判断事务类型并提取所有可填字段。
+    prompt = f"""你是智能表单助手。根据用户描述判断事务类型并按模板字段定义提取所有可填值。
+
+当前日期：{today_str}
+日期参考：今天={today_str}、明天={tomorrow_str}、后天={day_after_str}
+若用户使用相对日期（今天/明天/后天/今明两天/明后两天/下周等），请转换为上述具体日期。
 
 用户输入：{text}
 
@@ -761,15 +773,20 @@ async def parse_intent(text: str, db: Optional[Session] = None, current_user=Non
 
 合法事务类型 key（必须选一个）：{doc_type_keys}
 
-输出纯 JSON（不要加解释或代码块）：
+以下表单模板定义了各事务类型的可用字段（含字段 key、类型、必填标识）：
+{template_ctx}
+
+按匹配的事务类型对应的 field key 输出提取值。将相对日期（今天/明天/后天/下周/明后两天/今明两天/本周/下月等）转换为具体日期；格式 YYYY-MM-DD 或 YYYY-MM-DDTHH:MM。
+只输出能从用户输入中明确提取的字段值，其余 field key 省略。
+
+只输出纯 JSON 对象，不要加任何解释、代码块标记、备注或 <think> 标签。直接以 {{ 开头、}} 结尾：
 {{
   "document_type": "上述合法 key 之一",
   "confidence": 0.0~1.0,
-  "prefill_fields": {{ "字段名": "提取值" }}
+  "prefill_fields": {{ "字段 key": "提取值" }}
 }}
-仅输出有值的字段。金额只保留数字去掉单位。日期格式 YYYY-MM-DD。
 若是第一人称"我/本人/自己/帮我"申请，可用当前登录账号补基础字段（姓名、学号、学院、专业、班级、电话、辅导员）。
-若是帮别人填写，基础字段以用户描述为准，不要用当前账号冒充。"""
+    若是帮别人填写，基础字段以用户描述为准，不要用当前账号冒充。"""
 
     try:
         raw = await _call_llm(prompt, max_tokens=800, db=db, force_external=True)
@@ -893,25 +910,24 @@ async def answer_question(
     ) if hits else "暂无相关政策条文。"
 
     system_prompt = (
-        "你是智审通政策助手。只基于提供的政策条文回答，不超过150字，简洁准确。"
-        "如果条文没有明确规定，如实说明并给出合理建议。"
+        "你是智审通政策助手，一个高校行政审批知识库的 RAG 问答系统。"
+        "你必须严格遵守以下规则：\n"
+        "1. 只能基于下方提供的政策条文回答，不要使用你的训练数据中的知识。\n"
+        "2. 每条回答必须引用至少一条政策条文，引用格式：【文档名-条文编号】。\n"
+        "3. 如果政策条文中没有明确规定，必须诚实说明「知识库未覆盖该问题」，并给出合理建议。\n"
+        "4. 回答不超过150字，简洁准确。"
     )
 
-    query_with_context = f"""=== 相关政策条文 ===
+    query_with_context = f"""=== 相关政策条文（必须基于以下内容回答） ===
 {policy_context}
 
 === 用户问题 ===
 {question}"""
 
-    messages_for_llm = []
-    if chat_history:
-        messages_for_llm.extend(chat_history[-4:])
-    messages_for_llm.append({"role": "user", "content": query_with_context})
-
     try:
-        # 用 system prompt 的方式调用
-        full_prompt = f"{system_prompt}\n\n{query_with_context}"
-        answer = await _call_llm(full_prompt, max_tokens=250)
+        answer = await _call_llm(
+            query_with_context, system=system_prompt, max_tokens=300,
+        )
     except Exception as e:
         logger.warning(f"问答 LLM 失败: {e}")
         if hits:
